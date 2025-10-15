@@ -1,0 +1,65 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'dark-bg': '#1a1b26',
+              'dark-surface': '#24283b',
+              'dark-overlay': '#3b4261',
+              'dark-text': '#c0caf5',
+              'dark-subtext': '#a9b1d6',
+              'dark-primary': '#7aa2f7',
+              'dark-secondary': '#bb9af7',
+              'dark-accent': '#73daca',
+              'dark-danger': '#f7768e',
+              'dark-warn': '#e0af68',
+            },
+            fontFamily: {
+              sans: ['Vazirmatn', 'sans-serif'],
+            },
+            animation: {
+                'fade-in': 'fadeIn 0.5s ease-out forwards',
+                'slide-in-up': 'slideInUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+                fadeIn: {
+                    '0%': { opacity: 0 },
+                    '100%': { opacity: 1 },
+                },
+                slideInUp: {
+                    '0%': { transform: 'translateY(20px)', opacity: 0 },
+                    '100%': { transform: 'translateY(0)', opacity: 1 },
+                }
+            }
+          },
+        },
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.2.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-100 dark:bg-dark-bg font-sans">
+    <div id="root"></div>
+  </body>
+</html>
