@@ -10,11 +10,7 @@ import PromptForm from './PromptForm';
 import ImageRemixStudio from './ImageRemixStudio';
 import InspirationHub from './InspirationHub';
 import PromptLab from './PromptLab';
-import Settings from './Settings';
 import { NAV_ITEMS } from '../constants';
-import { useToast } from './ToastProvider';
-import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 
 // Sample data for initial load
 const initialPrompts: Prompt[] = [
@@ -52,22 +48,6 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
   const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', initialPrompts);
   const [activeView, setActiveView] = useState(NAV_ITEMS[0].id);
   const [searchQuery, setSearchQuery] = useState('');
-  const { showToast } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    // Sync active view with current path
-    const path = (location.pathname || '/').replace(/^\//, '');
-    const candidate = path || 'dashboard';
-    const exists = NAV_ITEMS.some(n => n.id === candidate);
-    setActiveView(exists ? candidate : 'dashboard');
-  }, [location.pathname]);
-
-  const handleSetActiveView = useCallback((view: string) => {
-    setActiveView(view);
-    navigate(`/${view}`);
-  }, [navigate]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
@@ -106,7 +86,6 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
         }
     });
     setIsFormOpen(false); // Close form after save
-    showToast('پرامپت ذخیره شد', { type: 'success' });
   }, [setPrompts]);
   
   const handleSavePromptFromLab = useCallback((title: string, variation: PromptVariation) => {
@@ -123,7 +102,7 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
         rating: 0,
     };
     handleSavePrompt(newPrompt);
-    showToast('پرامپت برنده با موفقیت ذخیره شد', { type: 'success' });
+    alert('پرامپت برنده با موفقیت ذخیره شد!');
     setActiveView('image'); // Switch view to see the new prompt
   }, [handleSavePrompt]);
 
@@ -163,13 +142,13 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
                       if (Array.isArray(importedPrompts) && importedPrompts.every(p => p.id && p.title && p.content)) {
                           setPrompts(importedPrompts);
                           setActiveView('dashboard');
-                          showToast('پرامپت‌ها با موفقیت وارد شدند', { type: 'success' });
+                          alert('پرامپت‌ها با موفقیت وارد شدند!');
                       } else {
                           throw new Error('Invalid file format');
                       }
                   }
               } catch (error) {
-                  showToast('خطا در ورود فایل. لطفا از فایل JSON معتبر استفاده کنید', { type: 'error' });
+                  alert('خطا در ورود فایل. لطفا از فایل JSON معتبر استفاده کنید.');
               }
           };
           fileReader.readAsText(event.target.files[0]);
@@ -186,8 +165,6 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
         return <InspirationHub prompts={prompts} onUsePrompt={handleSavePrompt} />;
       case 'prompt-lab':
         return <PromptLab onSaveWinner={handleSavePromptFromLab} />;
-      case 'settings':
-        return <Settings prompts={prompts} setPrompts={setPrompts as unknown as (value: unknown[]) => void} />;
       case 'all':
       case 'image':
       case 'text':
@@ -221,7 +198,7 @@ const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
           {renderContent()}
         </div>
       </main>
-      <Sidebar activeView={activeView} setActiveView={handleSetActiveView} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} />
 
       <PromptForm 
         isOpen={isFormOpen}

@@ -10,7 +10,6 @@ import {
   Bot,
   Sparkles,
   Beaker,
-  Settings as SettingsIcon,
 } from './components/icons';
 
 type IconComponent = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -62,5 +61,4 @@ export const NAV_ITEMS: { id: string; label: string; icon: IconComponent }[] = [
   { id: 'prompt-lab', label: 'آزمایشگاه پرامپت', icon: Beaker },
   { id: 'assistant', label: 'دستیار AI', icon: Bot },
   { id: 'inspiration', label: 'مرکز الهام‌بخش', icon: Sparkles },
-  { id: 'settings', label: 'تنظیمات', icon: SettingsIcon },
 ];
