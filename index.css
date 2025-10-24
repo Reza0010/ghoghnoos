@@ -115,7 +115,7 @@
   }
 
   .prompt-card {
-    @apply card hover:shadow-lg cursor-pointer group;
+    @apply card hover:shadow-lg cursor-pointer;
   }
 
   .prompt-card-header {
@@ -362,7 +362,7 @@
 /* Dark mode specific styles */
 @media (prefers-color-scheme: dark) {
   .dark-auto {
-    @apply dark;
+    color-scheme: dark;
   }
 }
 
