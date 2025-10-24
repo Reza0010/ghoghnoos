@@ -1,7 +1,6 @@
 
 import React from 'react';
-import { NAV_ITEMS } from '../constants';
-import { PromptType } from '../types';
+import { NAV_STRUCTURE } from '../constants';
 
 interface SidebarProps {
   activeView: string;
@@ -17,20 +16,28 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
       </div>
       <nav className="flex-grow">
         <ul>
-          {NAV_ITEMS.map((item) => (
-            <li key={item.id} className="mb-2">
-              <button
-                onClick={() => setActiveView(item.id)}
-                className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 text-right ${
-                  activeView === item.id
-                    ? 'bg-dark-primary/20 text-dark-primary font-semibold'
-                    : 'hover:bg-dark-primary/10'
-                }`}
-              >
-                <item.icon className="w-5 h-5 ml-3" />
-                {item.label}
-              </button>
-            </li>
+          {NAV_STRUCTURE.map((section, sectionIndex) => (
+            <React.Fragment key={section.title}>
+              {sectionIndex > 0 && <hr className="my-3 border-gray-200 dark:border-dark-overlay/50" />}
+              <li className="px-3 pt-2 pb-1 text-xs font-bold text-gray-400 dark:text-dark-subtext/60 uppercase tracking-wider">
+                {section.title}
+              </li>
+              {section.items.map((item) => (
+                <li key={item.id} className="mb-1">
+                  <button
+                    onClick={() => setActiveView(item.id)}
+                    className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 text-right ${
+                      activeView === item.id
+                        ? 'bg-dark-primary/20 text-dark-primary font-semibold'
+                        : 'hover:bg-dark-primary/10'
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5 ml-3" />
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </React.Fragment>
           ))}
         </ul>
       </nav>

@@ -23,27 +23,26 @@ export interface ChatMessage {
   text: string;
 }
 
-// For Gemini API history
 export interface GeminiContent {
   role: 'user' | 'model';
-  parts: { text: string }[];
+  parts: Array<{ text: string }>;
 }
 
-// --- A/B Testing Types ---
-
 export interface PromptVariation {
-  id: string;
-  content: string;
-  outputUrl?: string; // for image prompts
-  isWinner: boolean;
+    id: string;
+    content: string;
+    outputUrl?: string;
+    isWinner: boolean;
 }
 
 export interface PromptExperiment {
-  id: string;
-  title: string;
-  goal: string;
-  promptType: PromptType.Image; // For now, only support image
-  variations: PromptVariation[];
-  createdAt: string;
-  status: 'running' | 'completed';
+    id: string;
+    title: string;
+    goal: string;
+    promptType: PromptType;
+    status: 'running' | 'completed';
+    variations: PromptVariation[];
+    createdAt: string;
 }
+
+export type SocialPlatform = 'instagram' | 'telegram' | 'twitter';

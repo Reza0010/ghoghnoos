@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Prompt, PromptType } from '../types';
 import { PROMPT_TYPE_CONFIG } from '../constants';
@@ -9,9 +10,10 @@ interface PromptFormProps {
   onClose: () => void;
   onSave: (prompt: Prompt) => void;
   editingPrompt: Prompt | null;
+  initialType?: PromptType;
 }
 
-const PromptForm: React.FC<PromptFormProps> = ({ isOpen, onClose, onSave, editingPrompt }) => {
+const PromptForm: React.FC<PromptFormProps> = ({ isOpen, onClose, onSave, editingPrompt, initialType }) => {
   const [prompt, setPrompt] = useState<Partial<Prompt>>({});
   const [currentTag, setCurrentTag] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,31 +28,13 @@ const PromptForm: React.FC<PromptFormProps> = ({ isOpen, onClose, onSave, editin
         id: new Date().getTime().toString(),
         title: '',
         content: '',
-        type: PromptType.Text,
+        type: initialType || PromptType.Text,
         tags: [],
         rating: 0,
         createdAt: new Date().toISOString(),
       });
     }
-  }, [editingPrompt, isOpen]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      const isMac = navigator.platform.toUpperCase().includes('MAC');
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-      if (cmdOrCtrl && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        // Trigger save
-        onSave({
-          ...(prompt as Prompt),
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, prompt, onSave]);
+  }, [editingPrompt, isOpen, initialType]);
 
   if (!isOpen) return null;
 
@@ -163,7 +147,8 @@ const PromptForm: React.FC<PromptFormProps> = ({ isOpen, onClose, onSave, editin
               <label htmlFor="type" className="block text-sm font-medium text-gray-700 dark:text-dark-subtext mb-1">نوع پرامپت</label>
               <select name="type" id="type" value={prompt.type} onChange={handleChange} className="w-full bg-gray-100 dark:bg-dark-bg rounded-lg border-transparent focus:border-dark-primary focus:ring-0">
                 {Object.values(PromptType).map(type => (
-                  <option key={type} value={type}>{PROMPT_TYPE_CONFIG[type].label}</option>
+                  // FIX: Cast type to PromptType for correct indexing.
+                  <option key={type} value={type}>{PROMPT_TYPE_CONFIG[type as PromptType].label}</option>
                 ))}
               </select>
             </div>

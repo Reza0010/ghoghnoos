@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip } from 'recharts';
 import { Prompt, PromptType } from '../types';
@@ -40,12 +41,10 @@ const Dashboard: React.FC<DashboardProps> = ({ prompts, onImport, onExport }) =>
   const totalTags = new Set(prompts.flatMap(p => p.tags)).size;
 
   const promptTypeData = Object.values(PromptType).map(type => {
-    // FIX: Cast type to PromptType for correct indexing
     const config = PROMPT_TYPE_CONFIG[type as PromptType];
     return {
       name: config.label.split(' ')[1],
       value: prompts.filter(p => p.type === type).length,
-      // FIX: Cast type to PromptType for correct indexing
       color: PROMPT_TYPE_CONFIG[type as PromptType].borderColor.replace('border-', '#').replace('-500', ''),
     };
   }).filter(d => d.value > 0);
@@ -60,11 +59,11 @@ const Dashboard: React.FC<DashboardProps> = ({ prompts, onImport, onExport }) =>
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
     
-  // FIX: Explicitly typing the accumulator's initial value ensures `tagFrequency` has the correct type.
+  // FIX: Explicitly typed the accumulator in the reduce function to ensure `tagFrequency` is a `Record<string, number>`, which resolves downstream type errors.
   const tagFrequency = prompts.flatMap(p => p.tags).reduce((acc: Record<string, number>, tag) => {
     acc[tag] = (acc[tag] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
   const sortedTags = Object.entries(tagFrequency).sort((a, b) => b[1] - a[1]).slice(0, 20);
   const maxFreq = sortedTags.length > 0 ? sortedTags[0][1] : 1;
@@ -72,22 +71,23 @@ const Dashboard: React.FC<DashboardProps> = ({ prompts, onImport, onExport }) =>
   // --- Rendering Helpers ---
 
   const RADIAN = Math.PI / 180;
-  // FIX: Change argument type to `any` to accommodate for recharts' loose typings and explicitly cast all properties to numbers before performing arithmetic operations to prevent type errors.
-  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  // FIX: Replaced `any` with an explicit object type for recharts props to resolve arithmetic operation errors.
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; }) => {
     if (percent < 0.05) return null; // Don't render label for small slices
-    // FIX: Explicitly cast recharts properties to Number to prevent arithmetic errors.
-    const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.6;
-    const x = Number(cx) + radius * Math.cos(-Number(midAngle) * RADIAN);
-    const y = Number(cy) + radius * Math.sin(-Number(midAngle) * RADIAN);
+    
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
     return (
       <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="bold">
-        {`${(Number(percent) * 100).toFixed(0)}%`}
+        {`${(percent * 100).toFixed(0)}%`}
       </text>
     );
   };
   
-  const CustomTooltip = ({ active, payload }: any) => {
+  // FIX: Replaced `any` with an explicit type for recharts tooltip props for type safety.
+  const CustomTooltip = ({ active, payload }: { active?: boolean, payload?: Array<{ name: string, value: number }> }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-dark-overlay p-3 rounded-lg border border-dark-surface text-sm">
@@ -185,9 +185,7 @@ const Dashboard: React.FC<DashboardProps> = ({ prompts, onImport, onExport }) =>
                 <h2 className="text-xl font-bold text-gray-700 dark:text-dark-text mb-4">ابر تگ‌ها</h2>
                 <div className="flex flex-wrap gap-2 justify-center">
                     {sortedTags.map(([tag, freq]) => {
-                        // FIX: Logic is correct now that `freq` and `maxFreq` are correctly typed as numbers.
-                        // FIX: Cast `freq` and `maxFreq` to Number to handle `unknown` type and prevent arithmetic errors.
-                        const ratio = Number(maxFreq) > 1 ? (Number(freq) - 1) / (Number(maxFreq) - 1) : 0;
+                        const ratio = maxFreq > 1 ? (freq - 1) / (maxFreq - 1) : 0;
                         const fontSize = 12 + ratio * (24 - 12);
                         const opacity = 0.6 + ratio * 0.4;
                         return (
