@@ -1,6 +1,7 @@
 import React from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import PromptStudio from './components/PromptStudio';
+import { ToastProvider } from './components/ToastProvider';
 
 function App() {
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('theme', 'dark');
@@ -17,7 +18,9 @@ function App() {
 
   return (
     <div className={`theme-${theme}`}>
+      <ToastProvider>
         <PromptStudio theme={theme} toggleTheme={toggleTheme} />
+      </ToastProvider>
     </div>
   );
 }

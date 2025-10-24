@@ -34,6 +34,24 @@ const PromptForm: React.FC<PromptFormProps> = ({ isOpen, onClose, onSave, editin
     }
   }, [editingPrompt, isOpen]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      if (cmdOrCtrl && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        // Trigger save
+        onSave({
+          ...(prompt as Prompt),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, prompt, onSave]);
+
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
