@@ -1,42 +1,120 @@
-
-import React from 'react';
-import { Sun, Moon, Plus, Search } from './icons';
+import React, { useState } from 'react';
+import { Sun, Moon, Plus, Search, Menu, Settings, Zap } from './icons';
 
 interface HeaderProps {
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
-  onAddPrompt: () => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
+  onThemeToggle: () => void;
+  isDark: boolean;
+  onNewPrompt: () => void;
+  onMenuToggle: () => void;
+  onSearch: (query: string) => void;
+  currentView: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ theme, toggleTheme, onAddPrompt, searchQuery, setSearchQuery }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+  onThemeToggle, 
+  isDark, 
+  onNewPrompt, 
+  onMenuToggle,
+  onSearch,
+  currentView 
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    onSearch(query);
+  };
+
+  const getViewTitle = () => {
+    switch (currentView) {
+      case 'dashboard': return 'Dashboard';
+      case 'studio': return 'Prompt Studio';
+      case 'lab': return 'Prompt Lab';
+      case 'assistant': return 'AI Assistant';
+      case 'image': return 'Image Studio';
+      case 'inspiration': return 'Inspiration Hub';
+      case 'settings': return 'Settings';
+      default: return 'Prompt Studio';
+    }
+  };
+
   return (
-    <header className="p-4 bg-gray-100/80 dark:bg-dark-bg/80 backdrop-blur-sm border-b border-gray-200 dark:border-dark-overlay flex items-center justify-between" dir="rtl">
-      <div className="relative flex-grow max-w-lg">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-dark-subtext" />
-        <input
-          type="text"
-          placeholder="جستجو در پرامپت‌ها..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-gray-200 dark:bg-dark-surface border-transparent focus:border-dark-primary focus:ring-0 rounded-full py-2 pr-10 pl-4 transition"
-        />
+    <header className="header">
+      <div className="flex items-center space-x-4">
+        {/* Mobile Menu Toggle */}
+        <button
+          onClick={onMenuToggle}
+          className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+
+        {/* Logo and Title */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg">
+            <Zap size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              Prompt Studio
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+              {getViewTitle()}
+            </p>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-4">
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-dark-surface transition-colors"
-        >
-          {theme === 'dark' ? <Sun className="w-6 h-6 text-dark-warn" /> : <Moon className="w-6 h-6 text-dark-secondary" />}
-        </button>
-        <button
-          onClick={onAddPrompt}
-          className="flex items-center gap-2 bg-dark-primary text-white font-semibold px-4 py-2 rounded-full hover:bg-opacity-90 transition-all duration-200 shadow-lg shadow-dark-primary/30"
-        >
-          <Plus className="w-5 h-5" />
-          افزودن پرامپت
-        </button>
+
+      <div className="flex items-center space-x-3">
+        {/* Search */}
+        <div className="relative hidden sm:block">
+          <Search className="search-icon" size={16} />
+          <input
+            type="text"
+            placeholder="Search prompts..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="search-input w-64"
+          />
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex items-center space-x-2">
+          {/* New Prompt Button */}
+          <button
+            onClick={onNewPrompt}
+            className="btn btn-primary btn-sm hidden sm:flex"
+          >
+            <Plus size={16} />
+            <span className="ml-2">New Prompt</span>
+          </button>
+
+          {/* Mobile New Prompt Button */}
+          <button
+            onClick={onNewPrompt}
+            className="btn btn-primary btn-sm sm:hidden"
+          >
+            <Plus size={16} />
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={onThemeToggle}
+            className="btn btn-ghost btn-sm"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          {/* Settings (Mobile) */}
+          <button
+            className="btn btn-ghost btn-sm md:hidden"
+            title="Settings"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
     </header>
   );

@@ -1,203 +1,258 @@
 import React from 'react';
-import { PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip } from 'recharts';
-import { Prompt, PromptType } from '../types';
-import { PROMPT_TYPE_CONFIG } from '../constants';
-import { Download, Upload, Star } from './icons';
+import { Prompt } from '../types';
+import { PromptCard } from './PromptCard';
+import { 
+  FileText, 
+  Image, 
+  TrendingUp, 
+  Clock, 
+  Star, 
+  Zap,
+  BarChart,
+  Heart
+} from './icons';
 
 interface DashboardProps {
   prompts: Prompt[];
-  onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onExport: () => void;
+  onEditPrompt: (prompt: Prompt) => void;
+  onDeletePrompt: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onUsePrompt: (prompt: Prompt) => void;
 }
 
-const timeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return `${Math.floor(interval)} سال پیش`;
-    interval = seconds / 2592000;
-    if (interval > 1) return `${Math.floor(interval)} ماه پیش`;
-    interval = seconds / 86400;
-    if (interval > 1) return `${Math.floor(interval)} روز پیش`;
-    interval = seconds / 3600;
-    if (interval > 1) return `${Math.floor(interval)} ساعت پیش`;
-    interval = seconds / 60;
-    if (interval > 1) return `${Math.floor(interval)} دقیقه پیش`;
-    return 'همین الان';
-};
-
-
-const Dashboard: React.FC<DashboardProps> = ({ prompts, onImport, onExport }) => {
-
-  // --- Data Processing ---
-
-  const totalPrompts = prompts.length;
-  const promptsWithRatings = prompts.filter(p => p.rating && p.rating > 0);
-  const averageRating = promptsWithRatings.length > 0
-    ? (promptsWithRatings.reduce((acc, p) => acc + (p.rating || 0), 0) / promptsWithRatings.length).toFixed(1)
-    : 'N/A';
-  const totalTags = new Set(prompts.flatMap(p => p.tags)).size;
-
-  const promptTypeData = Object.values(PromptType).map(type => {
-    // FIX: Cast type to PromptType for correct indexing
-    const config = PROMPT_TYPE_CONFIG[type as PromptType];
-    return {
-      name: config.label.split(' ')[1],
-      value: prompts.filter(p => p.type === type).length,
-      // FIX: Cast type to PromptType for correct indexing
-      color: PROMPT_TYPE_CONFIG[type as PromptType].borderColor.replace('border-', '#').replace('-500', ''),
-    };
-  }).filter(d => d.value > 0);
-
-  const ratingData = [1, 2, 3, 4, 5].map(star => ({
-    name: `${star} ستاره`,
-    value: prompts.filter(p => p.rating === star).length
-  })).filter(d => d.value > 0);
-  const RATING_COLORS = ['#f7768e', '#e0af68', '#73daca', '#7aa2f7', '#bb9af7']; // 1 to 5 stars
-
-  const recentPrompts = [...prompts]
+export const Dashboard: React.FC<DashboardProps> = ({
+  prompts,
+  onEditPrompt,
+  onDeletePrompt,
+  onToggleFavorite,
+  onUsePrompt,
+}) => {
+  const recentPrompts = prompts
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5);
-    
-  // FIX: Explicitly typing the accumulator's initial value ensures `tagFrequency` has the correct type.
-  const tagFrequency = prompts.flatMap(p => p.tags).reduce((acc: Record<string, number>, tag) => {
-    acc[tag] = (acc[tag] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+    .slice(0, 6);
 
-  const sortedTags = Object.entries(tagFrequency).sort((a, b) => b[1] - a[1]).slice(0, 20);
-  const maxFreq = sortedTags.length > 0 ? sortedTags[0][1] : 1;
+  const favoritePrompts = prompts.filter(p => p.isFavorite);
+  const textPrompts = prompts.filter(p => p.type === 'text');
+  const imagePrompts = prompts.filter(p => p.type === 'image');
+  const totalUsage = prompts.reduce((sum, p) => sum + p.usageCount, 0);
 
-  // --- Rendering Helpers ---
-
-  const RADIAN = Math.PI / 180;
-  // FIX: Change argument type to `any` to accommodate for recharts' loose typings and explicitly cast all properties to numbers before performing arithmetic operations to prevent type errors.
-  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-    if (percent < 0.05) return null; // Don't render label for small slices
-    // FIX: Explicitly cast recharts properties to Number to prevent arithmetic errors.
-    const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.6;
-    const x = Number(cx) + radius * Math.cos(-Number(midAngle) * RADIAN);
-    const y = Number(cy) + radius * Math.sin(-Number(midAngle) * RADIAN);
-
-    return (
-      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="bold">
-        {`${(Number(percent) * 100).toFixed(0)}%`}
-      </text>
-    );
-  };
-  
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-dark-overlay p-3 rounded-lg border border-dark-surface text-sm">
-          <p className="label">{`${payload[0].name} : ${payload[0].value}`}</p>
-        </div>
-      );
+  const stats = [
+    {
+      title: 'Total Prompts',
+      value: prompts.length,
+      icon: FileText,
+      color: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      change: '+12%',
+      changeType: 'positive' as const
+    },
+    {
+      title: 'Text Prompts',
+      value: textPrompts.length,
+      icon: FileText,
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-50 dark:bg-green-900/20',
+      change: '+8%',
+      changeType: 'positive' as const
+    },
+    {
+      title: 'Image Prompts',
+      value: imagePrompts.length,
+      icon: Image,
+      color: 'text-purple-600 dark:text-purple-400',
+      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+      change: '+15%',
+      changeType: 'positive' as const
+    },
+    {
+      title: 'Favorites',
+      value: favoritePrompts.length,
+      icon: Heart,
+      color: 'text-red-600 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/20',
+      change: '+5%',
+      changeType: 'positive' as const
+    },
+    {
+      title: 'Total Usage',
+      value: totalUsage,
+      icon: TrendingUp,
+      color: 'text-orange-600 dark:text-orange-400',
+      bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      change: '+23%',
+      changeType: 'positive' as const
+    },
+    {
+      title: 'Categories',
+      value: new Set(prompts.map(p => p.category)).size,
+      icon: BarChart,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+      change: '+2%',
+      changeType: 'positive' as const
     }
-    return null;
-  };
+  ];
 
   return (
-    <div className="p-6 h-full overflow-y-auto animate-fade-in" dir="rtl">
-      <h1 className="text-3xl font-bold text-gray-800 dark:text-dark-text mb-6">داشبورد پیشرفته</h1>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-lg animate-slide-in-up">
-          <h3 className="text-md font-semibold text-gray-500 dark:text-dark-subtext">تعداد کل پرامپت‌ها</h3>
-          <p className="text-4xl font-bold text-dark-primary mt-2">{totalPrompts}</p>
-        </div>
-        <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-lg animate-slide-in-up" style={{animationDelay: '100ms'}}>
-          <h3 className="text-md font-semibold text-gray-500 dark:text-dark-subtext">میانگین امتیاز</h3>
-          <div className="flex items-center gap-2">
-            <p className="text-4xl font-bold text-dark-warn mt-2">{averageRating}</p>
-            {averageRating !== 'N/A' && <Star className="w-8 h-8 text-dark-warn mt-2" />}
+    <div className="main-content">
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="fade-in">
+          <div className="flex items-center space-x-3 mb-2">
+            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl">
+              <Zap size={20} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                Dashboard
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Welcome back! Here's what's happening with your prompts.
+              </p>
+            </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-lg animate-slide-in-up" style={{animationDelay: '200ms'}}>
-          <h3 className="text-md font-semibold text-gray-500 dark:text-dark-subtext">تعداد کل تگ‌ها</h3>
-          <p className="text-4xl font-bold text-dark-accent mt-2">{totalTags}</p>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 slide-up">
+          {stats.map((stat, index) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.title}
+                className="card hover:shadow-lg transition-all duration-300"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className="card-body">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`p-3 rounded-xl ${stat.bgColor}`}>
+                      <Icon size={20} className={stat.color} />
+                    </div>
+                    <div className={`text-xs font-medium px-2 py-1 rounded-full ${
+                      stat.changeType === 'positive' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                    }`}>
+                      {stat.change}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                      {stat.value.toLocaleString()}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {stat.title}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <div className="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-lg animate-slide-in-up flex flex-col justify-center" style={{animationDelay: '300ms'}}>
-           <h3 className="text-md font-semibold text-gray-500 dark:text-dark-subtext mb-2">مدیریت داده‌ها</h3>
-           <div className="flex gap-2">
-              <label htmlFor="import-file" className="flex-1 flex items-center justify-center gap-2 bg-dark-accent/10 text-dark-accent font-semibold px-3 py-2 rounded-lg hover:bg-opacity-90 transition-all duration-200 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  ورود
-              </label>
-              <input type="file" id="import-file" className="hidden" accept=".json" onChange={onImport} />
-              <button onClick={onExport} className="flex-1 flex items-center justify-center gap-2 bg-dark-secondary/10 text-dark-secondary font-semibold px-3 py-2 rounded-lg hover:bg-opacity-90 transition-all duration-200">
-                  <Download className="w-4 h-4" />
-                  خروج
+
+        {/* Quick Actions */}
+        <div className="card slide-up" style={{ animationDelay: '600ms' }}>
+          <div className="card-header">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Quick Actions
+            </h2>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <button className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                  <FileText size={20} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900 dark:text-white">New Text Prompt</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Create a text-based prompt</p>
+                </div>
               </button>
-           </div>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-           <div className="bg-white dark:bg-dark-surface p-6 rounded-2xl shadow-lg h-80">
-                <h2 className="text-xl font-bold text-gray-700 dark:text-dark-text mb-4">توزیع نوع پرامپت</h2>
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie data={promptTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} labelLine={false} label={renderCustomizedLabel} paddingAngle={5}>
-                            {promptTypeData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend wrapperStyle={{fontSize: '14px'}}/>
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-             <div className="bg-white dark:bg-dark-surface p-6 rounded-2xl shadow-lg h-80">
-                <h2 className="text-xl font-bold text-gray-700 dark:text-dark-text mb-4">توزیع امتیازات</h2>
-                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie data={ratingData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} labelLine={false} label={renderCustomizedLabel} paddingAngle={5}>
-                             {ratingData.map((entry, index) => <Cell key={`cell-${index}`} fill={RATING_COLORS[parseInt(entry.name) - 1]} />)}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend wrapperStyle={{fontSize: '14px'}}/>
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-        <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-dark-surface p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold text-gray-700 dark:text-dark-text mb-4">فعالیت‌های اخیر</h2>
-                <div className="space-y-4">
-                    {recentPrompts.map(prompt => {
-                        const config = PROMPT_TYPE_CONFIG[prompt.type];
-                        return (
-                             <div key={prompt.id} className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg ${config.color} flex-shrink-0 flex items-center justify-center`}>
-                                    <config.icon className="w-5 h-5 text-white" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-sm truncate">{prompt.title}</p>
-                                    <p className="text-xs text-gray-400 dark:text-dark-subtext/70">{timeAgo(prompt.updatedAt)}</p>
-                                </div>
-                            </div>
-                        )
-                    })}
+
+              <button className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                  <Image size={20} className="text-purple-600 dark:text-purple-400" />
                 </div>
-            </div>
-            <div className="bg-white dark:bg-dark-surface p-6 rounded-2xl shadow-lg">
-                <h2 className="text-xl font-bold text-gray-700 dark:text-dark-text mb-4">ابر تگ‌ها</h2>
-                <div className="flex flex-wrap gap-2 justify-center">
-                    {sortedTags.map(([tag, freq]) => {
-                        // FIX: Logic is correct now that `freq` and `maxFreq` are correctly typed as numbers.
-                        // FIX: Cast `freq` and `maxFreq` to Number to handle `unknown` type and prevent arithmetic errors.
-                        const ratio = Number(maxFreq) > 1 ? (Number(freq) - 1) / (Number(maxFreq) - 1) : 0;
-                        const fontSize = 12 + ratio * (24 - 12);
-                        const opacity = 0.6 + ratio * 0.4;
-                        return (
-                            <span key={tag} className="text-dark-primary cursor-pointer hover:text-dark-accent transition-colors" style={{fontSize: `${fontSize}px`, opacity: opacity}}>
-                                {tag}
-                            </span>
-                        )
-                    })}
+                <div className="text-left">
+                  <p className="font-medium text-gray-900 dark:text-white">New Image Prompt</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Create an image generation prompt</p>
                 </div>
+              </button>
+
+              <button className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors">
+                  <Zap size={20} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900 dark:text-white">Run Experiment</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Test prompts in the lab</p>
+                </div>
+              </button>
+
+              <button className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group">
+                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg group-hover:bg-orange-200 dark:group-hover:bg-orange-900/50 transition-colors">
+                  <Star size={20} className="text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900 dark:text-white">Browse Templates</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Explore inspiration hub</p>
+                </div>
+              </button>
             </div>
+          </div>
+        </div>
+
+        {/* Recent Prompts */}
+        <div className="slide-up" style={{ animationDelay: '800ms' }}>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <Clock size={20} className="text-gray-600 dark:text-gray-400" />
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Recent Prompts
+              </h2>
+            </div>
+            <button className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium text-sm">
+              View All
+            </button>
+          </div>
+
+          {recentPrompts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {recentPrompts.map((prompt, index) => (
+                <div
+                  key={prompt.id}
+                  className="fade-in"
+                  style={{ animationDelay: `${1000 + index * 100}ms` }}
+                >
+                  <PromptCard
+                    prompt={prompt}
+                    onEdit={onEditPrompt}
+                    onDelete={onDeletePrompt}
+                    onToggleFavorite={onToggleFavorite}
+                    onUse={onUsePrompt}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="card">
+              <div className="card-body text-center py-12">
+                <div className="flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full mx-auto mb-4">
+                  <FileText size={24} className="text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  No prompts yet
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                  Create your first prompt to get started with Prompt Studio.
+                </p>
+                <button className="btn btn-primary">
+                  <FileText size={16} />
+                  <span className="ml-2">Create Your First Prompt</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

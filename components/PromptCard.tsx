@@ -1,79 +1,160 @@
 import React from 'react';
-import { Prompt } from '../types';
+import { Prompt, PromptCardProps } from '../types';
+import { 
+  Edit, 
+  Trash, 
+  Heart, 
+  Copy, 
+  Play, 
+  Clock,
+  Tag,
+  FileText,
+  Image as ImageIcon
+} from './icons';
 import { PROMPT_TYPE_CONFIG } from '../constants';
-import { Star, Edit, Trash, Wand2, Copy } from './icons';
+import { formatDistanceToNow } from 'date-fns';
 
-interface PromptCardProps {
-  prompt: Prompt;
-  onEdit: (prompt: Prompt) => void;
-  onDelete: (id: string) => void;
-  onRemix: (prompt: Prompt) => void;
-}
+export const PromptCard: React.FC<PromptCardProps> = ({
+  prompt,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+  onUse,
+}) => {
+  const typeConfig = PROMPT_TYPE_CONFIG[prompt.type];
+  const TypeIcon = typeConfig.icon;
 
-const PromptCard: React.FC<PromptCardProps> = ({ prompt, onEdit, onDelete, onRemix }) => {
-  const config = PROMPT_TYPE_CONFIG[prompt.type];
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt.content);
+      // You could add a toast notification here
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(prompt.content);
-    // In a real app, you might want to show a toast notification here.
+  const truncateText = (text: string, maxLength: number = 120) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
   };
 
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-lg flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1 animate-fade-in">
-      {prompt.imageUrl && (
-        <div className="relative h-48 w-full">
-          <img src={prompt.imageUrl} alt={prompt.title} className="w-full h-full object-cover rounded-t-2xl" />
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-t from-black/60 to-transparent"></div>
-          <div className={`absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold text-white ${config.color}`}>
-            <config.icon className="w-4 h-4" />
-            <span>{config.label}</span>
-          </div>
-        </div>
-      )}
-      <div className="p-5 flex flex-col flex-grow">
-        {!prompt.imageUrl && (
-            <div className={`self-start flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${config.textColor} ${config.color}/10 mb-3`}>
-                <config.icon className="w-4 h-4" />
-                <span>{config.label}</span>
+    <div className="prompt-card group">
+      <div className="prompt-card-header">
+        <div className="flex-1">
+          <div className="flex items-center space-x-2 mb-2">
+            <div className={`p-1.5 rounded-lg ${typeConfig.bgColor}`}>
+              <TypeIcon size={16} className={typeConfig.color} />
             </div>
-        )}
-        <div className="flex justify-between items-start">
-            <h3 className={`text-xl font-bold ${prompt.imageUrl ? 'text-white -mt-16' : 'text-gray-800 dark:text-dark-text'}`}>{prompt.title}</h3>
-            {prompt.rating && prompt.rating > 0 && (
-                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                    {[...Array(5)].map((_, i) => (
-                        <Star key={i} className={`w-5 h-5 ${i < (prompt.rating || 0) ? 'text-dark-warn fill-current' : 'text-gray-300 dark:text-dark-overlay'}`} />
-                    ))}
-                </div>
+            <span className={`text-xs font-medium px-2 py-1 rounded-full ${typeConfig.bgColor} ${typeConfig.color}`}>
+              {typeConfig.label}
+            </span>
+            {prompt.isFavorite && (
+              <Heart size={14} className="text-red-500 fill-current" />
             )}
+          </div>
+          <h3 className="font-semibold text-gray-900 dark:text-white text-lg mb-1 line-clamp-2">
+            {prompt.title}
+          </h3>
+          {prompt.description && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {truncateText(prompt.description, 80)}
+            </p>
+          )}
         </div>
-        <p className="mt-2 text-sm text-gray-600 dark:text-dark-subtext flex-grow leading-relaxed">{prompt.summary || prompt.content.substring(0, 120) + (prompt.content.length > 120 ? '...' : '')}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-            {prompt.tags.map(tag => (
-                <span key={tag} className="px-2 py-1 bg-dark-primary/10 text-dark-primary text-xs font-semibold rounded-full">
-                    #{tag}
-                </span>
-            ))}
+        
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onToggleFavorite(prompt.id)}
+            className="btn btn-ghost btn-sm"
+            title={prompt.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart 
+              size={16} 
+              className={prompt.isFavorite ? 'text-red-500 fill-current' : 'text-gray-400'} 
+            />
+          </button>
+          <button
+            onClick={handleCopy}
+            className="btn btn-ghost btn-sm"
+            title="Copy prompt"
+          >
+            <Copy size={16} />
+          </button>
+          <button
+            onClick={() => onEdit(prompt)}
+            className="btn btn-ghost btn-sm"
+            title="Edit prompt"
+          >
+            <Edit size={16} />
+          </button>
+          <button
+            onClick={() => onDelete(prompt.id)}
+            className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
+            title="Delete prompt"
+          >
+            <Trash size={16} />
+          </button>
         </div>
       </div>
-      <div className="p-3 border-t border-gray-100 dark:border-dark-overlay bg-gray-50/50 dark:bg-dark-surface/50 rounded-b-2xl flex items-center justify-end gap-2">
-        <button onClick={handleCopy} title="کپی کردن پرامپت" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-dark-overlay transition-colors">
-            <Copy className="w-5 h-5 text-gray-500 dark:text-dark-subtext" />
-        </button>
-        {prompt.type === 'image' && prompt.imageUrl && (
-            <button onClick={() => onRemix(prompt)} title="ریمیکس تصویر" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-dark-overlay transition-colors">
-                <Wand2 className="w-5 h-5 text-dark-secondary" />
-            </button>
+
+      <div className="prompt-card-body">
+        <p className="text-gray-700 dark:text-gray-300 text-sm mb-4 line-clamp-3">
+          {truncateText(prompt.content)}
+        </p>
+
+        {/* Tags */}
+        {prompt.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {prompt.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="tag tag-gray text-xs"
+              >
+                {tag}
+              </span>
+            ))}
+            {prompt.tags.length > 3 && (
+              <span className="tag tag-gray text-xs">
+                +{prompt.tags.length - 3} more
+              </span>
+            )}
+          </div>
         )}
-        <button onClick={() => onEdit(prompt)} title="ویرایش" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-dark-overlay transition-colors">
-            <Edit className="w-5 h-5 text-dark-accent" />
-        </button>
-        <button onClick={() => onDelete(prompt.id)} title="حذف" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-dark-overlay transition-colors">
-            <Trash className="w-5 h-5 text-dark-danger" />
+
+        {/* Category */}
+        {prompt.category && (
+          <div className="flex items-center space-x-1 mb-3">
+            <Tag size={12} className="text-gray-400" />
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {prompt.category}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="prompt-card-footer">
+        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center space-x-1">
+            <Clock size={12} />
+            <span>
+              {formatDistanceToNow(new Date(prompt.updatedAt), { addSuffix: true })}
+            </span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <Play size={12} />
+            <span>{prompt.usageCount} uses</span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onUse(prompt)}
+          className="btn btn-primary btn-sm"
+        >
+          <Play size={14} />
+          <span className="ml-1">Use</span>
         </button>
       </div>
     </div>
   );
 };
-
-export default PromptCard;

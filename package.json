@@ -1,24 +1,37 @@
 {
   "name": "prompt-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "A comprehensive AI prompt management and testing platform",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "@google/genai": "^1.24.0",
-    "react-router-dom": "^6.28.0",
-    "recharts": "^3.2.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "@google/generative-ai": "^0.21.0",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@types/uuid": "^9.0.4",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.15",
+    "postcss": "^8.4.29",
+    "tailwindcss": "^3.3.3",
     "typescript": "~5.8.2",
+    "uuid": "^9.0.1",
     "vite": "^6.2.0"
   }
 }

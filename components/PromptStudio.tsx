@@ -1,243 +1,520 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { Prompt, PromptType, PromptVariation } from '../types';
-import Sidebar from './Sidebar';
-import Header from './Header';
-import PromptList from './PromptList';
-import Dashboard from './Dashboard';
-import AIAssistant from './AIAssistant';
-import PromptForm from './PromptForm';
-import ImageRemixStudio from './ImageRemixStudio';
-import InspirationHub from './InspirationHub';
-import PromptLab from './PromptLab';
-import Settings from './Settings';
-import { NAV_ITEMS } from '../constants';
-import { useToast } from './ToastProvider';
-import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-
-// Sample data for initial load
-const initialPrompts: Prompt[] = [
-    {
-        id: "1",
-        title: "ربات آینده‌نگر",
-        content: "A photorealistic image of a sleek, humanoid robot standing in a neon-lit futuristic city street at night. Rain is falling, reflecting the city lights on the wet pavement. The robot is looking thoughtfully into the distance. 8K, cinematic lighting, hyper-detailed.",
-        type: PromptType.Image,
-        tags: ["futuristic", "robot", "neon", "photorealistic"],
-        createdAt: "2023-10-26T10:00:00Z",
-        updatedAt: "2023-10-26T10:00:00Z",
-        summary: "A photorealistic image of a sleek, humanoid robot in a neon-lit futuristic city.",
-        rating: 5,
-        imageUrl: "https://storage.googleapis.com/maker-me/prompts%2F995a55a4-e1b6-4598-a1a7-f58be318856c",
-    },
-    {
-        id: "2",
-        title: "داستان کوتاه علمی-تخیلی",
-        content: "Write a short story about a lone astronaut who discovers a mysterious, glowing plant on an unexplored planet. The plant seems to communicate through light patterns. The story should build a sense of wonder and suspense.",
-        type: PromptType.Text,
-        tags: ["sci-fi", "story", "space", "mystery"],
-        createdAt: "2023-10-25T14:30:00Z",
-        updatedAt: "2023-10-27T11:00:00Z",
-        summary: "A short story about an astronaut discovering a communicating plant on a new planet.",
-        rating: 4,
-    }
-];
+import React, { useState, useEffect } from 'react';
+import { Prompt } from '../types';
+import { 
+  Save, 
+  X, 
+  FileText, 
+  Image as ImageIcon, 
+  Tag, 
+  Folder, 
+  Eye,
+  Play,
+  Wand2,
+  Copy
+} from './icons';
+import { DEFAULT_PROMPT_CATEGORIES } from '../constants';
 
 interface PromptStudioProps {
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
+  prompt?: Prompt | null;
+  onSave: (prompt: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onCancel: () => void;
+  isLoading?: boolean;
 }
 
-const PromptStudio: React.FC<PromptStudioProps> = ({ theme, toggleTheme }) => {
-  const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', initialPrompts);
-  const [activeView, setActiveView] = useState(NAV_ITEMS[0].id);
-  const [searchQuery, setSearchQuery] = useState('');
-  const { showToast } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
+export const PromptStudio: React.FC<PromptStudioProps> = ({
+  prompt,
+  onSave,
+  onCancel,
+  isLoading = false,
+}) => {
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    description: '',
+    type: 'text' as 'text' | 'image',
+    tags: [] as string[],
+    category: '',
+  });
 
+  const [newTag, setNewTag] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Initialize form data when prompt changes
   useEffect(() => {
-    // Sync active view with current path
-    const path = (location.pathname || '/').replace(/^\//, '');
-    const candidate = path || 'dashboard';
-    const exists = NAV_ITEMS.some(n => n.id === candidate);
-    setActiveView(exists ? candidate : 'dashboard');
-  }, [location.pathname]);
-
-  const handleSetActiveView = useCallback((view: string) => {
-    setActiveView(view);
-    navigate(`/${view}`);
-  }, [navigate]);
-
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
-  
-  const [isRemixOpen, setIsRemixOpen] = useState(false);
-  const [remixingPrompt, setRemixingPrompt] = useState<Prompt | null>(null);
-
-  const handleAddPrompt = useCallback(() => {
-    setEditingPrompt(null);
-    setIsFormOpen(true);
-  }, []);
-
-  const handleEditPrompt = useCallback((prompt: Prompt) => {
-    setEditingPrompt(prompt);
-    setIsFormOpen(true);
-  }, []);
-  
-  const handleRemixPrompt = useCallback((prompt: Prompt) => {
-    setRemixingPrompt(prompt);
-    setIsRemixOpen(true);
-  }, []);
-
-  const handleDeletePrompt = useCallback((id: string) => {
-    if (window.confirm('آیا از حذف این پرامپت مطمئن هستید؟')) {
-      setPrompts(prevPrompts => prevPrompts.filter(p => p.id !== id));
+    if (prompt) {
+      setFormData({
+        title: prompt.title,
+        content: prompt.content,
+        description: prompt.description || '',
+        type: prompt.type,
+        tags: [...prompt.tags],
+        category: prompt.category,
+      });
+    } else {
+      setFormData({
+        title: '',
+        content: '',
+        description: '',
+        type: 'text',
+        tags: [],
+        category: DEFAULT_PROMPT_CATEGORIES[0],
+      });
     }
-  }, [setPrompts]);
+  }, [prompt]);
 
-  const handleSavePrompt = useCallback((promptToSave: Prompt) => {
-    setPrompts(prevPrompts => {
-        const exists = prevPrompts.some(p => p.id === promptToSave.id);
-        if (exists) {
-            return prevPrompts.map(p => (p.id === promptToSave.id ? promptToSave : p));
-        } else {
-            return [promptToSave, ...prevPrompts];
-        }
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) {
+      newErrors.title = 'Title is required';
+    }
+
+    if (!formData.content.trim()) {
+      newErrors.content = 'Prompt content is required';
+    }
+
+    if (!formData.category.trim()) {
+      newErrors.category = 'Category is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    onSave({
+      ...formData,
+      title: formData.title.trim(),
+      content: formData.content.trim(),
+      description: formData.description.trim(),
+      category: formData.category.trim(),
     });
-    setIsFormOpen(false); // Close form after save
-    showToast('پرامپت ذخیره شد', { type: 'success' });
-  }, [setPrompts]);
-  
-  const handleSavePromptFromLab = useCallback((title: string, variation: PromptVariation) => {
-    const now = new Date().toISOString();
-    const newPrompt: Prompt = {
-        id: new Date().getTime().toString(),
-        title: `${title} (Winner)`,
-        content: variation.content,
-        imageUrl: variation.outputUrl,
-        type: PromptType.Image,
-        tags: ['ab-test-winner', 'prompt-lab'],
-        createdAt: now,
-        updatedAt: now,
-        rating: 0,
-    };
-    handleSavePrompt(newPrompt);
-    showToast('پرامپت برنده با موفقیت ذخیره شد', { type: 'success' });
-    setActiveView('image'); // Switch view to see the new prompt
-  }, [handleSavePrompt]);
+  };
 
-  const filteredPrompts = useMemo(() => {
-    const nonLabViews = ['all', 'dashboard', 'assistant', 'inspiration', 'prompt-lab'];
-    return prompts
-      .filter(prompt => {
-        if (nonLabViews.includes(activeView)) return true;
-        return prompt.type === activeView;
-      })
-      .filter(prompt =>
-        prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prompt.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prompt.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-  }, [prompts, activeView, searchQuery]);
-  
-  const handleExport = useCallback(() => {
-    const dataStr = JSON.stringify(prompts, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = 'prompt_studio_export.json';
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  }, [prompts]);
-  
-  const handleImport = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files && event.target.files[0]) {
-          const fileReader = new FileReader();
-          fileReader.onload = (e) => {
-              try {
-                  const result = e.target?.result;
-                  if (typeof result === 'string') {
-                      const importedPrompts = JSON.parse(result) as Prompt[];
-                      // Basic validation
-                      if (Array.isArray(importedPrompts) && importedPrompts.every(p => p.id && p.title && p.content)) {
-                          setPrompts(importedPrompts);
-                          setActiveView('dashboard');
-                          showToast('پرامپت‌ها با موفقیت وارد شدند', { type: 'success' });
-                      } else {
-                          throw new Error('Invalid file format');
-                      }
-                  }
-              } catch (error) {
-                  showToast('خطا در ورود فایل. لطفا از فایل JSON معتبر استفاده کنید', { type: 'error' });
-              }
-          };
-          fileReader.readAsText(event.target.files[0]);
-      }
-  }, [setPrompts]);
-
-  const renderContent = useCallback(() => {
-    switch (activeView) {
-      case 'dashboard':
-        return <Dashboard prompts={prompts} onImport={handleImport} onExport={handleExport} />;
-      case 'assistant':
-        return <AIAssistant />;
-      case 'inspiration':
-        return <InspirationHub prompts={prompts} onUsePrompt={handleSavePrompt} />;
-      case 'prompt-lab':
-        return <PromptLab onSaveWinner={handleSavePromptFromLab} />;
-      case 'settings':
-        return <Settings prompts={prompts} setPrompts={setPrompts as unknown as (value: unknown[]) => void} />;
-      case 'all':
-      case 'image':
-      case 'text':
-      case 'video':
-      case 'music':
-        return (
-          <PromptList
-            prompts={filteredPrompts}
-            view={activeView}
-            onEdit={handleEditPrompt}
-            onDelete={handleDeletePrompt}
-            onRemix={handleRemixPrompt}
-          />
-        );
-      default:
-        return null;
+  const handleAddTag = () => {
+    const tag = newTag.trim();
+    if (tag && !formData.tags.includes(tag)) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, tag]
+      }));
+      setNewTag('');
     }
-  }, [activeView, prompts, filteredPrompts, handleSavePromptFromLab, handleExport, handleImport, handleEditPrompt, handleDeletePrompt, handleRemixPrompt, handleSavePrompt]);
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddTag();
+    }
+  };
+
+  const handleCopyContent = async () => {
+    try {
+      await navigator.clipboard.writeText(formData.content);
+      // Could add toast notification here
+    } catch (err) {
+      console.error('Failed to copy content:', err);
+    }
+  };
+
+  const getCharacterCount = () => {
+    return formData.content.length;
+  };
+
+  const getWordCount = () => {
+    return formData.content.trim().split(/\s+/).filter(word => word.length > 0).length;
+  };
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-dark-text overflow-hidden">
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          theme={theme}
-          toggleTheme={toggleTheme}
-          onAddPrompt={handleAddPrompt}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-        />
-        <div className="flex-1 overflow-y-auto">
-          {renderContent()}
+    <div className="main-content">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {prompt ? 'Edit Prompt' : 'Create New Prompt'}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {prompt ? 'Update your existing prompt' : 'Design and craft your AI prompt'}
+            </p>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => setShowPreview(!showPreview)}
+              className="btn btn-secondary btn-sm"
+            >
+              <Eye size={16} />
+              <span className="ml-2">{showPreview ? 'Hide' : 'Preview'}</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={onCancel}
+              className="btn btn-ghost btn-sm"
+            >
+              <X size={16} />
+              <span className="ml-2">Cancel</span>
+            </button>
+          </div>
         </div>
-      </main>
-      <Sidebar activeView={activeView} setActiveView={handleSetActiveView} />
 
-      <PromptForm 
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSave={handleSavePrompt}
-        editingPrompt={editingPrompt}
-      />
-      
-      <ImageRemixStudio
-        isOpen={isRemixOpen}
-        onClose={() => setIsRemixOpen(false)}
-        prompt={remixingPrompt}
-        onSave={handleSavePrompt}
-      />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Form */}
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Basic Information */}
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Basic Information
+                  </h2>
+                </div>
+                <div className="card-body space-y-4">
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                      className={`input ${errors.title ? 'border-red-500' : ''}`}
+                      placeholder="Enter a descriptive title for your prompt"
+                    />
+                    {errors.title && (
+                      <p className="text-red-500 text-sm mt-1">{errors.title}</p>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.description}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      className="input"
+                      placeholder="Brief description of what this prompt does"
+                    />
+                  </div>
+
+                  {/* Type */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Type *
+                    </label>
+                    <div className="flex space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="type"
+                          value="text"
+                          checked={formData.type === 'text'}
+                          onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'text' | 'image' }))}
+                          className="mr-2"
+                        />
+                        <FileText size={16} className="mr-2" />
+                        Text Prompt
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="type"
+                          value="image"
+                          checked={formData.type === 'image'}
+                          onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'text' | 'image' }))}
+                          className="mr-2"
+                        />
+                        <ImageIcon size={16} className="mr-2" />
+                        Image Prompt
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Category *
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                      className={`select ${errors.category ? 'border-red-500' : ''}`}
+                    >
+                      <option value="">Select a category</option>
+                      {DEFAULT_PROMPT_CATEGORIES.map(category => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.category && (
+                      <p className="text-red-500 text-sm mt-1">{errors.category}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Prompt Content */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Prompt Content
+                    </h2>
+                    <div className="flex items-center space-x-4">
+                      <button
+                        type="button"
+                        onClick={handleCopyContent}
+                        className="btn btn-ghost btn-sm"
+                        title="Copy content"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {getWordCount()} words, {getCharacterCount()} characters
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <textarea
+                    value={formData.content}
+                    onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                    className={`textarea min-h-[300px] ${errors.content ? 'border-red-500' : ''}`}
+                    placeholder={formData.type === 'image' 
+                      ? "Describe the image you want to generate in detail. Include style, composition, colors, lighting, and any specific elements..."
+                      : "Enter your prompt here. Be specific and clear about what you want the AI to do..."
+                    }
+                  />
+                  {errors.content && (
+                    <p className="text-red-500 text-sm mt-1">{errors.content}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Tags
+                  </h2>
+                </div>
+                <div className="card-body">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {formData.tags.map(tag => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="ml-2 text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      className="input flex-1"
+                      placeholder="Add a tag and press Enter"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTag}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      <Tag size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="btn btn-secondary"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="loading-spinner" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  <span className="ml-2">
+                    {isLoading ? 'Saving...' : (prompt ? 'Update Prompt' : 'Create Prompt')}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Preview */}
+            {showPreview && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Preview
+                  </h3>
+                </div>
+                <div className="card-body">
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-white">
+                        {formData.title || 'Untitled Prompt'}
+                      </h4>
+                      {formData.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {formData.description}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 text-sm">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        formData.type === 'text' 
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                      }`}>
+                        {formData.type === 'text' ? 'Text' : 'Image'}
+                      </span>
+                      {formData.category && (
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {formData.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {formData.content || 'Your prompt content will appear here...'}
+                      </p>
+                    </div>
+
+                    {formData.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {formData.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tips */}
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Tips for Great Prompts
+                </h3>
+              </div>
+              <div className="card-body">
+                <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary-500 mt-1">•</span>
+                    <span>Be specific and clear about what you want</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary-500 mt-1">•</span>
+                    <span>Include context and background information</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary-500 mt-1">•</span>
+                    <span>Use examples when helpful</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary-500 mt-1">•</span>
+                    <span>Specify the desired format or style</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-primary-500 mt-1">•</span>
+                    <span>Test and iterate to improve results</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Quick Actions
+                </h3>
+              </div>
+              <div className="card-body space-y-2">
+                <button
+                  type="button"
+                  className="w-full btn btn-ghost btn-sm justify-start"
+                >
+                  <Wand2 size={16} />
+                  <span className="ml-2">AI Enhance</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full btn btn-ghost btn-sm justify-start"
+                >
+                  <Play size={16} />
+                  <span className="ml-2">Test Prompt</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full btn btn-ghost btn-sm justify-start"
+                >
+                  <Folder size={16} />
+                  <span className="ml-2">Save as Template</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
-
-export default PromptStudio;
