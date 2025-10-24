@@ -1,8 +1,51 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Prompt, PromptType, GeminiContent } from "../types";
 
-// FIX: Initialize the GoogleGenAI client. The API key must be sourced from process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+type GenAIOptions = {
+  model?: string;
+  // Pass-through config for the SDK; we keep it loosely typed for flexibility
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config?: any;
+};
+
+function getStored<T = string>(key: string, fallback?: T): T | undefined {
+  try {
+    if (typeof window !== 'undefined') {
+      const v = window.localStorage.getItem(key);
+      if (v != null) return JSON.parse(v);
+    }
+  } catch {}
+  return fallback;
+}
+
+function getApiKey(): string | undefined {
+  const local = getStored<string>('geminiApiKey');
+  // IMPORTANT: use literal references so Vite replaces them at build time
+  const envFromGemini: string | undefined = (process.env.GEMINI_API_KEY as unknown as string) || undefined;
+  const envFromApiKey: string | undefined = (process.env.API_KEY as unknown as string) || undefined;
+  const envKey = envFromGemini || envFromApiKey;
+  return local || envKey;
+}
+
+function getDefaultModelFor(type: 'text' | 'image'): string {
+  const local = getStored<string>(type === 'text' ? 'defaultTextModel' : 'defaultImageModel');
+  if (local) return local;
+  return type === 'text' ? 'gemini-2.5-flash' : 'imagen-4.0-generate-001';
+}
+
+function getDefaultTemperature(): number | undefined {
+  const t = getStored<number>('defaultTemperature');
+  return typeof t === 'number' ? t : undefined;
+}
+
+function getAIClient(): GoogleGenAI {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    // Create a dummy client that will fail on call; callers handle gracefully
+    return new GoogleGenAI({ apiKey: '' as unknown as string });
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 /**
  * Enhances a given prompt using AI.
@@ -11,12 +54,18 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
  * @returns An object with improvements and suggested tags, or a specific error object on failure.
  */
 // Update: Removed `| null` from return type as it's never null.
-export const getPromptEnhancements = async (prompt: string, type: PromptType): Promise<{ improvements: string; tags: string[] }> => {
+export const getPromptEnhancements = async (
+  prompt: string,
+  type: PromptType,
+  options?: GenAIOptions
+): Promise<{ improvements: string; tags: string[] }> => {
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: options?.model || getDefaultModelFor('text'),
       contents: `Analyze and enhance the following prompt for a ${type} generation AI. Provide a better, more detailed version and suggest 3-5 relevant tags. Prompt: "${prompt}"`,
       config: {
+        temperature: options?.config?.temperature ?? getDefaultTemperature(),
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -50,15 +99,17 @@ export const getPromptEnhancements = async (prompt: string, type: PromptType): P
  * @param prompt The text prompt for image generation.
  * @returns A base64 encoded image string, or null on failure.
  */
-export const generateImage = async (prompt: string): Promise<string | null> => {
+export const generateImage = async (prompt: string, options?: GenAIOptions): Promise<string | null> => {
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
+      model: options?.model || getDefaultModelFor('image'),
       prompt: prompt,
       config: {
         numberOfImages: 1,
         outputMimeType: 'image/png',
         aspectRatio: '1:1',
+        ...(options?.config || {}),
       },
     });
 
@@ -79,15 +130,21 @@ export const generateImage = async (prompt: string): Promise<string | null> => {
  * @param newPrompt The new user prompt.
  * @returns The AI's text response.
  */
-export const getAIAssistantResponse = async (history: GeminiContent[], newPrompt: string): Promise<string> => {
+export const getAIAssistantResponse = async (
+  history: GeminiContent[],
+  newPrompt: string,
+  options?: GenAIOptions
+): Promise<string> => {
   try {
+    const ai = getAIClient();
     const contents = [...history, { role: 'user', parts: [{ text: newPrompt }] }];
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: options?.model || getDefaultModelFor('text'),
       contents: contents,
       config: {
-        systemInstruction: "You are a helpful assistant for writing and refining AI prompts. Your name is Prompt Pal. Keep your answers concise and helpful."
+        systemInstruction: "You are a helpful assistant for writing and refining AI prompts. Your name is Prompt Pal. Keep your answers concise and helpful.",
+        temperature: options?.config?.temperature ?? getDefaultTemperature(),
       }
     });
 
@@ -104,7 +161,7 @@ export const getAIAssistantResponse = async (history: GeminiContent[], newPrompt
  * @param instruction The text instruction for editing.
  * @returns A new base64 encoded image string, or null on failure.
  */
-export const editImage = async (base64ImageUrl: string, instruction: string): Promise<string | null> => {
+export const editImage = async (base64ImageUrl: string, instruction: string, options?: GenAIOptions): Promise<string | null> => {
   try {
     const match = base64ImageUrl.match(/^data:(image\/.+);base64,(.+)$/);
     if (!match) {
@@ -113,8 +170,9 @@ export const editImage = async (base64ImageUrl: string, instruction: string): Pr
     const mimeType = match[1];
     const base64ImageData = match[2];
 
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: options?.model || 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
@@ -130,6 +188,7 @@ export const editImage = async (base64ImageUrl: string, instruction: string): Pr
       },
       config: {
         responseModalities: [Modality.IMAGE, Modality.TEXT],
+        ...(options?.config || {}),
       },
     });
 
@@ -167,10 +226,12 @@ Provide a title, the full prompt content, a suitable type ('image', 'text', 'vid
 Return the response as a valid JSON array of objects.`;
 
   try {
+    const ai = getAIClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: getDefaultModelFor('text'),
       contents: promptForAI,
       config: {
+        temperature: getDefaultTemperature(),
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
