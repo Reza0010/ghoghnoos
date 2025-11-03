@@ -1,6 +1,7 @@
 import React from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import PromptStudio from './components/PromptStudio';
+import Layout from './components/Layout';
+import ConfigManagement from './components/ConfigManagement';
 
 function App() {
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('theme', 'dark');
@@ -17,7 +18,9 @@ function App() {
 
   return (
     <div className={`theme-${theme}`}>
-        <PromptStudio theme={theme} toggleTheme={toggleTheme} />
+      <Layout theme={theme} toggleTheme={toggleTheme}>
+        <ConfigManagement />
+      </Layout>
     </div>
   );
 }
