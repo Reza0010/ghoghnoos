@@ -1,20 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+````markdown
+```code
+# Prompt Studio (Tauri PoC)
 
-# Run and deploy your AI Studio app
+توضیح کوتاه: این شاخه حاوی PoC برای بسته‌بندی به عنوان اپ ویندوزی با Tauri است. تغییرات کلیدی:
+- ترجمه‌ها به پوشه locales تفکیک شده‌اند.
+- صفحهٔ Settings با ذخیرهٔ API Key و تنظیمات backup اضافه شده.
+- سرویس ذخیره‌سازی محلی و backup هنگام بسته شدن برنامه پیاده‌سازی شده.
 
-This contains everything you need to run your app locally.
+نکات مهم برای باندل‌سازی:
+- برای ساخت نهایی روی ویندوز نیاز به toolchain مخصوص (برای ساخت بسته) دارید.
+- فایل src-tauri/tauri.conf.json تنظیمات بسته‌بندی پایه را دارد.
+- برای امنیت کلید API پیشنهاد می‌شود از keyring/OS secure storage یا رمزگذاری قوی استفاده کنید؛ در PoC یک روش ساده محلی اعمال شده است.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1kbHJCUylv2eKo1fe1fnbqyKXAFoxjmGX
+نحوهٔ اجرا (توسعه):
+1. npm install
+2. npm run dev
+3. npm run tauri:dev   (برای اجرای در webview دسکتاپ)
+4. npm run tauri:build (برای ساخت installer)
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+مواردی که حتماً باید قبل از انتشار بررسی شوند:
+- کدنویسی امن برای ذخیرهٔ کلیدها (استفاده از keyring در صورت نیاز)
+- code-signing برای installer
+- تست حافظه و نشت‌های React
+- تست روی Windows 10/11
+```
+````

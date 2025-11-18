@@ -1,0 +1,34 @@
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": ""
+  },
+  "package": {
+    "productName": "Prompt Studio",
+    "version": "0.0.0"
+  },
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "targets": ["msi", "msix"],
+      "identifier": "com.yourcompany.promptstudio",
+      "icon": [
+        "icons/icon.ico",
+        "icons/icon.png"
+      ],
+      "resources": [],
+      "windows": {
+        "certificateThumbprint": "",
+        "digestAlgorithm": "sha256"
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "allowlist": {
+      "fs": { "all": true },
+      "path": { "all": true },
+      "dialog": { "open": true, "save": true }
+    }
+  }
+}
