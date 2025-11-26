@@ -1,5 +1,0 @@
-{
-  "sidebar": { "title": "Prompt Studio", "version": "Version" },
-  "header": { "searchPlaceholder": "Keyword or semantic search...", "createNewLabel": "Create New" },
-  "aiAssistant": { "title": "Personal Prompt Assistant", "welcomeMessage": "Hello! I'm your AI assistant for writing prompts. How can I help you?", "inputPlaceholder": "Type your message...", "errorMessage": "Sorry, something went wrong. Please try again." }
-}
