@@ -49,36 +49,51 @@ class LoginWidget(QWidget):
 
         # Proxy Group
         proxy_group = QGroupBox("Proxy Settings")
-        proxy_layout = QFormLayout()
+        self.proxy_layout = QFormLayout()
 
         self.proxy_type = QComboBox()
-        self.proxy_type.addItems(["SOCKS5", "HTTP"])
-        proxy_layout.addRow("Type:", self.proxy_type)
+        self.proxy_type.addItems(["SOCKS5", "HTTP", "MTProto"])
+        self.proxy_type.currentTextChanged.connect(self.toggle_proxy_fields)
+        self.proxy_layout.addRow("Type:", self.proxy_type)
 
         self.proxy_server = QLineEdit()
-        proxy_layout.addRow("Server:", self.proxy_server)
+        self.proxy_layout.addRow("Server:", self.proxy_server)
 
         self.proxy_port = QLineEdit()
-        proxy_layout.addRow("Port:", self.proxy_port)
+        self.proxy_layout.addRow("Port:", self.proxy_port)
+
+        self.proxy_secret = QLineEdit()
+        self.proxy_layout.addRow("Secret:", self.proxy_secret)
 
         self.proxy_username = QLineEdit()
-        proxy_layout.addRow("Username:", self.proxy_username)
+        self.proxy_layout.addRow("Username:", self.proxy_username)
 
         self.proxy_password = QLineEdit()
         self.proxy_password.setEchoMode(QLineEdit.EchoMode.Password)
-        proxy_layout.addRow("Password:", self.proxy_password)
+        self.proxy_layout.addRow("Password:", self.proxy_password)
 
         self.save_proxy_button = QPushButton("Save Proxy")
         self.save_proxy_button.clicked.connect(self.save_proxy)
-        proxy_layout.addWidget(self.save_proxy_button)
+        self.proxy_layout.addWidget(self.save_proxy_button)
 
-        proxy_group.setLayout(proxy_layout)
+        proxy_group.setLayout(self.proxy_layout)
         layout.addWidget(proxy_group)
 
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
 
         self.load_proxy_settings()
+        self.toggle_proxy_fields(self.proxy_type.currentText())
+
+    def toggle_proxy_fields(self, proxy_type):
+        is_mtproto = proxy_type == "MTProto"
+        self.proxy_secret.setVisible(is_mtproto)
+        self.proxy_layout.labelForField(self.proxy_secret).setVisible(is_mtproto)
+
+        self.proxy_username.setVisible(not is_mtproto)
+        self.proxy_layout.labelForField(self.proxy_username).setVisible(not is_mtproto)
+        self.proxy_password.setVisible(not is_mtproto)
+        self.proxy_layout.labelForField(self.proxy_password).setVisible(not is_mtproto)
 
     def load_proxy_settings(self):
         config = configparser.ConfigParser()
@@ -87,6 +102,7 @@ class LoginWidget(QWidget):
             self.proxy_type.setCurrentText(config['proxy'].get('type', 'SOCKS5'))
             self.proxy_server.setText(config['proxy'].get('server', ''))
             self.proxy_port.setText(config['proxy'].get('port', ''))
+            self.proxy_secret.setText(config['proxy'].get('secret', ''))
             self.proxy_username.setText(config['proxy'].get('username', ''))
             self.proxy_password.setText(config['proxy'].get('password', ''))
 
@@ -94,10 +110,11 @@ class LoginWidget(QWidget):
         proxy_type = self.proxy_type.currentText()
         server = self.proxy_server.text()
         port = self.proxy_port.text()
+        secret = self.proxy_secret.text()
         username = self.proxy_username.text()
         password = self.proxy_password.text()
 
-        self.telegram_service.save_proxy_settings(proxy_type, server, port, username, password)
+        self.telegram_service.save_proxy_settings(proxy_type, server, port, username, password, secret)
         self.status_label.setText("Proxy settings saved. Please restart the application to apply.")
 
     async def send_code(self):
@@ -175,7 +192,6 @@ class MainWindow(QMainWindow):
 async def main():
     try:
         telegram_service = TelegramService()
-        await telegram_service.connect()
     except Exception as e:
         print(f"Error during initialization: {e}")
         return

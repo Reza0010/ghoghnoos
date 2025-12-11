@@ -1,9 +1,12 @@
 import configparser
 import os
+import logging
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 import socks
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CONFIG_FILE = 'config.ini'
 
@@ -27,22 +30,29 @@ except (KeyError, ValueError):
     )
 
 def get_proxy_settings():
-    proxy_settings = None
-    if 'proxy' in config and config['proxy'].get('server'):
-        proxy_type = config['proxy'].get('type', 'SOCKS5').upper()
-        proxy_server = config['proxy']['server']
-        proxy_port = int(config['proxy']['port'])
-        proxy_username = config['proxy'].get('username')
-        proxy_password = config['proxy'].get('password')
+    try:
+        if 'proxy' in config and config['proxy'].get('server'):
+            proxy_type = config['proxy'].get('type', 'SOCKS5').upper()
+            server = config['proxy']['server']
+            port = int(config['proxy']['port'])
 
-        proxy_dict = {
-            'proxy_type': socks.SOCKS5 if proxy_type == 'SOCKS5' else socks.HTTP,
-            'addr': proxy_server,
-            'port': proxy_port,
-            'username': proxy_username,
-            'password': proxy_password
-        }
-        return proxy_dict
+            if proxy_type == 'MTPROTO':
+                secret = config['proxy'].get('secret', '')
+                return ('mtproxy', server, port, secret)
+            else:
+                username = config['proxy'].get('username')
+                password = config['proxy'].get('password')
+                proxy_protocol = socks.SOCKS5 if proxy_type == 'SOCKS5' else socks.HTTP
+
+                return {
+                    'proxy_type': proxy_protocol,
+                    'addr': server,
+                    'port': port,
+                    'username': username,
+                    'password': password
+                }
+    except (ValueError, KeyError) as e:
+        logging.warning(f"Invalid proxy settings in '{CONFIG_FILE}': {e}. Proceeding without proxy.")
     return None
 
 class TelegramService:
@@ -84,7 +94,7 @@ class TelegramService:
     async def disconnect(self):
         await self.client.disconnect()
 
-    def save_proxy_settings(self, proxy_type, server, port, username, password):
+    def save_proxy_settings(self, proxy_type, server, port, username, password, secret):
         if 'proxy' not in config:
             config.add_section('proxy')
 
@@ -93,6 +103,7 @@ class TelegramService:
         config.set('proxy', 'port', str(port))
         config.set('proxy', 'username', username)
         config.set('proxy', 'password', password)
+        config.set('proxy', 'secret', secret)
 
         with open(CONFIG_FILE, 'w') as configfile:
             config.write(configfile)
