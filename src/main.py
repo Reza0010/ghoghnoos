@@ -10,6 +10,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from telegram_service import TelegramService, CONFIG_FILE
 
+# Patch for asyncqt compatibility with PyQt6 > 6.0
+QApplication.exec_ = QApplication.exec
+
 class LoginWidget(QWidget):
     def __init__(self, telegram_service, main_window, parent=None):
         super().__init__(parent)
