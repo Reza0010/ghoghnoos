@@ -3,6 +3,7 @@ import os
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
+import socks
 
 CONFIG_FILE = 'config.ini'
 
@@ -25,9 +26,29 @@ except (KeyError, ValueError):
         f"Please ensure 'api_id' and 'api_hash' are present under the [telegram] section."
     )
 
+def get_proxy_settings():
+    proxy_settings = None
+    if 'proxy' in config and config['proxy'].get('server'):
+        proxy_type = config['proxy'].get('type', 'SOCKS5').upper()
+        proxy_server = config['proxy']['server']
+        proxy_port = int(config['proxy']['port'])
+        proxy_username = config['proxy'].get('username')
+        proxy_password = config['proxy'].get('password')
+
+        proxy_dict = {
+            'proxy_type': socks.SOCKS5 if proxy_type == 'SOCKS5' else socks.HTTP,
+            'addr': proxy_server,
+            'port': proxy_port,
+            'username': proxy_username,
+            'password': proxy_password
+        }
+        return proxy_dict
+    return None
+
 class TelegramService:
     def __init__(self, session_file='telegram_session.session'):
-        self.client = TelegramClient(session_file, API_ID, API_HASH)
+        self.proxy = get_proxy_settings()
+        self.client = TelegramClient(session_file, API_ID, API_HASH, proxy=self.proxy)
         self.phone_number = None
 
     async def connect(self):
@@ -62,3 +83,16 @@ class TelegramService:
 
     async def disconnect(self):
         await self.client.disconnect()
+
+    def save_proxy_settings(self, proxy_type, server, port, username, password):
+        if 'proxy' not in config:
+            config.add_section('proxy')
+
+        config.set('proxy', 'type', proxy_type)
+        config.set('proxy', 'server', server)
+        config.set('proxy', 'port', str(port))
+        config.set('proxy', 'username', username)
+        config.set('proxy', 'password', password)
+
+        with open(CONFIG_FILE, 'w') as configfile:
+            config.write(configfile)

@@ -1,12 +1,14 @@
 import sys
 import asyncio
+import configparser
 from asyncqt import QEventLoop
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QLineEdit, QPushButton, QLabel, QStackedWidget, QListWidget
+    QLineEdit, QPushButton, QLabel, QStackedWidget, QListWidget,
+    QGroupBox, QFormLayout, QComboBox
 )
 from PyQt6.QtCore import Qt
-from telegram_service import TelegramService
+from telegram_service import TelegramService, CONFIG_FILE
 
 class LoginWidget(QWidget):
     def __init__(self, telegram_service, main_window, parent=None):
@@ -17,29 +19,86 @@ class LoginWidget(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
+        # Login Group
+        login_group = QGroupBox("Login")
+        login_layout = QFormLayout()
+
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone Number (e.g., +1234567890)")
-        layout.addWidget(self.phone_input)
+        login_layout.addRow("Phone:", self.phone_input)
 
         self.send_code_button = QPushButton("Send Code")
         self.send_code_button.clicked.connect(lambda: asyncio.create_task(self.send_code()))
-        layout.addWidget(self.send_code_button)
+        login_layout.addWidget(self.send_code_button)
 
         self.code_input = QLineEdit()
         self.code_input.setPlaceholderText("Verification Code")
-        layout.addWidget(self.code_input)
+        login_layout.addRow("Code:", self.code_input)
 
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("2FA Password (if any)")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addWidget(self.password_input)
+        login_layout.addRow("Password:", self.password_input)
 
         self.login_button = QPushButton("Login")
         self.login_button.clicked.connect(lambda: asyncio.create_task(self.login()))
-        layout.addWidget(self.login_button)
+        login_layout.addWidget(self.login_button)
+
+        login_group.setLayout(login_layout)
+        layout.addWidget(login_group)
+
+        # Proxy Group
+        proxy_group = QGroupBox("Proxy Settings")
+        proxy_layout = QFormLayout()
+
+        self.proxy_type = QComboBox()
+        self.proxy_type.addItems(["SOCKS5", "HTTP"])
+        proxy_layout.addRow("Type:", self.proxy_type)
+
+        self.proxy_server = QLineEdit()
+        proxy_layout.addRow("Server:", self.proxy_server)
+
+        self.proxy_port = QLineEdit()
+        proxy_layout.addRow("Port:", self.proxy_port)
+
+        self.proxy_username = QLineEdit()
+        proxy_layout.addRow("Username:", self.proxy_username)
+
+        self.proxy_password = QLineEdit()
+        self.proxy_password.setEchoMode(QLineEdit.EchoMode.Password)
+        proxy_layout.addRow("Password:", self.proxy_password)
+
+        self.save_proxy_button = QPushButton("Save Proxy")
+        self.save_proxy_button.clicked.connect(self.save_proxy)
+        proxy_layout.addWidget(self.save_proxy_button)
+
+        proxy_group.setLayout(proxy_layout)
+        layout.addWidget(proxy_group)
 
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
+
+        self.load_proxy_settings()
+
+    def load_proxy_settings(self):
+        config = configparser.ConfigParser()
+        config.read(CONFIG_FILE)
+        if 'proxy' in config:
+            self.proxy_type.setCurrentText(config['proxy'].get('type', 'SOCKS5'))
+            self.proxy_server.setText(config['proxy'].get('server', ''))
+            self.proxy_port.setText(config['proxy'].get('port', ''))
+            self.proxy_username.setText(config['proxy'].get('username', ''))
+            self.proxy_password.setText(config['proxy'].get('password', ''))
+
+    def save_proxy(self):
+        proxy_type = self.proxy_type.currentText()
+        server = self.proxy_server.text()
+        port = self.proxy_port.text()
+        username = self.proxy_username.text()
+        password = self.proxy_password.text()
+
+        self.telegram_service.save_proxy_settings(proxy_type, server, port, username, password)
+        self.status_label.setText("Proxy settings saved. Please restart the application to apply.")
 
     async def send_code(self):
         phone_number = self.phone_input.text()
@@ -114,8 +173,12 @@ class MainWindow(QMainWindow):
 
 
 async def main():
-    telegram_service = TelegramService()
-    await telegram_service.connect()
+    try:
+        telegram_service = TelegramService()
+        await telegram_service.connect()
+    except Exception as e:
+        print(f"Error during initialization: {e}")
+        return
 
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
