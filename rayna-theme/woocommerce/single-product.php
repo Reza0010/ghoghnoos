@@ -16,6 +16,13 @@ get_header( 'shop' ); ?>
 
             <!-- راست: بخش خرید و قیمت -->
             <section class="purchase-options" style="background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #eee;">
+                <div class="stock-status mb-3">
+                    <?php if ( $product->is_in_stock() ) : ?>
+                        <span style="color: #27ae60; font-weight: bold;"><i class="fas fa-check-circle"></i> موجود در انبار</span>
+                    <?php else : ?>
+                        <span style="color: #e74c3c; font-weight: bold;"><i class="fas fa-times-circle"></i> ناموجود</span>
+                    <?php endif; ?>
+                </div>
                 <?php
                 /**
                  * Hook: woocommerce_single_product_summary.

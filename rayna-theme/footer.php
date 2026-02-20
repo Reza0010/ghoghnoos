@@ -44,7 +44,7 @@
                     </div>
                     <div class="contact-item">
                         <i class="fas fa-phone-alt"></i>
-                        <span>۰۲۱-۸۸XXXXXX</span>
+                        <span><?php echo esc_html( get_theme_mod( 'rayna_contact_phone', '۰۲۱-۸۸XXXXXX' ) ); ?></span>
                     </div>
                     <div class="contact-item">
                         <i class="fas fa-envelope"></i>
@@ -58,7 +58,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; <?php echo date('Y'); ?> تمامی حقوق برای فروشگاه RAYNA محفوظ است.</p>
+                <p>&copy; <?php echo date('Y'); ?> <?php echo esc_html( get_theme_mod( 'rayna_footer_copy', 'تمامی حقوق برای فروشگاه RAYNA محفوظ است.' ) ); ?></p>
                 <div class="payment-logos">
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" alt="Visa">
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" alt="Mastercard">

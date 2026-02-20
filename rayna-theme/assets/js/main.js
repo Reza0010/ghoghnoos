@@ -1,42 +1,46 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // --- State Management (Optional for simple theme) ---
-    let wishlist = [];
+jQuery(document).ready(function($) {
+    // --- AJAX Search ---
+    const $searchBar = $('.search-bar');
+    const $searchInput = $searchBar.find('input[type="search"]');
 
-    // --- DOM Elements ---
-    const wishlistCountBadge = document.getElementById('wishlist-count');
-    const wishlistLink = document.getElementById('wishlist-link');
-    const loginLink = document.getElementById('login-link');
+    // Inject results container
+    $searchBar.css('position', 'relative');
+    $searchBar.append('<div id="rayna-search-results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #eee; z-index:1000; box-shadow:0 10px 20px rgba(0,0,0,0.1); border-radius:0 0 8px 8px; max-height:400px; overflow-y:auto;"></div>');
+    const $results = $('#rayna-search-results');
 
-    // --- Modal Elements ---
-    // Note: In a real WP theme, these would be added to footer.php or via a plugin
-    // For this professional demo, we assume they might be added by the user or we can inject them
+    let searchTimer;
+    $searchInput.on('keyup', function() {
+        const keyword = $(this).val();
+        clearTimeout(searchTimer);
 
-    // Example: Simple Toggle for mobile menu if it exists
-    const menuToggle = document.querySelector('.menu-toggle');
-    const mainMenu = document.querySelector('.main-menu');
+        if (keyword.length < 2) {
+            $results.hide();
+            return;
+        }
 
-    if (menuToggle && mainMenu) {
-        menuToggle.addEventListener('click', function() {
-            mainMenu.classList.toggle('active');
-        });
-    }
+        searchTimer = setTimeout(function() {
+            $results.html('<p style="padding:15px; text-align:center;">در حال جستجو...</p>').show();
 
-    // --- Wishlist Mockup Logic ---
-    if (wishlistLink) {
-        wishlistLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            alert('لیست علاقه مندی‌ها در نسخه بعدی فعال خواهد شد. فعلاً می‌توانید محصولات را به سبد خرید اضافه کنید.');
-        });
-    }
+            $.ajax({
+                url: rayna_ajax.ajax_url,
+                type: 'GET',
+                data: {
+                    action: 'rayna_search',
+                    keyword: keyword
+                },
+                success: function(response) {
+                    $results.html(response).show();
+                }
+            });
+        }, 500);
+    });
 
-    // --- Login Mockup Logic ---
-    if (loginLink) {
-        loginLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            // In WP, redirect to my-account
-            window.location.href = window.location.origin + '/my-account/';
-        });
-    }
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.search-bar').length) {
+            $results.hide();
+        }
+    });
 
-    console.log('Rayna Theme Interactions Initialized');
+    // --- Basic Interaction ---
+    console.log('Rayna Professional Theme Initialized');
 });

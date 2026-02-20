@@ -3,6 +3,16 @@
 <head>
     <meta charset="<?php bloginfo( 'charset' ); ?>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- SEO & Social Meta Tags -->
+    <?php if ( is_single() ) : ?>
+        <meta property="og:title" content="<?php the_title(); ?>">
+        <meta property="og:description" content="<?php echo wp_strip_all_tags( get_the_excerpt() ); ?>">
+        <meta property="og:image" content="<?php echo get_the_post_thumbnail_url( get_the_ID(), 'large' ); ?>">
+        <meta property="og:url" content="<?php the_permalink(); ?>">
+        <meta name="twitter:card" content="summary_large_image">
+    <?php endif; ?>
+
     <?php wp_head(); ?>
 </head>
 <body <?php body_class(); ?>>

@@ -14,6 +14,9 @@ if ( empty( $product ) || ! $product->is_visible() ) {
 ?>
 <div <?php wc_product_class( 'product-card', $product ); ?>>
     <div class="product-image">
+        <?php if ( $product->is_on_sale() ) : ?>
+            <span class="discount-badge" style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; z-index: 10; font-weight: bold; font-size: 0.8rem;">فروش ویژه</span>
+        <?php endif; ?>
         <a href="<?php the_permalink(); ?>">
             <?php echo $product->get_image(); ?>
         </a>

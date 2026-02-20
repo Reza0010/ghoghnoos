@@ -3,6 +3,12 @@
  * Rayna Theme Functions
  */
 
+// Customizer settings
+require get_template_directory() . '/inc/customizer.php';
+
+// Plugin recommendations
+require get_template_directory() . '/inc/tgm-config.php';
+
 function rayna_setup() {
     // Add default posts and comments RSS feed links to head.
     add_theme_support( 'automatic-feed-links' );
@@ -75,6 +81,7 @@ function rayna_scripts() {
 
     // Load scripts
     wp_enqueue_script( 'rayna-main', get_template_directory_uri() . '/assets/js/main.js', array('jquery'), '1.0.0', true );
+    wp_localize_script( 'rayna-main', 'rayna_ajax', array( 'ajax_url' => admin_url( 'admin-ajax.php' ) ) );
 }
 add_action( 'wp_enqueue_scripts', 'rayna_scripts' );
 
@@ -101,3 +108,40 @@ add_action('woocommerce_after_main_content', 'rayna_woocommerce_wrapper_end', 10
  * Adjust Single Product Hooks for Custom Layout
  */
 remove_action( 'woocommerce_after_single_product_summary', 'woocommerce_output_product_data_tabs', 10 );
+
+/**
+ * AJAX Search Handler
+ */
+function rayna_ajax_search() {
+    $keyword = sanitize_text_field( $_GET['keyword'] );
+    $args = array(
+        'post_type'      => 'product',
+        'post_status'    => 'publish',
+        'posts_per_page' => 5,
+        's'              => $keyword,
+    );
+    $query = new WP_Query( $args );
+
+    if ( $query->have_posts() ) {
+        echo '<ul>';
+        while ( $query->have_posts() ) {
+            $query->the_post();
+            global $product;
+            ?>
+            <li>
+                <a href="<?php the_permalink(); ?>">
+                    <?php the_post_thumbnail( array( 40, 40 ) ); ?>
+                    <span class="title"><?php the_title(); ?></span>
+                    <span class="price"><?php echo $product->get_price_html(); ?></span>
+                </a>
+            </li>
+            <?php
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>نتیجه‌ای یافت نشد.</p>';
+    }
+    wp_die();
+}
+add_action( 'wp_ajax_rayna_search', 'rayna_ajax_search' );
+add_action( 'wp_ajax_nopriv_rayna_search', 'rayna_ajax_search' );
