@@ -538,6 +538,35 @@ def get_orders_count_by_platform_and_status(db: Session, platform: str, status: 
             models.User.platform == platform
         ).scalar()
 
+def get_top_selling_products(db: Session, limit: int = 5):
+    """لیست محصولات پرفروش به همراه تعداد و درآمد کل"""
+    return db.query(
+        models.Product.name,
+        func.sum(models.OrderItem.quantity).label('total_qty'),
+        func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase).label('total_revenue')
+    ).join(models.OrderItem).group_by(models.Product.id)\
+    .order_by(desc('total_qty')).limit(limit).all()
+
+def get_sales_growth(db: Session):
+    """محاسبه درصد رشد فروش امروز نسبت به دیروز"""
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+
+    def get_day_revenue(day):
+        return db.query(func.coalesce(func.sum(models.Order.total_amount), 0))\
+            .filter(func.date(models.Order.created_at) == day)\
+            .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+            .scalar()
+
+    rev_today = get_day_revenue(today)
+    rev_yesterday = get_day_revenue(yesterday)
+
+    if rev_yesterday == 0:
+        return 100 if rev_today > 0 else 0
+
+    growth = ((rev_today - rev_yesterday) / rev_yesterday) * 100
+    return round(growth, 1)
+
 # ======================================================================
 # 8. آدرس‌ها و علاقه‌مندی‌ها
 # ======================================================================
