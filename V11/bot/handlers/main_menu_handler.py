@@ -165,13 +165,42 @@ async def handle_delete_address(update: Update, context: ContextTypes.DEFAULT_TY
 # ==============================================================================
 
 async def handle_special_offers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بخش پیشنهادات ویژه (جایگاه کمپین‌های تبلیغاتی)"""
+    """بخش پیشنهادات ویژه (نمایش محصولات تخفیف‌دار و پرفروش)"""
     query = update.callback_query
     await query.answer()
     
-    # می‌توان این متن را از یک Setting در دیتابیس خواند
-    text = f"🔥 <b>جشنواره تخفیفات ویژه</b>\n{responses.get_divider()}\nدر حال حاضر کمپین فعالی وجود ندارد.\nبا عضویت در کانال ما از کدهای تخفیف باخبر شوید!"
-    await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    def _fetch_specials(db):
+        # محصولات تخفیف‌دار
+        discounted = db.query(models.Product).filter(models.Product.discount_price > 0, models.Product.stock > 0).limit(5).all()
+        # محصولات پرفروش
+        top_sellers = db.query(models.Product).filter(models.Product.is_top_seller == True, models.Product.stock > 0).limit(5).all()
+        return discounted, top_sellers
+
+    discounted, top_sellers = await run_db(_fetch_specials)
+
+    text = f"🔥 <b>پیشنهادات ویژه و جشنواره‌ها</b>\n{responses.get_divider()}\n"
+
+    btns = []
+    if discounted:
+        text += "💰 <b>محصولات دارای تخفیف:</b>\n"
+        for p in discounted:
+            text += f"• {p.name}\n"
+            btns.append([InlineKeyboardButton(f"🎁 {p.name}", callback_data=f"prod:show:{p.id}")])
+
+    if top_sellers:
+        text += "\n🏆 <b>محبوب‌ترین‌های این هفته:</b>\n"
+        for p in top_sellers:
+            text += f"• {p.name}\n"
+            # جلوگیری از دکمه تکراری
+            if not any(b[0].callback_data == f"prod:show:{p.id}" for b in btns):
+                btns.append([InlineKeyboardButton(f"⭐ {p.name}", callback_data=f"prod:show:{p.id}")])
+
+    if not discounted and not top_sellers:
+        text += "در حال حاضر جشنواره فعالی وجود ندارد. منتظر خبرهای خوب باشید!"
+
+    btns.append([InlineKeyboardButton(responses.BACK_BUTTON, callback_data="main_menu")])
+
+    await _safe_edit(update, text, InlineKeyboardMarkup(btns))
 
 async def handle_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اطلاعات تماس با پشتیبانی"""

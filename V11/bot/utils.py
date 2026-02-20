@@ -82,3 +82,11 @@ def shorten_text(text: str, max_length: int = 50) -> str:
     if not text:
         return ""
     return (text[:max_length] + '...') if len(text) > max_length else text
+
+async def get_branded_text(text: str) -> str:
+    """افزودن خودکار فوتر برندینگ به متن"""
+    from db import crud
+    footer = await run_db(crud.get_setting, "bot_footer_text", "")
+    if footer:
+        return f"{text}\n\n---\n{footer}"
+    return text

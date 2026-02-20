@@ -127,16 +127,18 @@ USER_PROFILE_BUTTON = "👤 حساب کاربری"
 CATEGORY_SELECT = "📂 <b>لطفاً دسته‌بندی مورد نظر را انتخاب کنید:</b>"
 PRODUCT_LIST = "📋 <b>لیست محصولات گروه:</b>\n{breadcrumbs}"
 PRODUCT_DETAILS = """
-✨ <b>{name}</b>
+💎 <b>{name}</b>
 {divider}
-📝 <b>توضیحات:</b>
-{description}
+📜 <b>توضیحات محصول:</b>
+<i>{description}</i>
 
 🏷 <b>برند:</b> <code>{brand}</code>
-📦 <b>وضعیت:</b> {stock_status}
+📦 <b>وضعیت موجودی:</b> {stock_status}
 {divider}
-💰 <b>قیمت:</b> {price_formatted}
+💰 <b>قیمت نهایی:</b> {price_formatted}
 {cart_preview}
+
+🚀 <b>تضمین کیفیت و اصالت کالا</b>
 """
 SEARCH_PROMPT = "🔍 <b>چه محصولی نیاز دارید؟</b>\nنام محصول، برند یا تگ مورد نظر را بنویسید:"
 SEARCH_NO_RESULT = "❌ <b>نتیجه‌ای یافت نشد!</b>\nلطفاً کلمات کلیدی دیگری را امتحان کنید."

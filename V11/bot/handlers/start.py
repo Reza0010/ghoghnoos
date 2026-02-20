@@ -78,6 +78,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     }
     welcome_text = responses.format_dynamic_text(welcome_text, dynamic_data)
 
+    # افزودن فوتر برندینگ
+    from bot.utils import get_branded_text
+    welcome_text = await get_branded_text(welcome_text)
+
     # افزودن هشدار وضعیت فروشگاه
     if str(is_open).lower() == "false":
         welcome_text += f"\n\n{responses.get_divider()}\n⛔️ <b>در حال حاضر فروشگاه بسته است و سفارش جدید ثبت نمی‌شود.</b>"

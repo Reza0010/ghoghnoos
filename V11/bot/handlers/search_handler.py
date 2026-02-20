@@ -1,7 +1,7 @@
 import math
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -140,6 +140,36 @@ async def show_search_results(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ==============================================================================
 # لغو و بازگشت
 # ==============================================================================
+async def handle_inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """جستجوی اینلاین برای اشتراک‌گذاری محصولات در چت‌های دیگر"""
+    query = update.inline_query.query.strip()
+    if not query: return
+
+    products = await run_db(crud.advanced_search_products, query=query, limit=10)
+
+    results = []
+    for p in products:
+        price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
+        # ساخت نتیجه برای هر محصول
+        results.append(
+            InlineQueryResultArticle(
+                id=str(p.id),
+                title=p.name,
+                description=f"💰 قیمت: {int(price):,} تومان | برند: {p.brand or '-'}",
+                thumbnail_url=None, # در صورت تمایل می‌توان لینک مستقیم عکس را قرار داد
+                input_message_content=InputTextMessageContent(
+                    await get_branded_text(
+                        f"🛍 <b>{p.name}</b>\n\n"
+                        f"💰 قیمت: {int(price):,} تومان\n"
+                        f"🔗 مشاهده در ربات: t.me/{(await context.bot.get_me()).username}?start=p_{p.id}"
+                    ),
+                    parse_mode='HTML'
+                )
+            )
+        )
+
+    await update.inline_query.answer(results, cache_time=300)
+
 async def cancel_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """پاکسازی داده‌ها و بازگشت به منوی اصلی"""
     context.user_data.pop('search_query', None)

@@ -4,6 +4,7 @@ from telegram.ext import (
     CommandHandler, 
     CallbackQueryHandler, 
     MessageHandler, 
+    InlineQueryHandler,
     filters
 )
 from bot.error_handler import global_error_handler
@@ -33,6 +34,7 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # 1. هندلرهای مکالمه (Conversation Handlers) - اولویت ۱
     # ==================================================================
     # این موارد باید حتماً قبل از هندلرهای Callback معمولی باشند
+    app.add_handler(InlineQueryHandler(search_handler.handle_inline_query))
     app.add_handler(search_handler.search_conversation_handler)
     app.add_handler(cart_handler.checkout_conversation_handler)
     app.add_handler(support_handler.support_conversation_handler)

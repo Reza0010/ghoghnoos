@@ -67,7 +67,7 @@ def build_product_keyboard(products: List[models.Product], cat_id: int, page: in
         # انتخاب قیمت (اگر تخفیف داشت، قیمت تخفیفی نمایش داده شود)
         price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
         price_str = f"{int(price):,}"
-        keyboard.append([InlineKeyboardButton(f"🔹 {p.name} | {price_str} ت", callback_data=f"prod:show:{p.id}")])
+        keyboard.append([InlineKeyboardButton(f"📦 {p.name} | {price_str} ت", callback_data=f"prod:show:{p.id}")])
 
     # کنترلر صفحه‌بندی
     if total_pages > 1:
@@ -81,7 +81,11 @@ def build_product_keyboard(products: List[models.Product], cat_id: int, page: in
             nav_row.append(InlineKeyboardButton("بعدی ▶️", callback_data=f"prod:list:{cat_id}:{page+1}"))
         keyboard.append(nav_row)
 
-    keyboard.append([InlineKeyboardButton(responses.BACK_BUTTON, callback_data=f"cat:list:{cat_id}")])
+    # دکمه‌های ناوبری اضافه
+    keyboard.append([
+        InlineKeyboardButton("🔍 جستجو", callback_data="search:start"),
+        InlineKeyboardButton(responses.BACK_BUTTON, callback_data=f"cat:list:{cat_id}")
+    ])
     return InlineKeyboardMarkup(keyboard)
 
 def get_product_detail_keyboard(product: models.Product, is_favorite: bool, cart_qty: int, bot_username: str) -> InlineKeyboardMarkup:
@@ -90,7 +94,7 @@ def get_product_detail_keyboard(product: models.Product, is_favorite: bool, cart
     
     # 1. بخش خرید یا اطلاع‌رسانی
     if product.stock > 0:
-        label = f"🛒 افزودن به سبد ({cart_qty} عدد)" if cart_qty > 0 else "🛒 افزودن به سبد خرید"
+        label = f"🛒 خرید سریع ({cart_qty} عدد)" if cart_qty > 0 else "🛒 افزودن به سبد خرید"
         # اگر محصول متغیر (رنگ/سایز) داشته باشد، ابتدا باید انتخاب کند
         if product.variants:
             cb_data = f"attr:start:{product.id}"
@@ -101,12 +105,17 @@ def get_product_detail_keyboard(product: models.Product, is_favorite: bool, cart
         keyboard.append([InlineKeyboardButton("🔔 موجود شد خبرم کن", callback_data=f"notify:{product.id}")])
 
     # 2. دکمه‌های تعاملی (علاقه‌مندی و اشتراک)
-    fav_text = "❤️ حذف از علاقه‌مندی" if is_favorite else "🤍 افزودن به علاقه‌مندی"
+    fav_text = "❤️ حذف از موردعلاقه" if is_favorite else "🤍 افزودن به موردعلاقه"
     share_url = f"https://t.me/share/url?url=https://t.me/{bot_username}?start=p_{product.id}"
     
     keyboard.append([
         InlineKeyboardButton(fav_text, callback_data=f"fav:toggle:{product.id}"),
-        InlineKeyboardButton("🔗 اشتراک‌گذاری", url=share_url)
+        InlineKeyboardButton("🛒 مشاهده سبد", callback_data="cart:view")
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton("🔗 اشتراک‌گذاری", url=share_url),
+        InlineKeyboardButton("📞 پشتیبانی", callback_data="support")
     ])
 
     # 3. دکمه بازگشت
