@@ -97,12 +97,14 @@ class TicketsWidget(QWidget):
 
     def showEvent(self, event):
         if not self._data_loaded:
-            asyncio.create_task(self.refresh_tickets())
+            self.refresh_tickets()
             self._data_loaded = True
 
     @asyncSlot()
     async def refresh_tickets(self):
         try:
+            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+                return
             status = self.status_filter.currentText()
         except RuntimeError:
             return

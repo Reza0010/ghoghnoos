@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
         super().__init__()
+        self._is_shutting_down = False
         self.bot_application = bot_application
         self.rubika_client = rubika_client
         self.base_path = Path(BASE_DIR) / "admin_panel"
@@ -372,12 +373,17 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(3500, self._toast.close)
 
     def closeEvent(self, event):
+        if self._is_shutting_down:
+            event.accept()
+            return
+
         reply = QMessageBox.question(
             self, 'خروج', "آیا از خروج و توقف مدیریت مطمئن هستید؟",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            self._is_shutting_down = True
             event.accept()
         else:
             event.ignore()

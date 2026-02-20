@@ -456,6 +456,8 @@ class DashboardWidget(QWidget):
     @asyncSlot()
     async def refresh_data(self):
         try:
+            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+                return
             self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white', animation=qta.Spin(self.btn_refresh)))
         except RuntimeError:
             return

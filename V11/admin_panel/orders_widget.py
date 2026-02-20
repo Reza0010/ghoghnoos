@@ -519,6 +519,8 @@ class OrdersWidget(QWidget):
     @asyncSlot()
     async def refresh_data(self):
         try:
+            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+                return
             self.btn_refresh.setEnabled(False)
         except RuntimeError:
             return

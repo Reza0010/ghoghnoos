@@ -572,6 +572,8 @@ class ProductsWidget(QWidget):
 
     async def refresh_data(self):
         try:
+            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+                return
             for i in reversed(range(self.grid_layout.count())):
                 if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
         except RuntimeError:

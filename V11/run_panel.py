@@ -35,14 +35,22 @@ logger = logging.getLogger("Launcher")
 # ==============================================================================
 def run_telegram_bot():
     if not TELEGRAM_BOT_TOKEN: return
-    try:
-        # ایجاد لوپ مجزا
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def run_bot():
         app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         setup_application_handlers(app)
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         logger.info("✅ Telegram Bot Thread Started")
-        app.run_polling(allowed_updates=Update.ALL_TYPES, close_loop=False)
+        # بیخیال هندل کردن سیگنال در ترد ایزوله
+        while True:
+            await asyncio.sleep(3600)
+
+    try:
+        loop.run_until_complete(run_bot())
     except Exception as e:
         logger.error(f"Telegram Thread Error: {e}")
 # ==============================================================================
@@ -67,6 +75,7 @@ class ApplicationManager:
         self.window = None
         self.tg_thread = None
         self.rb_thread = None
+        self._is_shutting_down = False
 
     async def launch(self):
         """راه‌اندازی سریع پنل"""
@@ -113,6 +122,7 @@ class ApplicationManager:
 
     async def connect_light_clients(self):
         """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
+        if self._is_shutting_down: return
         # کلاینت تلگرام برای پنل
         if TELEGRAM_BOT_TOKEN:
             try:
@@ -137,9 +147,12 @@ class ApplicationManager:
             self.window._safe_check_connection()
 
     async def shutdown(self):
+        if self._is_shutting_down: return
+        self._is_shutting_down = True
         logger.info("Shutting down...")
 
         if self.window:
+            self.window._is_shutting_down = True
             if self.window.bot_application:
                 try:
                     await self.window.bot_application.stop()
@@ -154,7 +167,8 @@ class ApplicationManager:
             task.cancel()
 
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # استفاده از wait با timeout برای جلوگیری از فریز شدن در صورت عدم پاسخ تسک‌ها
+            await asyncio.wait(tasks, timeout=2.0)
 
         self.loop.stop()
 
