@@ -17,15 +17,23 @@ class RubikaWorker:
         self.bot_guid: Optional[str] = None
 
     async def _initialize_bot(self):
-        """دریافت شناسه ربات برای جلوگیری از لوپ"""
+        """دریافت شناسه ربات و تنظیم دستورات"""
         try:
             res = await self.api.get_me()
             # ساختار پاسخ getMe طبق مستندات: {'bot': {'bot_id': ...}}
             if res and "bot" in res:
                 self.bot_guid = res["bot"]["bot_id"]
                 logger.info(f"Rubika Bot ID identified: {self.bot_guid}")
+
+            # تنظیم منوی دستورات
+            await self.api.set_commands([
+                {"command": "start", "description": "🏠 منوی اصلی"},
+                {"command": "search", "description": "🔍 جستجوی محصول"},
+                {"command": "cart", "description": "🛒 سبد خرید"},
+                {"command": "support", "description": "📞 پشتیبانی"}
+            ])
         except Exception as e:
-            logger.error(f"Failed to get bot info: {e}")
+            logger.error(f"Failed to initialize bot: {e}")
 
     async def start_polling(self):
         """شروع حلقه دریافت پیام‌ها"""
@@ -61,28 +69,28 @@ class RubikaWorker:
 
     async def process_update(self, update: Dict[str, Any]):
         """توزیع‌کننده رویدادها (Dispatcher)"""
-        # ساختار آپدیت طبق مدل Update در 03.txt
         update_type = update.get("type")
 
-        # ۱. پیام جدید (NewMessage)
         if update_type == "NewMessage":
             msg = update.get("new_message", {})
             chat_id = update.get("chat_id")
             sender_id = msg.get("sender_id")
 
-            # فیلتر پیام‌های خود ربات (جلوگیری از لوپ)
-            if sender_id == self.bot_guid:
-                return
+            if sender_id == self.bot_guid: return
+
+            # دریافت اطلاعات کاربر برای CRM
+            with SessionLocal() as db:
+                # تلاش برای دریافت نام کاربر اگر در آپدیت باشد (روبیکا در NewMessage معمولا فقط sender_id را می‌دهد)
+                # اما می‌توان از getChat برای تکمیل پروفایل استفاده کرد در صورت لزوم
+                crud.get_or_create_user(db, sender_id, "کاربر روبیکا", None, "rubika")
 
             text = msg.get("text", "")
             aux_data = msg.get("aux_data", {})
             button_id = aux_data.get("button_id")
 
             if button_id:
-                # اگر روی دکمه ای کلیک شده باشد
                 await self.handle_button_click(chat_id, sender_id, button_id, aux_data)
             elif text:
-                # اگر متن ارسال شده باشد
                 await self.handle_text_message(chat_id, sender_id, text)
 
         # ۲. سایر رویدادها (StartedBot, StoppedBot, etc.)
@@ -95,10 +103,6 @@ class RubikaWorker:
 
     async def handle_text_message(self, chat_id: str, user_id: str, text: str):
         """مدیریت پیام‌های متنی"""
-        # ثبت یا آپدیت کاربر در دیتابیس
-        with SessionLocal() as db:
-            user = crud.get_or_create_user(db, user_id, "کاربر روبیکا", None, "rubika")
-
         text = text.strip()
 
         if text == "/start" or text == "🏠 بازگشت به منو":
@@ -109,14 +113,21 @@ class RubikaWorker:
             await self.send_cart(chat_id, user_id)
         elif text == "📞 پشتیبانی":
             await self.send_support_menu(chat_id, user_id)
+        elif text.startswith("/search") or text == "🔍 جستجو":
+            q = text.replace("/search", "").strip()
+            if not q:
+                await self.api.send_message(chat_id, "🔎 لطفا عبارت مورد نظر برای جستجو را وارد کنید:")
+            else:
+                await self.handle_search(chat_id, q)
+        elif text == "💳 شارژ کیف پول":
+             await self.api.send_message(chat_id, "بزودی...")
         else:
-            # بررسی تیکتینگ (اگر پیام در جواب تیکت باشد یا موضوع تیکت)
-            await self.handle_support_text(chat_id, user_id, text)
+            # اگر پیام متنی معمولی بود، شاید جستجو باشد یا ثبت تیکت
+            if len(text) > 2:
+                 await self.handle_support_text(chat_id, user_id, text)
 
     async def handle_button_click(self, chat_id: str, user_id: str, btn_id: str, aux_data: Dict):
         """مدیریت کلیک روی دکمه‌های Inline"""
-
-        # ساختار ID دکمه‌ها: `action:data` مثلا `cat:5`
         parts = btn_id.split(":")
         action = parts[0]
         data = parts[1] if len(parts) > 1 else None
@@ -135,6 +146,11 @@ class RubikaWorker:
             await self.send_ticket_details(chat_id, user_id, int(data))
         elif action == "t_new":
             await self.api.send_message(chat_id, "💡 لطفا موضوع و متن تیکت خود را در یک پیام بفرستید:")
+        elif action == "nav":
+            if data == "back_cat":
+                await self.send_categories(chat_id)
+            elif data == "main":
+                await self.send_main_menu(chat_id)
 
     # ================= UI Methods =================
 
@@ -185,24 +201,84 @@ class RubikaWorker:
         await self.api.send_message(chat_id, text, inline_keyboard=inline_rows)
 
     async def send_product_detail(self, chat_id: str, prod_id: int):
-        """جزئیات محصول"""
+        """جزئیات محصول (حرفه‌ای با پشتیبانی از گالری تصاویر)"""
         with SessionLocal() as db:
             p = crud.get_product(db, prod_id)
             if not p: return
 
+        # آماده سازی متن
+        final_price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
+        price_text = f"{int(final_price):,} تومان"
+        if p.discount_price and p.discount_price > 0:
+            price_text = f"<s>{int(p.price):,}</s> ➡️ {price_text} 🔥"
+
         txt = (
-            f"🛍 <b>{p.name}</b>\n\n"
-            f"💰 قیمت: {int(p.price):,} تومان\n"
-            f"📦 موجودی: {p.stock}\n\n"
-            f"{p.description or ''}"
+            f"🛍 **{p.name}**\n"
+            f"━━━━━━━━━━━━\n"
+            f"📑 برند: {p.brand or 'متفرقه'}\n"
+            f"💰 قیمت: {price_text}\n"
+            f"📦 وضعیت: {'✅ موجود' if p.stock > 0 else '❌ ناموجود'}\n\n"
+            f"📝 توضیحات:\n{p.description or 'توضیحاتی ثبت نشده است.'}"
         )
 
-        inline_rows = [
-            [{"id": f"add:{p.id}", "text": "➕ افزودن به سبد", "type": "Simple"}],
-            [{"id": "nav:back_cat", "text": "↩ بازگشت"}]
-        ]
+        # افزودن فوتر برندینگ
+        with SessionLocal() as db:
+            footer = crud.get_setting(db, "bot_footer_text", "")
+        if footer: txt += f"\n\n---\n{footer}"
 
-        await self.api.send_message(chat_id, txt, inline_keyboard=inline_rows)
+        inline_rows = [
+            [{"id": f"add:{p.id}", "text": "➕ افزودن به سبد"}] if p.stock > 0 else [],
+            [{"id": "nav:back_cat", "text": "↩ بازگشت به لیست"}]
+        ]
+        # فیلتر کردن سطرهای خالی
+        inline_rows = [r for r in inline_rows if r]
+
+        # مدیریت تصاویر (Gallery)
+        images = p.images if p.images else []
+        if not images and p.image_path:
+             from bot.models import ProductImage
+             images = [{"image_path": p.image_path}] # ساختار ساده برای آپلود
+
+        if images:
+            try:
+                # ارسال تصویر اول با کپشن و کیبورد
+                main_img = images[0]
+                # در روبیکا باید فایل آپلود شود تا file_id بگیریم
+                # برای بهینه‌سازی می‌توان file_id های روبیکا را هم در دیتابیس ذخیره کرد
+                from config import BASE_DIR
+                from pathlib import Path
+                full_path = str(Path(BASE_DIR) / main_img.image_path)
+
+                # آپلود و ارسال
+                f_id = await self.api.upload_file(full_path)
+                await self.api.send_file(chat_id, f_id, caption=txt, inline_keyboard=inline_rows)
+
+                # ارسال سایر تصاویر بدون کپشن
+                for other_img in images[1:3]: # محدود به ۳ عکس برای جلوگیری از اسپم
+                    other_path = str(Path(BASE_DIR) / other_img.image_path)
+                    f_id_other = await self.api.upload_file(other_path)
+                    await self.api.send_file(chat_id, f_id_other)
+
+            except Exception as e:
+                logger.error(f"Gallery Error: {e}")
+                await self.api.send_message(chat_id, txt, inline_keyboard=inline_rows)
+        else:
+            await self.api.send_message(chat_id, txt, inline_keyboard=inline_rows)
+
+    async def handle_search(self, chat_id: str, query: str):
+        """جستجوی محصول در روبیکا"""
+        with SessionLocal() as db:
+            prods = crud.advanced_search_products(db, query=query)
+
+        if not prods:
+            return await self.api.send_message(chat_id, f"❌ متاسفانه محصولی برای عبارت '{query}' یافت نشد.")
+
+        text = f"🔎 نتایج جستجو برای '{query}':"
+        inline_rows = []
+        for p in prods[:10]:
+            inline_rows.append([{"id": f"prod:{p.id}", "text": f"🔹 {p.name}"}])
+
+        await self.api.send_message(chat_id, text, inline_keyboard=inline_rows)
 
     async def add_to_cart(self, chat_id: str, user_id: str, prod_id: int):
         try:
@@ -213,23 +289,30 @@ class RubikaWorker:
             await self.api.send_message(chat_id, f"⚠️ {str(e)}")
 
     async def send_cart(self, chat_id: str, user_id: str):
-        """نمایش سبد خرید"""
+        """نمایش سبد خرید (بهینه شده)"""
         with SessionLocal() as db:
             items = crud.get_cart_items(db, user_id)
 
         if not items:
-            return await self.api.send_message(chat_id, "🛒 سبد خرید شما خالی است.")
+            return await self.api.send_message(chat_id, "🛒 سبد خرید شما در حال حاضر خالی است.")
 
-        msg = "🛒 سبد خرید شما:\n\n"
+        msg = "🛒 **جزئیات سبد خرید شما:**\n"
+        msg += "━━━━━━━━━━━━\n"
         total = 0
         for item in items:
             p = item.product
-            total += p.price * item.quantity
-            msg += f"• {p.name} x {item.quantity}\n"
+            price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
+            line_total = price * item.quantity
+            total += line_total
+            msg += f"🔹 {p.name}\n   تعداد: {item.quantity} | قیمت: {int(line_total):,} ت\n"
 
-        msg += f"\n💰 جمع کل: {int(total):,} تومان"
+        msg += "━━━━━━━━━━━━\n"
+        msg += f"💰 **جمع کل: {int(total):,} تومان**"
 
-        inline_rows = [[{"id": "checkout", "text": "✅ نهایی کردن سفارش"}]]
+        inline_rows = [
+            [{"id": "checkout", "text": "💳 ثبت و پرداخت نهایی"}],
+            [{"id": "nav:back_cat", "text": "🛍 ادامه خرید"}]
+        ]
         await self.api.send_message(chat_id, msg, inline_keyboard=inline_rows)
 
     async def process_checkout(self, chat_id: str, user_id: str):
@@ -328,12 +411,24 @@ class RubikaWorker:
 
         if not t: return
 
-        msg = f"🎫 **تیکت #{t.id}**\n📌 موضوع: {t.subject}\n📊 وضعیت: {t.status}\n\n"
+        status_map = {"open": "🆕 باز", "pending": "⏳ در انتظار پاسخ", "closed": "✅ بسته شده"}
+        status_text = status_map.get(t.status, t.status)
+
+        msg = f"🎫 **تیکت پشتیبانی #{t.id}**\n"
+        msg += f"📌 موضوع: {t.subject}\n"
+        msg += f"📊 وضعیت: {status_text}\n"
+        msg += "━━━━━━━━━━━━\n\n"
+
         for m in t.messages[-5:]:
             sender = "👤 شما" if not m.is_admin else "👨‍💻 پشتیبان"
-            msg += f"{sender}:\n{m.text}\n\n"
+            time_str = m.created_at.strftime("%H:%M")
+            msg += f"{sender} ({time_str}):\n{m.text}\n\n"
 
-        msg += "✍️ برای ارسال پاسخ، متن خود را بفرستید (در صورتی که تیکت باز است)."
+        if t.status != 'closed':
+            msg += "✍️ برای ارسال پاسخ، متن خود را در یک پیام بفرستید."
+        else:
+            msg += "🚫 این تیکت بسته شده است."
+
         await self.api.send_message(chat_id, msg)
 
     async def handle_support_text(self, chat_id: str, user_id: str, text: str):
