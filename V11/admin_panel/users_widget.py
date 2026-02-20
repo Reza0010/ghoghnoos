@@ -473,7 +473,7 @@ class UsersWidget(QWidget):
     def _start_search(self): self.search_timer.start(300)
 
     @asyncSlot()
-    async def refresh_data(self):
+    async def refresh_data(self, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return
@@ -552,7 +552,7 @@ class UsersWidget(QWidget):
         self.lbl_sel.setText(f"{c} انتخاب شده")
 
     @asyncSlot()
-    async def broadcast(self):
+    async def broadcast(self, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return

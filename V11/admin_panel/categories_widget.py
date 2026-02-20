@@ -398,7 +398,7 @@ class CategoriesWidget(QWidget):
             search(self.tree.topLevelItem(i))
 
     @asyncSlot()
-    async def save_category(self):
+    async def save_category(self, *args):
         try:
             name = self.inp_name.text().strip()
         except RuntimeError: return
@@ -426,7 +426,7 @@ class CategoriesWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"خطا در ذخیره‌سازی: {e}")
 
     @asyncSlot()
-    async def delete_category(self):
+    async def delete_category(self, *args):
         try:
             if not self.selected_cat_id: return
         except RuntimeError: return

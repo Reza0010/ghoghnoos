@@ -279,7 +279,7 @@ class ProductEditorDialog(QDialog):
         for v in data["variants"]: self.variant_mgr.add_row(v["name"], v["price_adjustment"], v["stock"])
 
     @asyncSlot()
-    async def save_product(self):
+    async def save_product(self, *args):
         if not self.inp_name.text(): return QMessageBox.warning(self, "خطا", "نام الزامی است.")
         data = {
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
@@ -564,7 +564,7 @@ class ProductsWidget(QWidget):
         dialog.exec()
 
     @asyncSlot()
-    async def refresh_data_slot(self):
+    async def refresh_data_slot(self, *args):
         try:
             await self.refresh_data()
         except RuntimeError:
@@ -649,7 +649,7 @@ class ProductsWidget(QWidget):
         self.lbl_sel_count.setText(f"{count} انتخاب شده")
 
     @asyncSlot()
-    async def delete_product_single(self, pid):
+    async def delete_product_single(self, pid, *args):
         try:
             if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
                 loop = asyncio.get_running_loop()
@@ -659,7 +659,7 @@ class ProductsWidget(QWidget):
             pass
 
     @asyncSlot()
-    async def duplicate_product(self, pid):
+    async def duplicate_product(self, pid, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return
@@ -682,7 +682,7 @@ class ProductsWidget(QWidget):
             logger.error(e)
 
     @asyncSlot()
-    async def delete_bulk_slot(self):
+    async def delete_bulk_slot(self, *args):
         try:
             if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
                 ids = list(self.selected_ids)

@@ -517,7 +517,7 @@ class OrdersWidget(QWidget):
             QMessageBox.warning(self, "هشدار", "کد رهگیری الزامی است.")
 
     @asyncSlot()
-    async def refresh_data(self):
+    async def refresh_data(self, *args):
         try:
             if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
                 return
@@ -752,7 +752,7 @@ class OrdersWidget(QWidget):
         """
 
     @asyncSlot()
-    async def export_to_excel(self):
+    async def export_to_excel(self, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return

@@ -454,7 +454,7 @@ class DashboardWidget(QWidget):
             self._data_loaded = True
 
     @asyncSlot()
-    async def refresh_data(self):
+    async def refresh_data(self, *args):
         try:
             if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
                 return
@@ -626,7 +626,7 @@ class DashboardWidget(QWidget):
         """)
 
     @asyncSlot()
-    async def toggle_shop_status(self):
+    async def toggle_shop_status(self, *args):
         try:
             new_status = "true" if self.btn_status.isChecked() else "false"
         except RuntimeError:
@@ -638,7 +638,7 @@ class DashboardWidget(QWidget):
         await self.refresh_data()
 
     @asyncSlot()
-    async def generate_sales_report(self):
+    async def generate_sales_report(self, *args):
         try:
             file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره گزارش مالی", "Sales_Report.pdf", "PDF Files (*.pdf)")
         except RuntimeError:

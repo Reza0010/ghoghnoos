@@ -804,7 +804,7 @@ class SettingsWidget(QWidget):
             return {k: crud.get_setting(db, k, v) for k, v in DEFAULT_SETTINGS.items()}
 
     @asyncSlot()
-    async def save_settings(self):
+    async def save_settings(self, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return
@@ -855,7 +855,7 @@ class SettingsWidget(QWidget):
         self.window().show_toast("تنظیمات با موفقیت ذخیره شد.")
 
     @asyncSlot()
-    async def save_rubika_settings(self):
+    async def save_rubika_settings(self, *args):
         data = {
             "rb_shop_name": self.rb_shop_name.text(),
             "rb_welcome_message": self.rb_welcome_msg.toPlainText(),
@@ -871,7 +871,7 @@ class SettingsWidget(QWidget):
             for k, v in data.items(): crud.set_setting(db, k, v)
 
     @asyncSlot()
-    async def update_bot_commands(self):
+    async def update_bot_commands(self, *args):
         try:
             if not self.isVisible(): return
         except RuntimeError: return
@@ -922,7 +922,7 @@ class SettingsWidget(QWidget):
             except Exception as e: QMessageBox.critical(self, "خطا", str(e))
 
     @asyncSlot()
-    async def send_backup_to_telegram(self):
+    async def send_backup_to_telegram(self, *args):
         with next(get_db()) as db:
             admin_ids = crud.get_admin_ids(db)
         if not self.bot_app or not admin_ids: return self.window().show_toast("ربات تلگرام یا ادمین تنظیم نشده است.", is_error=True)
@@ -939,7 +939,7 @@ class SettingsWidget(QWidget):
         except Exception as e: self.window().show_toast(f"خطا: {e}", is_error=True)
 
     @asyncSlot()
-    async def on_start_broadcast(self):
+    async def on_start_broadcast(self, *args):
         msg = self.bc_text.toPlainText().strip()
         if not msg and not self._broadcast_image_path:
             return QMessageBox.warning(self, "خطا", "متن یا عکس الزامی است.")

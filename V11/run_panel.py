@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning)
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
-from config import TELEGRAM_BOT_TOKEN, LOG_DIR, RUBIKA_BOT_TOKEN
+from config import TELEGRAM_BOT_TOKEN, LOG_DIR, RUBIKA_BOT_TOKEN, PROXY_URL
 from db.database import init_db
 from bot.loader import setup_application_handlers
 from rubika_bot.bot_logic import RubikaWorker
@@ -34,25 +34,34 @@ logger = logging.getLogger("Launcher")
 # ترد ایزوله تلگرام
 # ==============================================================================
 def run_telegram_bot():
+    """اجرای ربات تلگرام در ترد مجزا با پشتیبانی از پراکسی"""
     if not TELEGRAM_BOT_TOKEN: return
+
+    async def start_bot():
+        try:
+            builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
+            if PROXY_URL:
+                builder.proxy_url(PROXY_URL)
+                builder.get_updates_proxy_url(PROXY_URL)
+                logger.info(f"Connecting to Telegram via Proxy: {PROXY_URL}")
+
+            app = builder.build()
+            setup_application_handlers(app)
+
+            logger.info("✅ Telegram Bot Polling Started")
+            # استفاده از run_polling با تنظیمات ایمن برای Thread
+            await app.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                stop_signals=None, # مهم: جلوگیری از تداخل با سیگنال‌های Qt
+                close_loop=False
+            )
+        except Exception as e:
+            logger.error(f"Telegram Bot Error: {e}")
+
+    # ایجاد لوپ جدید برای این ترد
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def run_bot():
-        app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-        setup_application_handlers(app)
-        # استفاده از run_polling با غیرفعال کردن مدیریت سیگنال‌ها در ترد فرعی
-        logger.info("✅ Telegram Bot Thread Started")
-        await app.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            close_loop=False,
-            stop_signals=None
-        )
-
-    try:
-        loop.run_until_complete(run_bot())
-    except Exception as e:
-        logger.error(f"Telegram Thread Error: {e}")
+    loop.run_until_complete(start_bot())
 # ==============================================================================
 # ترد ایزوله روبیکا
 # ==============================================================================
@@ -129,16 +138,32 @@ class ApplicationManager:
     async def connect_light_clients(self):
         """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
         if self._is_shutting_down: return
-        # کلاینت تلگرام برای پنل (فقط ارسال پیام، بدون Updater)
+
+        # کلاینت تلگرام برای پنل (فقط جهت ارسال پیام)
         if TELEGRAM_BOT_TOKEN:
             try:
-                # ایجاد اپلیکیشن سبک بدون Updater برای جلوگیری از تداخل
-                tg_light = Application.builder().token(TELEGRAM_BOT_TOKEN).updater(None).build()
-                await asyncio.wait_for(tg_light.initialize(), timeout=5.0)
-                self.window.bot_application = tg_light
-                logger.info("✅ Panel Telegram Client Connected")
+                from telegram import Bot
+                from telegram.request import HTTPXRequest
+
+                request = None
+                if PROXY_URL:
+                    request = HTTPXRequest(proxy_url=PROXY_URL)
+
+                # استفاده از کلاس کمکی برای حفظ سازگاری با کدهای موجود در ویجت‌ها
+                class PanelBotWrapper:
+                    def __init__(self, bot_obj):
+                        self.bot = bot_obj
+                    async def initialize(self): pass
+                    async def shutdown(self): pass
+                    async def stop(self): pass
+                    @property
+                    def running(self): return True
+
+                bot_obj = Bot(token=TELEGRAM_BOT_TOKEN, request=request)
+                self.window.bot_application = PanelBotWrapper(bot_obj)
+                logger.info("✅ Panel Telegram Client Connected (Direct Bot Mode)")
             except Exception as e:
-                logger.warning(f"⚠️ Panel Telegram Client failed (Check Proxy/Internet): {e}")
+                logger.warning(f"⚠️ Panel Telegram Client failed: {e}")
         # کلاینت روبیکا برای پنل
         if RUBIKA_BOT_TOKEN:
             try:

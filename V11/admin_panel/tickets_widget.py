@@ -101,7 +101,7 @@ class TicketsWidget(QWidget):
             self._data_loaded = True
 
     @asyncSlot()
-    async def refresh_tickets(self):
+    async def refresh_tickets(self, *args):
         try:
             if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
                 return
@@ -136,7 +136,7 @@ class TicketsWidget(QWidget):
             logger.error(f"Refresh tickets error: {e}")
 
     @asyncSlot()
-    async def load_ticket_details(self, item):
+    async def load_ticket_details(self, item, *args):
         try:
             ticket_id = item.data(Qt.ItemDataRole.UserRole)
         except RuntimeError:
@@ -172,7 +172,7 @@ class TicketsWidget(QWidget):
             logger.error(f"Load ticket details error: {e}")
 
     @asyncSlot()
-    async def send_reply(self):
+    async def send_reply(self, *args):
         try:
             text = self.reply_input.toPlainText().strip()
         except RuntimeError:
@@ -216,7 +216,7 @@ class TicketsWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"خطا در ارسال پاسخ: {e}")
 
     @asyncSlot()
-    async def handle_close_ticket(self):
+    async def handle_close_ticket(self, *args):
         try:
             if not self._current_ticket_id: return
             if QMessageBox.question(self, "بستن تیکت", "آیا از بستن این تیکت مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
