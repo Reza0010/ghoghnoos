@@ -7,10 +7,11 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QGridLayout, QPushButton, QGraphicsDropShadowEffect,
-    QScrollArea, QTabWidget, QSizePolicy, QProgressBar
+    QScrollArea, QTabWidget, QSizePolicy, QProgressBar, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, pyqtProperty, QRect
-from PyQt6.QtGui import QColor, QFont, QPainter, QLinearGradient, QBrush, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QLinearGradient, QBrush, QPen, QTextDocument
+from PyQt6.QtPrintSupport import QPrinter
 from qasync import asyncSlot
 import qtawesome as qta
 
@@ -32,7 +33,7 @@ except ImportError:
 from config import BASE_DIR
 from db.database import get_db
 from db import crud, models
-from sqlalchemy import func
+from sqlalchemy import func, desc
 
 logger = logging.getLogger("Dashboard")
 
@@ -294,6 +295,13 @@ class DashboardWidget(QWidget):
         self.btn_status.clicked.connect(self.toggle_shop_status)
         header.addWidget(self.btn_status)
 
+        self.btn_report = QPushButton(" گزارش پیشرفته")
+        self.btn_report.setIcon(qta.icon('fa5s.file-pdf', color='white'))
+        self.btn_report.setStyleSheet(f"background: {COLOR_CARD}; border: 1px solid {COLOR_PURPLE}; border-radius: 10px; padding: 8px 15px; color: white; font-weight: bold;")
+        self.btn_report.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_report.clicked.connect(self.generate_sales_report)
+        header.addWidget(self.btn_report)
+
         self.btn_refresh = QPushButton()
         self.btn_refresh.setFixedSize(45, 45)
         self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white'))
@@ -517,3 +525,55 @@ class DashboardWidget(QWidget):
             None, lambda: crud.set_setting(next(get_db()), "tg_is_open", new_status)
         )
         self.refresh_data()
+
+    @asyncSlot()
+    async def generate_sales_report(self):
+        file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره گزارش مالی", "Sales_Report.pdf", "PDF Files (*.pdf)")
+        if not file_path: return
+
+        loop = asyncio.get_running_loop()
+        try:
+            def fetch_report_data():
+                with next(get_db()) as db:
+                    total_rev = crud.get_total_revenue_by_platform(db, "telegram") + crud.get_total_revenue_by_platform(db, "rubika")
+                    total_orders = db.query(models.Order).count()
+                    top_prods = db.query(models.Product.name, func.sum(models.OrderItem.quantity))\
+                        .join(models.OrderItem).group_by(models.Product.id)\
+                        .order_by(desc(func.sum(models.OrderItem.quantity))).limit(10).all()
+                    return total_rev, total_orders, top_prods
+
+            rev, count, prods = await loop.run_in_executor(None, fetch_report_data)
+
+            html = f"""
+            <div dir='rtl' style='font-family: Tahoma;'>
+            <h1 style='text-align: center; color: #7f5af0;'>گزارش عملکرد فروشگاه ققنوس</h1>
+            <p style='text-align: left;'>تاریخ گزارش: {datetime.now().strftime('%Y/%m/%d')}</p>
+            <hr>
+            <h3>📊 آمار کلی:</h3>
+            <table width='100%' border='1' cellpadding='10' style='border-collapse: collapse; border: 1px solid #ddd;'>
+                <tr style='background: #f9f9f9;'><th>کل درآمد تایید شده</th><td>{int(rev):,} تومان</td></tr>
+                <tr><th>تعداد کل سفارشات ثبت شده</th><td>{count} عدد</td></tr>
+            </table>
+            <br>
+            <h3>🏆 ۱۰ محصول پرفروش:</h3>
+            <table width='100%' border='1' cellpadding='5' style='border-collapse: collapse; border: 1px solid #ddd;'>
+                <tr style='background: #7f5af0; color: white;'><th>نام محصول</th><th>تعداد فروش</th></tr>
+            """
+            for p_name, p_qty in prods:
+                html += f"<tr><td>{p_name}</td><td style='text-align: center;'>{p_qty}</td></tr>"
+            html += "</table></div>"
+
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(file_path)
+
+            doc = QTextDocument()
+            font_path = Path(BASE_DIR) / "fonts" / "Vazirmatn.ttf"
+            if font_path.exists(): doc.setDefaultFont(QFont("Vazirmatn", 10))
+            doc.setHtml(html)
+            doc.print(printer)
+
+            if hasattr(self.window(), 'show_toast'): self.window().show_toast("گزارش مالی با موفقیت ایجاد شد.")
+        except Exception as e:
+            logger.error(f"Report generation error: {e}")
+            QMessageBox.critical(self, "خطا", f"خطا در تولید گزارش: {e}")

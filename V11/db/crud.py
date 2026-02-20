@@ -579,3 +579,53 @@ def add_product_notification(db: Session, user_id, product_id):
     if not exists:
         db.add(models.ProductNotification(user_id=str(user_id), product_id=product_id))
         db.commit()
+
+# ======================================================================
+# 9. سیستم تیکتینگ (Ticketing System)
+# ======================================================================
+def create_ticket(db: Session, user_id: str, subject: str, initial_message: str) -> models.Ticket:
+    ticket = models.Ticket(user_id=str(user_id), subject=subject)
+    db.add(ticket)
+    db.flush()
+
+    msg = models.TicketMessage(ticket_id=ticket.id, sender_id=str(user_id), text=initial_message, is_admin=False)
+    db.add(msg)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+def add_ticket_message(db: Session, ticket_id: int, sender_id: str, text: str, is_admin: bool = False):
+    msg = models.TicketMessage(ticket_id=ticket_id, sender_id=str(sender_id), text=text, is_admin=is_admin)
+    db.add(msg)
+    # آپدیت زمان آخرین تغییر تیکت
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.updated_at = datetime.now()
+        if is_admin:
+            ticket.status = "pending" # در انتظار پاسخ کاربر
+        else:
+            ticket.status = "open" # باز (نیاز به پاسخ ادمین)
+    db.commit()
+    return msg
+
+def get_user_tickets(db: Session, user_id: str) -> List[models.Ticket]:
+    return db.query(models.Ticket).filter_by(user_id=str(user_id)).order_by(desc(models.Ticket.updated_at)).all()
+
+def get_all_tickets(db: Session, status: str = None) -> List[models.Ticket]:
+    q = db.query(models.Ticket).options(joinedload(models.Ticket.user))
+    if status and status != "all":
+        q = q.filter(models.Ticket.status == status)
+    return q.order_by(desc(models.Ticket.updated_at)).all()
+
+def get_ticket_with_messages(db: Session, ticket_id: int) -> Optional[models.Ticket]:
+    return db.query(models.Ticket).options(
+        selectinload(models.Ticket.messages),
+        joinedload(models.Ticket.user)
+    ).filter_by(id=ticket_id).first()
+
+def close_ticket(db: Session, ticket_id: int):
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.status = "closed"
+        db.commit()
+    return ticket

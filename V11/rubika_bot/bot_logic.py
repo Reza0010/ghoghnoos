@@ -108,10 +108,10 @@ class RubikaWorker:
         elif text == "🛒 سبد خرید":
             await self.send_cart(chat_id, user_id)
         elif text == "📞 پشتیبانی":
-            await self.send_support(chat_id)
+            await self.send_support_menu(chat_id, user_id)
         else:
-            # پاسخ پیش‌فرض
-            await self.api.send_message(chat_id, "متوجه نشدم. لطفا از منو استفاده کنید.")
+            # بررسی تیکتینگ (اگر پیام در جواب تیکت باشد یا موضوع تیکت)
+            await self.handle_support_text(chat_id, user_id, text)
 
     async def handle_button_click(self, chat_id: str, user_id: str, btn_id: str, aux_data: Dict):
         """مدیریت کلیک روی دکمه‌های Inline"""
@@ -129,6 +129,12 @@ class RubikaWorker:
             await self.add_to_cart(chat_id, user_id, int(data))
         elif action == "checkout":
             await self.process_checkout(chat_id, user_id)
+        elif action == "t_list":
+            await self.send_ticket_list(chat_id, user_id)
+        elif action == "t_show":
+            await self.send_ticket_details(chat_id, user_id, int(data))
+        elif action == "t_new":
+            await self.api.send_message(chat_id, "💡 لطفا موضوع و متن تیکت خود را در یک پیام بفرستید:")
 
     # ================= UI Methods =================
 
@@ -286,6 +292,61 @@ class RubikaWorker:
             logger.error(f"Checkout Error: {e}")
             await self.api.send_message(chat_id, "❌ مشکلی در ثبت سفارش پیش آمد.")
 
-    async def send_support(self, chat_id: str):
-        msg = "📞 برای ارتباط با پشتیبانی به آیدی زیر پیام دهید:\n@YourSupportID"
+    async def send_support_menu(self, chat_id: str, user_id: str):
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+
+        msg = "📞 **مرکز پشتیبانی و تیکتینگ**\n\nدر این بخش می‌توانید درخواست‌های خود را ثبت و پیگیری کنید."
+        inline_kb = [[{"id": "t_new", "text": "➕ ثبت تیکت جدید"}]]
+        if tickets:
+            inline_kb.append([{"id": "t_list", "text": "📂 مشاهده تیکت‌های من"}])
+
+        await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+    async def send_ticket_list(self, chat_id: str, user_id: str):
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+
+        if not tickets:
+            return await self.api.send_message(chat_id, "تیکتی یافت نشد.")
+
+        msg = "📂 **لیست تیکت‌های شما:**"
+        inline_kb = []
+        for t in tickets[:10]:
+            status = "🟢" if t.status == "pending" else ("🟡" if t.status == "open" else "⚪️")
+            inline_kb.append([{"id": f"t_show:{t.id}", "text": f"{status} #{t.id} - {t.subject}"}])
+
+        await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+    async def send_ticket_details(self, chat_id: str, user_id: str, ticket_id: int):
+        with SessionLocal() as db:
+            t = crud.get_ticket_with_messages(db, ticket_id)
+
+        if not t: return
+
+        msg = f"🎫 **تیکت #{t.id}**\n📌 موضوع: {t.subject}\n📊 وضعیت: {t.status}\n\n"
+        for m in t.messages[-5:]:
+            sender = "👤 شما" if not m.is_admin else "👨‍💻 پشتیبان"
+            msg += f"{sender}:\n{m.text}\n\n"
+
+        msg += "✍️ برای ارسال پاسخ، متن خود را بفرستید (در صورتی که تیکت باز است)."
         await self.api.send_message(chat_id, msg)
+
+    async def handle_support_text(self, chat_id: str, user_id: str, text: str):
+        # منطق ساده برای ثبت تیکت جدید یا پاسخ
+        # در دنیای واقعی باید وضعیت کاربر را چک کنیم. اینجا اگر تیکت بازی داشته باشد به آن پاسخ می‌دهد
+        # در غیر این صورت تیکت جدید می‌سازد
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+            open_tickets = [t for t in tickets if t.status != 'closed']
+
+            if open_tickets:
+                # پاسخ به آخرین تیکت باز
+                t = open_tickets[0]
+                crud.add_ticket_message(db, t.id, user_id, text)
+                await self.api.send_message(chat_id, f"✅ پاسخ شما به تیکت #{t.id} ثبت شد.")
+            else:
+                # ثبت تیکت جدید
+                subject = text[:30] + "..." if len(text) > 30 else text
+                t = crud.create_ticket(db, user_id, subject, text)
+                await self.api.send_message(chat_id, f"✅ تیکت جدید با موفقیت ثبت شد.\n🆔 شماره تیکت: #{t.id}")

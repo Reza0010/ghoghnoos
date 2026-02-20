@@ -12,7 +12,8 @@ from bot.handlers import (
     products_handler,
     search_handler,
     cart_handler,
-    main_menu_handler
+    main_menu_handler,
+    support_handler
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # این موارد باید حتماً قبل از هندلرهای Callback معمولی باشند
     app.add_handler(search_handler.search_conversation_handler)
     app.add_handler(cart_handler.checkout_conversation_handler)
+    app.add_handler(support_handler.support_conversation_handler)
 
     # ==================================================================
     # 2. نقطه شروع و منوی اصلی - اولویت ۲
@@ -93,7 +95,9 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # بخش‌های اطلاع‌رسانی
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_special_offers, pattern=r"^special_offers$"))
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_track_order, pattern=r"^track_order$"))
-    app.add_handler(CallbackQueryHandler(main_menu_handler.handle_support, pattern=r"^support$"))
+    app.add_handler(CallbackQueryHandler(support_handler.support_menu, pattern=r"^support$"))
+    app.add_handler(CallbackQueryHandler(support_handler.list_tickets, pattern=r"^ticket:list$"))
+    app.add_handler(CallbackQueryHandler(support_handler.show_ticket, pattern=r"^ticket:show:\d+$"))
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_about_us, pattern=r"^about_us$"))
 
     # ==================================================================

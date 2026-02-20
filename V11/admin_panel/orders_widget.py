@@ -97,7 +97,13 @@ class OrderDetailDialog(QDialog):
         btn_copy_ship.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; border-radius: 5px; padding: 5px 10px;")
         btn_copy_ship.clicked.connect(self.copy_shipping_info)
 
+        btn_pdf = QPushButton(" PDF")
+        btn_pdf.setIcon(qta.icon("fa5s.file-pdf", color="white"))
+        btn_pdf.setStyleSheet(f"background: {DANGER_COLOR}; color: white; border-radius: 5px; padding: 5px 10px;")
+        btn_pdf.clicked.connect(lambda: self.parent_widget.save_invoice_pdf(self.order_data['id']))
+
         header_layout.addWidget(btn_copy_ship)
+        header_layout.addWidget(btn_pdf)
         header_layout.addWidget(btn_print)
         header_layout.addWidget(btn_close)
         layout.addWidget(header)
@@ -616,10 +622,54 @@ class OrdersWidget(QWidget):
             dialog.exec()        
 
     def print_invoice(self, order_id):
+        html_content = self._get_invoice_html(order_id)
+        if not html_content: return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        preview = QPrintPreviewDialog(printer, self)
+        preview.setWindowTitle(f"چاپ فاکتور سفارش #{order_id}")
+        preview.setMinimumSize(1000, 800)
+
+        def handle_paint(printer_obj):
+            doc = QTextDocument()
+            self._apply_font_to_doc(doc)
+            doc.setHtml(html_content)
+            doc.print(printer_obj)
+
+        preview.paintRequested.connect(handle_paint)
+        preview.exec()
+
+    def save_invoice_pdf(self, order_id):
+        html_content = self._get_invoice_html(order_id)
+        if not html_content: return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره PDF", f"Invoice_{order_id}.pdf", "PDF Files (*.pdf)")
+        if not file_path: return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(file_path)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+
+        doc = QTextDocument()
+        self._apply_font_to_doc(doc)
+        doc.setHtml(html_content)
+        doc.print(printer)
+        if hasattr(self.window(), 'show_toast'): self.window().show_toast("فایل PDF ذخیره شد.")
+
+    def _apply_font_to_doc(self, doc):
+        font_path = BASE_DIR / "fonts" / "Vazirmatn.ttf"
+        if font_path.exists():
+             doc.setDefaultFont(QFont("Vazirmatn", 10))
+        else:
+             doc.setDefaultFont(QFont("Tahoma", 10))
+
+    def _get_invoice_html(self, order_id):
         try:
             with next(get_db()) as db:
                 order = crud.get_order_by_id(db, order_id)
-                if not order: return
+                if not order: return None
 
                 items = []
                 for item in order.items:
@@ -638,30 +688,10 @@ class OrdersWidget(QWidget):
 
                 date_str = order.created_at.strftime("%Y/%m/%d - %H:%M")
                 total = order.total_amount
+                return self._generate_invoice_html(order_id, date_str, user_info, items, total)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Database error: {e}")
-            return
-
-        html_content = self._generate_invoice_html(order_id, date_str, user_info, items, total)
-
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-        preview = QPrintPreviewDialog(printer, self)
-        preview.setWindowTitle(f"چاپ فاکتور سفارش #{order_id}")
-        preview.setMinimumSize(1000, 800)
-
-        def handle_paint(printer_obj):
-            doc = QTextDocument()
-            font_path = BASE_DIR / "fonts" / "Vazirmatn.ttf"
-            if font_path.exists():
-                 doc.setDefaultFont(QFont("Vazirmatn", 10))
-            else:
-                 doc.setDefaultFont(QFont("Tahoma", 10))
-            doc.setHtml(html_content)
-            doc.print(printer_obj)
-
-        preview.paintRequested.connect(handle_paint)
-        preview.exec()
+            return None
 
     def _generate_invoice_html(self, order_id, date, user, items, total):
         rows = ""
