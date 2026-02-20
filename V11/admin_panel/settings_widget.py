@@ -897,7 +897,12 @@ class SettingsWidget(QWidget):
         except Exception as e: QMessageBox.critical(self, "خطا", str(e))
 
     def load_backups_list(self):
-        self.bk_table.setRowCount(0)
+        try:
+            if not self.isVisible(): return
+            self.bk_table.setRowCount(0)
+        except RuntimeError:
+            return
+
         d = BASE_DIR / "db" / "backups"
         if not d.exists(): return
         for i, f in enumerate(sorted(d.glob("*.db"), key=os.path.getmtime, reverse=True)):

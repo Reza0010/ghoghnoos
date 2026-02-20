@@ -41,13 +41,13 @@ def run_telegram_bot():
     async def run_bot():
         app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         setup_application_handlers(app)
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        # استفاده از run_polling با غیرفعال کردن مدیریت سیگنال‌ها در ترد فرعی
         logger.info("✅ Telegram Bot Thread Started")
-        # بیخیال هندل کردن سیگنال در ترد ایزوله
-        while True:
-            await asyncio.sleep(3600)
+        await app.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False,
+            stop_signals=None
+        )
 
     try:
         loop.run_until_complete(run_bot())
@@ -129,12 +129,11 @@ class ApplicationManager:
     async def connect_light_clients(self):
         """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
         if self._is_shutting_down: return
-        # کلاینت تلگرام برای پنل
+        # کلاینت تلگرام برای پنل (فقط ارسال پیام، بدون Updater)
         if TELEGRAM_BOT_TOKEN:
             try:
-                # ایجاد اپلیکیشن سبک با تایم‌اوت کم
-                tg_light = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-                # استفاده از wait_for برای جلوگیری از فریز طولانی در صورت خرابی پروکسی
+                # ایجاد اپلیکیشن سبک بدون Updater برای جلوگیری از تداخل
+                tg_light = Application.builder().token(TELEGRAM_BOT_TOKEN).updater(None).build()
                 await asyncio.wait_for(tg_light.initialize(), timeout=5.0)
                 self.window.bot_application = tg_light
                 logger.info("✅ Panel Telegram Client Connected")
@@ -161,7 +160,9 @@ class ApplicationManager:
             self.window._is_shutting_down = True
             if self.window.bot_application:
                 try:
-                    await self.window.bot_application.stop()
+                    # فقط در صورتی stop صدا شود که اپلیکیشن در حال اجرا باشد و updater داشته باشد
+                    if self.window.bot_application.running:
+                        await self.window.bot_application.stop()
                     await self.window.bot_application.shutdown()
                 except Exception as e:
                     logger.error(f"Error stopping TG client: {e}")

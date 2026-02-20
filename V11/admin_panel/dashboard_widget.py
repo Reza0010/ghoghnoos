@@ -511,7 +511,7 @@ class DashboardWidget(QWidget):
                         "rev_tg": rev_tg, "rev_rb": rev_rb, "pending": pending_orders, "users": total_users,
                         "dates": dates, "tg_sales": tg_sales, "rb_sales": rb_sales,
                         "low_stock": low_stock, "recent_orders": recent_orders, "is_open": is_open,
-                        "top_prods": top_prods, "growth": growth
+                        "top_prods": top_prods, "growth": growth, "aov": aov
                     }
 
             data = await loop.run_in_executor(None, fetch_all)
