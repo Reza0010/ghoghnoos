@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
 
     def toggle_sidebar(self):
         width = self.sidebar.width()
-        collapsed = 70
+        collapsed = 80
         expanded = 260
         
         if width > 100:
@@ -323,6 +323,7 @@ class MainWindow(QMainWindow):
         self.anim.setEasingCurve(QEasingCurve.Type.OutQuint)
         self.anim.start()
         self.sidebar.setMaximumWidth(target)
+        self.sidebar.setMinimumWidth(target)
 
     def _safe_check_connection(self):
         """بررسی وضعیت و تغییر استایل نشانگرها"""

@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 
-from bot.utils import run_db
+from bot.utils import run_db, get_branded_text
 from db import crud, models
 from bot import keyboards, responses
 

@@ -191,6 +191,7 @@ class SettingsWidget(QWidget):
         """)
 
         nav_items = [
+            (" تنظیمات پایه", "fa5s.network-wired"),
             (" ربات تلگرام", "fa5b.telegram"),
             (" ربات روبیکا", "fa5s.infinity"),
             (" مالی و ارسال", "fa5s.credit-card"),
@@ -208,6 +209,7 @@ class SettingsWidget(QWidget):
 
         # --- صفحات محتوا ---
         self.pages_stack = QStackedWidget()
+        self.pages_stack.addWidget(self._ui_core_page())
         self.pages_stack.addWidget(self._ui_telegram_page())
         self.pages_stack.addWidget(self._ui_rubika_page())
         self.pages_stack.addWidget(self._ui_payment_page())
@@ -227,6 +229,51 @@ class SettingsWidget(QWidget):
         self.pages_stack.setCurrentIndex(index)
         
     # ==================== UI Pages ====================
+
+    def _ui_core_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("background: transparent; border: none;")
+        container = QWidget(); v_box = QVBoxLayout(container); v_box.setSpacing(25)
+
+        # کارت توکن‌ها
+        card_tokens = SettingCard("توکن‌های اتصال (Bot Tokens)")
+        self.tg_token_inp = QLineEdit(); self.tg_token_inp.setPlaceholderText("Telegram Bot Token")
+        self.rb_token_inp = QLineEdit(); self.rb_token_inp.setPlaceholderText("Rubika Bot Token")
+        card_tokens.add_layout(self._form_row("توکن تلگرام:", self.tg_token_inp))
+        card_tokens.add_layout(self._form_row("توکن روبیکا:", self.rb_token_inp))
+        v_box.addWidget(card_tokens)
+
+        # کارت شبکه و پراکسی
+        card_network = SettingCard("تنظیمات شبکه و پراکسی")
+        self.proxy_url_inp = QLineEdit(); self.proxy_url_inp.setPlaceholderText("http://username:password@ip:port")
+        self.proxy_enabled = ToggleSwitch()
+        card_network.add_layout(self._form_row("استفاده از پراکسی:", self.proxy_enabled))
+        card_network.add_layout(self._form_row("آدرس پراکسی:", self.proxy_url_inp))
+        v_box.addWidget(card_network)
+
+        # کارت دسترسی ادمین‌ها
+        card_admins = SettingCard("مدیریت دسترسی ادمین‌ها")
+        self.admin_ids_main = QTextEdit(); self.admin_ids_main.setPlaceholderText("آیدی‌های عددی را با کاما جدا کنید...")
+        self.admin_ids_main.setMaximumHeight(80)
+        card_admins.add_widget(QLabel("شناسه ادمین‌های مجاز (تلگرام):"))
+        card_admins.add_widget(self.admin_ids_main)
+        v_box.addWidget(card_admins)
+
+        btn_save = QPushButton("💾 ذخیره تنظیمات پایه")
+        btn_save.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 12px; border-radius: 10px; font-weight: bold;")
+        btn_save.clicked.connect(self.save_settings)
+        v_box.addWidget(btn_save)
+
+        btn_restart = QPushButton("🔄 راه‌اندازی مجدد سرویس‌ها")
+        btn_restart.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {WARNING_COLOR}; color: {WARNING_COLOR}; padding: 10px; border-radius: 10px;")
+        btn_restart.clicked.connect(self.restart_all_services)
+        v_box.addWidget(btn_restart)
+
+        v_box.addStretch()
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        return page
 
     def _ui_telegram_page(self):
         page = QWidget()
@@ -771,6 +818,13 @@ class SettingsWidget(QWidget):
             self.panel_pass.setText(data.get("panel_password", "admin"))
             self.admin_ids_input.setText(data.get("admin_user_ids", ""))
 
+            # فیلدهای جدید
+            self.tg_token_inp.setText(data.get("telegram_bot_token", ""))
+            self.rb_token_inp.setText(data.get("rubika_bot_token", ""))
+            self.proxy_url_inp.setText(data.get("proxy_url", ""))
+            self.proxy_enabled.setChecked(data.get("proxy_enabled", "false") == "true")
+            self.admin_ids_main.setText(data.get("admin_user_ids", ""))
+
             roles = json.loads(data.get("admin_notification_roles", "{}"))
             self.role_sales.setText(",".join(map(str, roles.get("sales", []))))
             self.role_support.setText(",".join(map(str, roles.get("support", []))))
@@ -800,7 +854,9 @@ class SettingsWidget(QWidget):
                 "admin_user_ids": "",
                 "branding_logo": "", "bot_footer_text": "",
                 "op_hours_enabled": "false", "op_hours_start": "08:00", "op_hours_end": "22:00",
-                "admin_notification_roles": "{}"
+                "admin_notification_roles": "{}",
+                "telegram_bot_token": "", "rubika_bot_token": "",
+                "proxy_url": "", "proxy_enabled": "false"
             }
             return {k: crud.get_setting(db, k, v) for k, v in DEFAULT_SETTINGS.items()}
 
@@ -840,7 +896,11 @@ class SettingsWidget(QWidget):
             "zarinpal_enabled": "true" if self.zarinpal_enabled.isChecked() else "false",
             "zarinpal_merchant": self.zarinpal_merchant.text().strip(),
             "panel_password": self.panel_pass.text().strip() or "admin",
-            "admin_user_ids": self.admin_ids_input.text().strip(),
+            "admin_user_ids": self.admin_ids_main.toPlainText().strip() or self.admin_ids_input.text().strip(),
+            "telegram_bot_token": self.tg_token_inp.text().strip(),
+            "rubika_bot_token": self.rb_token_inp.text().strip(),
+            "proxy_url": self.proxy_url_inp.text().strip(),
+            "proxy_enabled": "true" if self.proxy_enabled.isChecked() else "false"
         }
         # کپی تصاویر برندینگ و بنر
         for key in ["tg_welcome_image", "branding_logo"]:
@@ -871,6 +931,14 @@ class SettingsWidget(QWidget):
     def _save_db(self, data):
         with next(get_db()) as db:
             for k, v in data.items(): crud.set_setting(db, k, v)
+
+    @asyncSlot()
+    async def restart_all_services(self, *args, **kwargs):
+        if not hasattr(self.window(), 'app_manager'):
+            return QMessageBox.warning(self, "خطا", "مدیریت برنامه در دسترس نیست.")
+
+        if QMessageBox.question(self, "تایید", "سرویس‌های ربات با تنظیمات جدید ریستارت شوند؟\n(ممکن است برای اعمال کامل توکن جدید نیاز به بستن و باز کردن برنامه باشد)") == QMessageBox.StandardButton.Yes:
+            await self.window().app_manager.restart_services()
 
     @asyncSlot()
     async def update_bot_commands(self, *args, **kwargs):

@@ -100,6 +100,42 @@ class ApplicationManager:
         self.rb_thread = None
         self._is_shutting_down = False
 
+    async def _load_db_config(self):
+        """بارگذاری تنظیمات حساس از دیتابیس"""
+        from db.database import SessionLocal
+        from db import crud
+        import config
+
+        try:
+            def fetch():
+                with SessionLocal() as db:
+                    return {
+                        "tg_token": crud.get_setting(db, "telegram_bot_token"),
+                        "rb_token": crud.get_setting(db, "rubika_bot_token"),
+                        "proxy_url": crud.get_setting(db, "proxy_url"),
+                        "proxy_enabled": crud.get_setting(db, "proxy_enabled", "false") == "true"
+                    }
+
+            db_conf = await self.loop.run_in_executor(None, fetch)
+
+            if db_conf["tg_token"]:
+                config.TELEGRAM_BOT_TOKEN = db_conf["tg_token"]
+                global TELEGRAM_BOT_TOKEN
+                TELEGRAM_BOT_TOKEN = db_conf["tg_token"]
+
+            if db_conf["rb_token"]:
+                config.RUBIKA_BOT_TOKEN = db_conf["rb_token"]
+                global RUBIKA_BOT_TOKEN
+                RUBIKA_BOT_TOKEN = db_conf["rb_token"]
+
+            if db_conf["proxy_enabled"] and db_conf["proxy_url"]:
+                config.PROXY_URL = db_conf["proxy_url"]
+                global PROXY_URL
+                PROXY_URL = db_conf["proxy_url"]
+
+        except Exception as e:
+            logger.error(f"Error loading DB config: {e}")
+
     async def launch(self, app):
         """راه‌اندازی سریع پنل"""
         # ۱. دیتابیس
@@ -108,6 +144,9 @@ class ApplicationManager:
         except Exception as e:
             logger.error(f"DB Error: {e}")
 
+        # بارگذاری تنظیمات از دیتابیس
+        await self._load_db_config()
+
         # ۲. بررسی رمز عبور (Login)
         if not await self.show_login():
             await self.shutdown()
@@ -115,6 +154,8 @@ class ApplicationManager:
 
         # ۳. ایجاد پنجره
         self.window = MainWindow(bot_application=None, rubika_client=None)
+        # تزریق منیجر برای عملیات سیستمی
+        self.window.app_manager = self
         self.window.show()
 
         # بازگرداندن رفتار استاندارد برای خروج
@@ -143,11 +184,37 @@ class ApplicationManager:
     def start_background_bots(self):
         """اجرای ربات‌ها در ترد کاملاً مجزا"""
         if TELEGRAM_BOT_TOKEN:
-            self.tg_thread = threading.Thread(target=run_telegram_bot, daemon=True, name="TG_Thread")
-            self.tg_thread.start()
+            if self.tg_thread and self.tg_thread.is_alive():
+                logger.info("TG thread already running")
+            else:
+                self.tg_thread = threading.Thread(target=run_telegram_bot, daemon=True, name="TG_Thread")
+                self.tg_thread.start()
+
         if RUBIKA_BOT_TOKEN:
-            self.rb_thread = threading.Thread(target=run_rubika_bot, daemon=True, name="RB_Thread")
-            self.rb_thread.start()
+            if self.rb_thread and self.rb_thread.is_alive():
+                logger.info("Rubika thread already running")
+            else:
+                self.rb_thread = threading.Thread(target=run_rubika_bot, daemon=True, name="RB_Thread")
+                self.rb_thread.start()
+
+    async def restart_services(self):
+        """بارگذاری مجدد تنظیمات و راه‌اندازی مجدد سرویس‌ها"""
+        logger.info("🔄 Restarting services with new configuration...")
+        await self._load_db_config()
+
+        # در اینجا ساده‌ترین راه ریستارت کامل تردهای Bot است.
+        # چون از ترد استفاده می‌کنیم، بستن تردها کمی دشوار است (daemon هستند).
+        # راه حل حرفه‌ای‌تر استفاده از پروسس یا کنترلرهای سیگنال است.
+        # فعلاً کلاینت‌های پنل را بروزرسانی می‌کنیم.
+        await self.connect_light_clients()
+
+        # برای تردهای پس‌زمینه، چون در ترد جدا هستند، ساده‌ترین راه
+        # اطلاع‌رسانی به کاربر است که برنامه را یکبار باز و بسته کند
+        # یا تلاش برای استارت تردهای جدید (اگر قبلی‌ها متوقف شده باشند)
+        self.start_background_bots()
+
+        if self.window:
+            self.window.show_toast("سرویس‌های پنل بروزرسانی شدند.")
 
     async def connect_light_clients(self):
         """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
