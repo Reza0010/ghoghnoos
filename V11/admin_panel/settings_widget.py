@@ -234,20 +234,45 @@ class SettingsWidget(QWidget):
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("background: transparent; border: none;")
         container = QWidget(); v_box = QVBoxLayout(container); v_box.setSpacing(20)
 
-        # --- کارت هویت ---
-        card1 = SettingCard("هویت فروشگاه")
-        row1 = QHBoxLayout()
+        # --- کارت هویت و برندینگ ---
+        card1 = SettingCard("هویت و برندینگ فروشگاه")
+        row_name = QHBoxLayout()
         self.tg_shop_name = QLineEdit(); self.tg_shop_name.setPlaceholderText("نام فروشگاه")
         self.tg_toggle_status = ToggleSwitch()
-        row1.addWidget(QLabel("نام:")); row1.addWidget(self.tg_shop_name)
-        row1.addStretch()
-        row1.addWidget(QLabel("وضعیت:")); row1.addWidget(self.tg_toggle_status)
-        self.tg_shop_address = QTextEdit(); self.tg_shop_address.setPlaceholderText("آدرس...")
+        row_name.addWidget(QLabel("نام فروشگاه:")); row_name.addWidget(self.tg_shop_name)
+        row_name.addStretch()
+        row_name.addWidget(QLabel("باز/بسته:")); row_name.addWidget(self.tg_toggle_status)
+        card1.add_layout(row_name)
+
+        h_branding = QHBoxLayout()
+        self.lbl_logo_path = QLineEdit(); self.lbl_logo_path.setPlaceholderText("مسیر لوگو (برای فاکتورها)"); self.lbl_logo_path.setReadOnly(True)
+        btn_logo = QPushButton("انتخاب لوگو"); btn_logo.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 5px;")
+        btn_logo.clicked.connect(self.select_branding_logo)
+        h_branding.addWidget(self.lbl_logo_path); h_branding.addWidget(btn_logo)
+        card1.add_layout(h_branding)
+
+        self.bot_footer_text = QLineEdit(); self.bot_footer_text.setPlaceholderText("متن فوتر پیام‌های ربات (مثلاً لینک کانال یا کپی‌رایت)")
+        card1.add_layout(self._form_row("متن فوتر:", self.bot_footer_text))
+
+        self.tg_shop_address = QTextEdit(); self.tg_shop_address.setPlaceholderText("آدرس فیزیکی فروشگاه...")
         self.tg_shop_address.setMaximumHeight(60)
-        card1.add_layout(row1)
-        card1.add_widget(QLabel("آدرس:"))
+        card1.add_widget(QLabel("آدرس فروشگاه:"))
         card1.add_widget(self.tg_shop_address)
         v_box.addWidget(card1)
+
+        # --- کارت ساعات کاری ---
+        card_hours = SettingCard("تنظیمات ساعات کاری خودکار")
+        self.op_hours_enabled = ToggleSwitch()
+        self.op_hours_start = QTimeEdit(); self.op_hours_end = QTimeEdit()
+
+        card_hours.add_layout(self._form_row("فعالسازی زمانبندی:", self.op_hours_enabled))
+        h_times = QHBoxLayout()
+        h_times.addWidget(QLabel("از ساعت:")); h_times.addWidget(self.op_hours_start)
+        h_times.addSpacing(20)
+        h_times.addWidget(QLabel("تا ساعت:")); h_times.addWidget(self.op_hours_end)
+        h_times.addStretch()
+        card_hours.add_layout(h_times)
+        v_box.addWidget(card_hours)
 
         # --- کارت ارتباطات ---
         card2 = SettingCard("اطلاعات تماس و پشتیبانی")
@@ -537,10 +562,20 @@ class SettingsWidget(QWidget):
         card_bc.add_widget(btn_bc)
         layout.addWidget(card_bc)
 
-        card_admin = SettingCard("مدیریت ادمین‌ها")
+        card_admin = SettingCard("مدیریت و نقش‌های ادمین")
         self.admin_ids_input = QLineEdit()
-        self.admin_ids_input.setPlaceholderText("آیدی عددی تلگرام ادمین‌ها (با کاما جدا کنید)")
-        card_admin.add_layout(self._form_row("لیست ادمین‌ها:", self.admin_ids_input))
+        self.admin_ids_input.setPlaceholderText("آیدی‌های ادمین (با کاما جدا کنید)")
+        card_admin.add_layout(self._form_row("کل ادمین‌ها:", self.admin_ids_input))
+
+        grid_roles = QGridLayout()
+        self.role_sales = QLineEdit(); self.role_sales.setPlaceholderText("آیدی‌های بخش فروش...")
+        self.role_support = QLineEdit(); self.role_support.setPlaceholderText("آیدی‌های بخش پشتیبانی...")
+        self.role_system = QLineEdit(); self.role_system.setPlaceholderText("آیدی‌های فنی/سیستمی...")
+
+        grid_roles.addWidget(QLabel("اعلان فروش:"), 0, 0); grid_roles.addWidget(self.role_sales, 0, 1)
+        grid_roles.addWidget(QLabel("اعلان تیکت:"), 1, 0); grid_roles.addWidget(self.role_support, 1, 1)
+        grid_roles.addWidget(QLabel("اعلان انبار:"), 2, 0); grid_roles.addWidget(self.role_system, 2, 1)
+        card_admin.add_layout(grid_roles)
         layout.addWidget(card_admin)
         
         QTimer.singleShot(500, self.load_backups_list)
@@ -642,6 +677,10 @@ class SettingsWidget(QWidget):
     def on_select_image(self):
         f, _ = QFileDialog.getOpenFileName(self, "تصویر", "", "Images (*.jpg *.png *.jpeg)")
         if f: self.tg_welcome_img_path.setText(f)
+
+    def select_branding_logo(self):
+        f, _ = QFileDialog.getOpenFileName(self, "انتخاب لوگوی برند", "", "Images (*.jpg *.png *.jpeg)")
+        if f: self.lbl_logo_path.setText(f)
         
     def select_broadcast_image(self):
         f, _ = QFileDialog.getOpenFileName(self, "عکس پیام همگانی", "", "Images (*.jpg *.png)")
@@ -668,12 +707,19 @@ class SettingsWidget(QWidget):
         loop = asyncio.get_running_loop()
         try:
             data = await loop.run_in_executor(None, self._fetch_all_settings)
-            # تلگرام
+            # تلگرام و برندینگ
             self.tg_shop_name.setText(data["tg_shop_name"])
             self.tg_toggle_status.setChecked(data["tg_is_open"] == "true")
             self.tg_shop_address.setPlainText(data["tg_shop_address"])
             self.tg_welcome_msg.setPlainText(data["tg_welcome_message"])
             self.tg_welcome_img_path.setText(data["tg_welcome_image"])
+            self.lbl_logo_path.setText(data.get("branding_logo", ""))
+            self.bot_footer_text.setText(data.get("bot_footer_text", ""))
+
+            # ساعات کاری
+            self.op_hours_enabled.setChecked(data.get("op_hours_enabled") == "true")
+            self.op_hours_start.setTime(QTime.fromString(data.get("op_hours_start", "08:00"), "HH:mm"))
+            self.op_hours_end.setTime(QTime.fromString(data.get("op_hours_end", "22:00"), "HH:mm"))
             
             tg_support_ids = json.loads(data.get("tg_support_ids", "[]"))
             self.tg_support_ids_list.clear()
@@ -718,6 +764,11 @@ class SettingsWidget(QWidget):
             self.panel_pass.setText(data.get("panel_password", "admin"))
             self.admin_ids_input.setText(data.get("admin_user_ids", ""))
 
+            roles = json.loads(data.get("admin_notification_roles", "{}"))
+            self.role_sales.setText(",".join(map(str, roles.get("sales", []))))
+            self.role_support.setText(",".join(map(str, roles.get("support", []))))
+            self.role_system.setText(",".join(map(str, roles.get("system", []))))
+
             # بک‌آپ
             self.auto_bk_toggle.setChecked(data["auto_backup_enabled"] == "true")
             try: self.auto_bk_time.setTime(QTime.fromString(data["auto_backup_time"], "HH:mm"))
@@ -739,19 +790,34 @@ class SettingsWidget(QWidget):
                 "tg_shop_address": "",
                 "zarinpal_enabled": "false", "zarinpal_merchant": "",
                 "panel_password": "admin",
-                "admin_user_ids": ""
+                "admin_user_ids": "",
+                "branding_logo": "", "bot_footer_text": "",
+                "op_hours_enabled": "false", "op_hours_start": "08:00", "op_hours_end": "22:00",
+                "admin_notification_roles": "{}"
             }
             return {k: crud.get_setting(db, k, v) for k, v in DEFAULT_SETTINGS.items()}
 
     @asyncSlot()
     async def save_settings(self):
-        # Logic to save Telegram & Payment settings
+        # نقش‌های ادمین
+        roles = {
+            "sales": [x.strip() for x in self.role_sales.text().split(',') if x.strip().isdigit()],
+            "support": [x.strip() for x in self.role_support.text().split(',') if x.strip().isdigit()],
+            "system": [x.strip() for x in self.role_system.text().split(',') if x.strip().isdigit()]
+        }
+
         data = {
             "tg_shop_name": self.tg_shop_name.text(),
             "tg_is_open": "true" if self.tg_toggle_status.isChecked() else "false",
             "tg_shop_address": self.tg_shop_address.toPlainText(),
             "tg_welcome_message": self.tg_welcome_msg.toPlainText(),
             "tg_welcome_image": self.tg_welcome_img_path.text(),
+            "branding_logo": self.lbl_logo_path.text(),
+            "bot_footer_text": self.bot_footer_text.text(),
+            "op_hours_enabled": "true" if self.op_hours_enabled.isChecked() else "false",
+            "op_hours_start": self.op_hours_start.time().toString("HH:mm"),
+            "op_hours_end": self.op_hours_end.time().toString("HH:mm"),
+            "admin_notification_roles": json.dumps(roles),
             "tg_support_ids": json.dumps([self.tg_support_ids_list.item(i).text() for i in range(self.tg_support_ids_list.count())]),
             "tg_phones": json.dumps([self.tg_phones_list.item(i).text() for i in range(self.tg_phones_list.count())]),
             "bank_cards": json.dumps([{"number": self.card_table.cellWidget(r, 0).text(), "owner": self.card_table.cellWidget(r, 1).text()} for r in range(self.card_table.rowCount())]),
@@ -764,15 +830,19 @@ class SettingsWidget(QWidget):
             "panel_password": self.panel_pass.text().strip() or "admin",
             "admin_user_ids": self.admin_ids_input.text().strip(),
         }
-        # Copy image
-        img = data["tg_welcome_image"]
-        if img and not img.startswith("media/"):
-            dest = BASE_DIR / "media" / f"banner_start{Path(img).suffix}"
-            shutil.copy(img, dest)
-            data["tg_welcome_image"] = f"media/{dest.name}"
+        # کپی تصاویر برندینگ و بنر
+        for key in ["tg_welcome_image", "branding_logo"]:
+            img = data[key]
+            if img and not img.startswith("media/"):
+                suffix = Path(img).suffix
+                dest = BASE_DIR / "media" / f"{key}{suffix}"
+                try:
+                    shutil.copy(img, dest)
+                    data[key] = f"media/{dest.name}"
+                except: pass
             
         await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_db(data))
-        self.window().show_toast("تنظیمات تلگرام و مالی ذخیره شد.")
+        self.window().show_toast("تنظیمات با موفقیت ذخیره شد.")
 
     @asyncSlot()
     async def save_rubika_settings(self):

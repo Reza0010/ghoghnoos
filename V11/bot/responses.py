@@ -88,6 +88,12 @@ def format_dynamic_text(template: str, user_data: Dict[str, Any]) -> str:
     for key, value in replacements.items():
         text = text.replace(key, value)
     
+    # افزودن فوتر برندینگ در صورت وجود (اختیاری)
+    if user_data.get("append_footer"):
+        footer = user_data.get("bot_footer_text")
+        if footer:
+            text += f"\n\n---\n{footer}"
+
     return text
 
 # ====================================================================

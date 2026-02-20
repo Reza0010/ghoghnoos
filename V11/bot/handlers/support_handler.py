@@ -62,6 +62,19 @@ async def get_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ تیکت شما با موفقیت ثبت شد.\n🆔 شماره تیکت: #{ticket.id}\n\nمنتظر پاسخ کارشناسان ما باشید.",
         reply_markup=keyboards.get_main_menu_keyboard()
     )
+
+    # اطلاع‌رسانی به ادمین‌های بخش پشتیبانی
+    def _get_support_admins(db):
+        return crud.get_admins_by_role(db, "support")
+
+    support_admins = await run_db(_get_support_admins)
+    admin_msg = f"🔔 **تیکت جدید ثبت شد! #{ticket.id}**\n👤 کاربر: {update.effective_user.full_name}\n📌 موضوع: {subject}\n\n💬 متن: {message}"
+
+    for admin_id in support_admins:
+        try:
+            await context.bot.send_message(admin_id, admin_msg, parse_mode='Markdown')
+        except: pass
+
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -123,6 +136,19 @@ async def get_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await run_db(crud.add_ticket_message, ticket_id, user_id, text, is_admin=False)
 
     await update.message.reply_text("✅ پاسخ شما ثبت شد.", reply_markup=keyboards.get_main_menu_keyboard())
+
+    # اطلاع‌رسانی پاسخ به ادمین‌های پشتیبانی
+    def _get_support_admins(db):
+        return crud.get_admins_by_role(db, "support")
+
+    support_admins = await run_db(_get_support_admins)
+    admin_msg = f"📩 **پاسخ جدید برای تیکت #{ticket_id}**\n👤 کاربر: {update.effective_user.full_name}\n\n💬 متن: {text}"
+
+    for admin_id in support_admins:
+        try:
+            await context.bot.send_message(admin_id, admin_msg, parse_mode='Markdown')
+        except: pass
+
     context.user_data.clear()
     return ConversationHandler.END
 

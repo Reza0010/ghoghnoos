@@ -236,6 +236,10 @@ class RubikaWorker:
         """ثبت سفارش نهایی"""
         try:
             with SessionLocal() as db:
+                # چک کردن وضعیت ساعات کاری
+                if not crud.is_shop_currently_open(db):
+                    return await self.api.send_message(chat_id, "⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر (خارج از ساعات کاری) سفارش جدید نمی‌پذیرد.")
+
                 items = crud.get_cart_items(db, user_id)
                 if not items:
                     return await self.api.send_message(chat_id, "🛒 سبد خرید شما خالی است.")

@@ -178,8 +178,15 @@ class TicketsWidget(QWidget):
 
             user_id, platform, t_id = await loop.run_in_executor(None, db_op)
 
+            # دریافت فوتر از تنظیمات
+            def get_footer():
+                with next(get_db()) as db:
+                    return crud.get_setting(db, "bot_footer_text", "")
+            footer = await loop.run_in_executor(None, get_footer)
+
             # ارسال پیام به کاربر
             msg = f"👨‍💻 **پاسخ پشتیبانی برای تیکت #{t_id}:**\n\n{text}"
+            if footer: msg += f"\n\n---\n{footer}"
 
             if platform == 'telegram' and self.bot_app:
                 try:

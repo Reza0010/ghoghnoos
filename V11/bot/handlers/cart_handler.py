@@ -126,10 +126,10 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     query = update.callback_query
     await query.answer()
     
-    # چک کردن وضعیت فروشگاه
-    is_open = await run_db(crud.get_setting, "tg_is_open", "true")
-    if is_open == "false":
-        await query.message.reply_text("⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر سفارش جدید نمی‌پذیرد.")
+    # چک کردن وضعیت فروشگاه (با لحاظ ساعات کاری)
+    is_open = await run_db(crud.is_shop_currently_open)
+    if not is_open:
+        await query.message.reply_text("⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر (خارج از ساعات کاری) سفارش جدید نمی‌پذیرد.")
         return ConversationHandler.END
 
     user_id = query.from_user.id
@@ -391,13 +391,32 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE, pay
 
         admin_list = await run_db(_get_admins)
 
-        for admin_id in admin_list:
+        # ارسال فقط به ادمین‌های بخش فروش (Sales)
+        def _get_sales_admins(db):
+            return crud.get_admins_by_role(db, "sales")
+
+        sales_admins = await run_db(_get_sales_admins)
+
+        for admin_id in sales_admins:
             try:
                 if photo_id:
                     await context.bot.send_photo(admin_id, photo_id, caption=admin_text, reply_markup=admin_kb, parse_mode='HTML')
                 else:
                     await context.bot.send_message(admin_id, admin_text, reply_markup=admin_kb, parse_mode='HTML')
             except: pass
+
+        # بررسی و اعلان موجودی کم به ادمین‌های سیستم
+        def _check_low_stock(db):
+            low_stock_prods = crud.get_low_stock_products(db, limit=10)
+            return [p.name for p in low_stock_prods if p.stock <= 2]
+
+        low_stock_names = await run_db(_check_low_stock)
+        if low_stock_names:
+            system_admins = await run_db(lambda db: crud.get_admins_by_role(db, "system"))
+            stock_msg = f"⚠️ **هشدار موجودی انبار**\n\nمحصولات زیر رو به اتمام هستند:\n" + "\n".join([f"• {name}" for name in low_stock_names])
+            for admin_id in system_admins:
+                try: await context.bot.send_message(admin_id, stock_msg, parse_mode='Markdown')
+                except: pass
 
     except Exception as e:
         logger.error(f"Finalize Error: {e}")

@@ -698,6 +698,17 @@ class OrdersWidget(QWidget):
         for idx, item in enumerate(items, 1):
             rows += f"""<tr><td style="text-align: center;">{idx}</td><td>{item['name']}</td><td style="text-align: center;">{item['qty']}</td><td style="text-align: right;">{int(item['price']):,}</td><td style="text-align: right;">{int(item['total']):,}</td></tr>"""
 
+        # دریافت لوگو
+        with next(get_db()) as db:
+            logo_path = crud.get_setting(db, "branding_logo", "")
+            shop_name = crud.get_setting(db, "tg_shop_name", "فروشگاه ققنوس")
+
+        logo_html = ""
+        if logo_path:
+            full_logo_path = Path(BASE_DIR) / logo_path
+            if full_logo_path.exists():
+                logo_html = f"<img src='file:///{full_logo_path}' width='80' height='80' style='margin-bottom: 10px;'>"
+
         return f"""
         <!DOCTYPE html>
         <html dir="rtl" lang="fa">
@@ -711,7 +722,11 @@ class OrdersWidget(QWidget):
         </style>
         </head>
         <body>
-        <div class="header"><h1>فاکتور فروش</h1><p>تاریخ: {date}</p></div>
+        <div class="header">
+            {logo_html}
+            <h1>فاکتور فروش {shop_name}</h1>
+            <p>تاریخ: {date}</p>
+        </div>
         <div style="margin-bottom: 20px;">
         <p><strong>خریدار:</strong> {user['name']}</p>
         <p><strong>تلفن:</strong> {user['phone']}</p>

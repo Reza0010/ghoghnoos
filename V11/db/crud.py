@@ -516,6 +516,40 @@ def set_setting(db: Session, key: str, value: str):
         db.add(models.Setting(key=key, value=str(value)))
     db.commit()
 
+def is_shop_currently_open(db: Session) -> bool:
+    """بررسی باز یا بسته بودن فروشگاه با لحاظ کردن ساعات کاری"""
+    manual_open = get_setting(db, "tg_is_open", "true") == "true"
+    if not manual_open:
+        return False
+
+    op_hours_enabled = get_setting(db, "op_hours_enabled", "false") == "true"
+    if not op_hours_enabled:
+        return True
+
+    try:
+        now = datetime.now().time()
+        start_str = get_setting(db, "op_hours_start", "08:00")
+        end_str = get_setting(db, "op_hours_end", "22:00")
+
+        start_time = datetime.strptime(start_str, "%H:%M").time()
+        end_time = datetime.strptime(end_str, "%H:%M").time()
+
+        if start_time < end_time:
+            return start_time <= now <= end_time
+        else: # بازه از شب تا صبح روز بعد
+            return now >= start_time or now <= end_time
+    except:
+        return True
+
+def get_admins_by_role(db: Session, role: str) -> List[int]:
+    """دریافت لیست ادمین‌ها بر اساس نقش (sales, support, system)"""
+    try:
+        roles_json = get_setting(db, "admin_notification_roles", "{}")
+        roles = json.loads(roles_json)
+        return [int(uid) for uid in roles.get(role, [])]
+    except:
+        return get_admin_ids(db)
+
 def log_setting_change(db: Session, admin_id, keys, values):
     logger.info(f"Admin {admin_id} changed settings: {keys}")
 
