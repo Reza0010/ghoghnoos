@@ -372,6 +372,14 @@ class DashboardWidget(QWidget):
 
         self.main_layout.addLayout(bottom_row, 2)
 
+        # فوتر سیستم
+        footer = QHBoxLayout()
+        self.lbl_system = QLabel("🚀 سیستم آماده است | نسخه 11.0.1")
+        self.lbl_system.setStyleSheet(f"color: {COLOR_GRAY}; font-size: 11px;")
+        footer.addStretch()
+        footer.addWidget(self.lbl_system)
+        self.main_layout.addLayout(footer)
+
     def showEvent(self, event):
         if not self._data_loaded:
             QTimer.singleShot(300, self.refresh_data)

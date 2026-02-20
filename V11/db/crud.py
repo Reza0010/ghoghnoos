@@ -10,6 +10,20 @@ from config import ADMIN_USER_IDS
 
 logger = logging.getLogger("CRUD")
 
+def get_admin_ids(db: Session) -> List[int]:
+    """ترکیب ادمین‌های فایل کانفیگ و دیتابیس"""
+    ids = list(ADMIN_USER_IDS)
+    db_ids_str = get_setting(db, "admin_user_ids", "")
+    if db_ids_str:
+        try:
+            extra_ids = [int(x.strip()) for x in db_ids_str.split(',') if x.strip().isdigit()]
+            for eid in extra_ids:
+                if eid not in ids:
+                    ids.append(eid)
+        except:
+            pass
+    return ids
+
 # ======================================================================
 # 1. مدیریت کاربران (User Management)
 # ======================================================================

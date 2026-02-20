@@ -10,12 +10,13 @@ from telegram.error import BadRequest
 from bot.utils import run_db
 from db import crud, models
 from bot import keyboards, responses
-from config import ADMIN_USER_IDS
+# config.get_admin_ids removed to avoid circular dependency
+# will use crud.get_admin_ids(db) instead
 
 logger = logging.getLogger("CartHandler")
 
 # وضعیت‌های گفتگوی خرید (Checkout States)
-GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, GET_RECEIPT = range(4)
+GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, CHOOSE_PAYMENT, GET_RECEIPT = range(5)
 
 # ==============================================================================
 # توابع کمکی (Helpers)
@@ -233,7 +234,7 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await show_invoice_step(update.message, context)
 
 async def show_invoice_step(message, context) -> int:
-    """نمایش فاکتور نهایی و اطلاعات کارت بانکی"""
+    """نمایش فاکتور و انتخاب روش پرداخت"""
     user_id = context._user_id
     items = await run_db(crud.get_cart_items, user_id)
     
@@ -241,7 +242,88 @@ async def show_invoice_step(message, context) -> int:
         await message.reply_text("سبد خرید شما خالی شده است.", reply_markup=keyboards.get_main_menu_keyboard())
         return ConversationHandler.END
 
-    # محاسبات مالی
+    items_total = sum(float(item.product.price) * item.quantity for item in items)
+    ship_cost = float(await run_db(crud.get_setting, "shipping_cost", "0"))
+    free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
+
+    final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
+    final_total = items_total + final_ship
+
+    context.user_data['final_total'] = final_total
+
+    zp_enabled = await run_db(crud.get_setting, "zarinpal_enabled", "false") == "true"
+
+    invoice_text = f"🧾 <b>پیش‌فاکتور نهایی</b>\n\n"
+    invoice_text += f"💰 مبلغ محصولات: {responses.format_price(items_total)}\n"
+    invoice_text += f"🚚 هزینه ارسال: {'رایگان' if final_ship == 0 else responses.format_price(final_ship)}\n"
+    invoice_text += f"{responses.get_divider()}\n"
+    invoice_text += f"💎 <b>مبلغ قابل پرداخت: {responses.format_price(final_total)}</b>\n\n"
+    invoice_text += "لطفا روش پرداخت مورد نظر خود را انتخاب کنید:"
+
+    await message.reply_text(invoice_text, reply_markup=keyboards.get_payment_method_keyboard(zp_enabled), parse_mode='HTML')
+    return CHOOSE_PAYMENT
+
+async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "pay_online":
+        # فرآیند زرین‌پال
+        merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
+        if not merchant_id:
+            await query.message.reply_text("⚠️ درگاه پرداخت آنلاین فعلا در دسترس نیست. لطفا روش کارت به کارت را انتخاب کنید.")
+            return CHOOSE_PAYMENT
+
+        from bot.zarinpal import ZarinPal
+        zp = ZarinPal(merchant_id)
+
+        amount = context.user_data['final_total']
+        description = f"خرید از ربات - کاربر {query.from_user.id}"
+        # لینک بازگشت (صوری برای این نسخه)
+        callback_url = f"https://t.me/{(await context.bot.get_me()).username}?start=verify"
+
+        url, authority = await zp.request_payment(amount, description, callback_url, mobile=context.user_data.get('phone'))
+
+        if url:
+            context.user_data['zp_authority'] = authority
+            kbd = InlineKeyboardMarkup([[InlineKeyboardButton("💳 ورود به درگاه بانکی", url=url)],
+                                        [InlineKeyboardButton("✅ پرداخت کردم (تایید نهایی)", callback_data="verify_online")]])
+            await query.message.reply_text("🌟 آماده اتصال به درگاه پرداخت...\n\nپس از تکمیل پرداخت در مرورگر، دکمه 'پرداخت کردم' را بزنید.", reply_markup=kbd)
+            return CHOOSE_PAYMENT
+        else:
+            await query.message.reply_text("❌ خطا در اتصال به درگاه. لطفا دقایقی دیگر تلاش کنید یا از روش کارت به کارت استفاده کنید.")
+            return CHOOSE_PAYMENT
+
+    elif query.data == "verify_online":
+        # تایید واقعی پرداخت از طریق درگاه زرین‌پال
+        authority = context.user_data.get('zp_authority')
+        amount = context.user_data.get('final_total')
+        merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
+
+        if not authority or not amount or not merchant_id:
+            await query.message.reply_text("❌ اطلاعات پرداخت یافت نشد. لطفا مجددا تلاش کنید.")
+            return CHOOSE_PAYMENT
+
+        from bot.zarinpal import ZarinPal
+        zp = ZarinPal(merchant_id)
+
+        success, ref_id = await zp.verify_payment(amount, authority)
+
+        if success:
+            await query.message.reply_text(f"✅ پرداخت شما با موفقیت تایید شد.\nشماره پیگیری بانکی: {ref_id}")
+            return await finalize_order(update, context, payment_type="online")
+        else:
+            await query.message.reply_text(f"❌ پرداخت تایید نشد یا هنوز تکمیل نشده است.\nخطا: {ref_id}")
+            return CHOOSE_PAYMENT
+
+    elif query.data == "pay_receipt":
+        return await show_card_info_step(query.message, context)
+
+async def show_card_info_step(message, context) -> int:
+    """نمایش اطلاعات کارت بانکی برای واریز دستی"""
+    user_id = context._user_id
+    items = await run_db(crud.get_cart_items, user_id)
+
     items_total = sum(float(item.product.price) * item.quantity for item in items)
     ship_cost = float(await run_db(crud.get_setting, "shipping_cost", "0"))
     free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
@@ -249,7 +331,6 @@ async def show_invoice_step(message, context) -> int:
     final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
     final_total = items_total + final_ship
 
-    # دریافت اطلاعات کارت از تنظیمات (پشتیبانی از لیست کارت‌ها)
     raw_cards = await run_db(crud.get_setting, "bank_cards", "[]")
     try:
         cards = json.loads(raw_cards)
@@ -268,14 +349,9 @@ async def show_invoice_step(message, context) -> int:
     await message.reply_text(text, reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
     return GET_RECEIPT
 
-async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """دریافت فیش و ثبت نهایی سفارش"""
-    if not update.message.photo:
-        await update.message.reply_text("⚠️ لطفا تصویر فیش واریزی را ارسال کنید.")
-        return GET_RECEIPT
-
+async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE, payment_type="receipt", photo_id=None) -> int:
+    """ثبت نهایی سفارش در دیتابیس و اطلاع‌رسانی"""
     user = update.effective_user
-    photo_id = update.message.photo[-1].file_id
     
     shipping_data = {
         "address": context.user_data.get('address'),
@@ -284,46 +360,60 @@ async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     }
 
     try:
-        # ثبت در دیتابیس (اتمیک)
         order = await run_db(crud.create_order_from_cart, user.id, shipping_data)
         
-        # ذخیره آیدی عکس فیش در سفارش
-        def _update_receipt(db, oid, pid):
+        def _update_details(db, oid, pid, p_type):
             order_obj = db.query(models.Order).filter_by(id=oid).first()
-            if order_obj: order_obj.payment_receipt_photo_id = pid
+            if order_obj:
+                if pid: order_obj.payment_receipt_photo_id = pid
+                if p_type == "online": order_obj.status = "paid"
             db.commit()
         
-        await run_db(_update_receipt, order.id, photo_id)
+        await run_db(_update_details, order.id, photo_id, payment_type)
 
-        # پیام موفقیت به کاربر
         success_text = responses.ORDER_CONFIRMATION.format(
             order_id=order.id,
-            timeline=responses.get_tracking_timeline("pending_payment"),
+            timeline=responses.get_tracking_timeline("paid" if payment_type == "online" else "pending_payment"),
             divider=responses.get_divider()
         )
-        await update.message.reply_text(success_text, reply_markup=keyboards.get_main_menu_keyboard(), parse_mode='HTML')
+        await update.effective_chat.send_message(success_text, reply_markup=keyboards.get_main_menu_keyboard(), parse_mode='HTML')
 
-        # اطلاع‌رسانی به ادمین‌ها
         admin_text = (
-            f"🔔 <b>سفارش جدید ثبت شد! #{order.id}</b>\n\n"
+            f"🔔 <b>سفارش جدید {'(پرداخت آنلاین)' if payment_type == 'online' else ''} #{order.id}</b>\n\n"
             f"👤 مشتری: {user.full_name}\n"
-            f"💰 مبلغ نهایی: {int(order.total_amount):,} تومان\n"
-            f"📞 تلفن: <code>{shipping_data['phone']}</code>\n"
+            f"💰 مبلغ: {int(order.total_amount):,} تومان\n"
             f"📍 آدرس: {shipping_data['address']}"
         )
         admin_kb = keyboards.get_admin_order_keyboard(order.id, user.id)
         
-        for admin_id in ADMIN_USER_IDS:
+        def _get_admins(db):
+            return crud.get_admin_ids(db)
+
+        admin_list = await run_db(_get_admins)
+
+        for admin_id in admin_list:
             try:
-                await context.bot.send_photo(admin_id, photo_id, caption=admin_text, reply_markup=admin_kb, parse_mode='HTML')
+                if photo_id:
+                    await context.bot.send_photo(admin_id, photo_id, caption=admin_text, reply_markup=admin_kb, parse_mode='HTML')
+                else:
+                    await context.bot.send_message(admin_id, admin_text, reply_markup=admin_kb, parse_mode='HTML')
             except: pass
 
     except Exception as e:
-        logger.error(f"Checkout Error: {e}")
-        await update.message.reply_text("❌ خطا در ثبت سفارش. مبلغ واریزی محفوظ است، لطفا به پشتیبانی پیام دهید.")
+        logger.error(f"Finalize Error: {e}")
+        await update.effective_chat.send_message("❌ خطا در ثبت سفارش. لطفا به پشتیبانی پیام دهید.")
 
     context.user_data.clear()
     return ConversationHandler.END
+
+async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """دریافت فیش و ثبت نهایی سفارش"""
+    if not update.message.photo:
+        await update.message.reply_text("⚠️ لطفا تصویر فیش واریزی را ارسال کنید.")
+        return GET_RECEIPT
+
+    photo_id = update.message.photo[-1].file_id
+    return await finalize_order(update, context, payment_type="receipt", photo_id=photo_id)
 
 async def cancel_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_chat.send_message("❌ فرآیند خرید لغو شد.", reply_markup=keyboards.get_main_menu_keyboard())
@@ -342,6 +432,9 @@ checkout_conversation_handler = ConversationHandler(
         GET_PHONE: [
             CallbackQueryHandler(handle_phone_choice, pattern=r"^(use_saved_phone|new_phone)$"),
             MessageHandler((filters.TEXT | filters.CONTACT) & ~filters.COMMAND, get_phone)
+        ],
+        CHOOSE_PAYMENT: [
+            CallbackQueryHandler(handle_payment_choice, pattern=r"^(pay_online|pay_receipt|verify_online)$")
         ],
         GET_RECEIPT: [MessageHandler(filters.PHOTO, get_receipt)],
     },

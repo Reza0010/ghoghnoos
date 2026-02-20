@@ -21,7 +21,7 @@ import qtawesome as qta
 
 from db.database import get_db
 from db import crud
-from config import BASE_DIR, ADMIN_USER_IDS
+from config import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -463,6 +463,14 @@ class SettingsWidget(QWidget):
         card2.add_layout(self._form_row("هزینه ارسال:", self.shipping_cost))
         card2.add_layout(self._form_row("سقف ارسال رایگان:", self.free_limit))
         layout.addWidget(card2)
+
+        card3 = SettingCard("درگاه پرداخت آنلاین (زرین‌پال)")
+        self.zarinpal_enabled = ToggleSwitch()
+        self.zarinpal_merchant = QLineEdit()
+        self.zarinpal_merchant.setPlaceholderText("Merchant ID")
+        card3.add_layout(self._form_row("فعال‌سازی درگاه:", self.zarinpal_enabled))
+        card3.add_layout(self._form_row("کد مرچنت:", self.zarinpal_merchant))
+        layout.addWidget(card3)
         
         btn = QPushButton("ذخیره تنظیمات مالی")
         btn.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px; border-radius: 8px;")
@@ -501,9 +509,12 @@ class SettingsWidget(QWidget):
         h_auto.addStretch()
         
         card_bk.add_widget(self.bk_table)
-        card_bk.add_layout(h_bk)
-        card_bk.add_layout(h_auto)
-        layout.addWidget(card_bk)
+        card_pass = SettingCard("امنیت پنل")
+        self.panel_pass = QLineEdit()
+        self.panel_pass.setPlaceholderText("رمز عبور جدید...")
+        self.panel_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        card_pass.add_layout(self._form_row("رمز عبور پنل:", self.panel_pass))
+        layout.addWidget(card_pass)
 
         # --- پیام همگانی ---
         card_bc = SettingCard("ارسال پیام همگانی (Broadcast)")
@@ -525,6 +536,12 @@ class SettingsWidget(QWidget):
         card_bc.add_widget(self.bc_progress)
         card_bc.add_widget(btn_bc)
         layout.addWidget(card_bc)
+
+        card_admin = SettingCard("مدیریت ادمین‌ها")
+        self.admin_ids_input = QLineEdit()
+        self.admin_ids_input.setPlaceholderText("آیدی عددی تلگرام ادمین‌ها (با کاما جدا کنید)")
+        card_admin.add_layout(self._form_row("لیست ادمین‌ها:", self.admin_ids_input))
+        layout.addWidget(card_admin)
         
         QTimer.singleShot(500, self.load_backups_list)
         return page
@@ -695,6 +712,12 @@ class SettingsWidget(QWidget):
             self.shipping_cost.setText(data["shipping_cost"])
             self.free_limit.setText(data["free_shipping_limit"])
 
+            self.zarinpal_enabled.setChecked(data.get("zarinpal_enabled", "false") == "true")
+            self.zarinpal_merchant.setText(data.get("zarinpal_merchant", ""))
+
+            self.panel_pass.setText(data.get("panel_password", "admin"))
+            self.admin_ids_input.setText(data.get("admin_user_ids", ""))
+
             # بک‌آپ
             self.auto_bk_toggle.setChecked(data["auto_backup_enabled"] == "true")
             try: self.auto_bk_time.setTime(QTime.fromString(data["auto_backup_time"], "HH:mm"))
@@ -713,7 +736,10 @@ class SettingsWidget(QWidget):
                 "rb_phones": "[]", "rb_main_menu": "[]", "bank_cards": "[]",
                 "shipping_cost": "0", "free_shipping_limit": "0",
                 "auto_backup_enabled": "false", "auto_backup_time": "00:00",
-                "tg_shop_address": ""
+                "tg_shop_address": "",
+                "zarinpal_enabled": "false", "zarinpal_merchant": "",
+                "panel_password": "admin",
+                "admin_user_ids": ""
             }
             return {k: crud.get_setting(db, k, v) for k, v in DEFAULT_SETTINGS.items()}
 
@@ -733,6 +759,10 @@ class SettingsWidget(QWidget):
             "free_shipping_limit": self.free_limit.text().replace(",", ""),
             "auto_backup_enabled": "true" if self.auto_bk_toggle.isChecked() else "false",
             "auto_backup_time": self.auto_bk_time.time().toString("HH:mm"),
+            "zarinpal_enabled": "true" if self.zarinpal_enabled.isChecked() else "false",
+            "zarinpal_merchant": self.zarinpal_merchant.text().strip(),
+            "panel_password": self.panel_pass.text().strip() or "admin",
+            "admin_user_ids": self.admin_ids_input.text().strip(),
         }
         # Copy image
         img = data["tg_welcome_image"]
@@ -804,7 +834,9 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def send_backup_to_telegram(self):
-        if not self.bot_app or not ADMIN_USER_IDS: return self.window().show_toast("ربات تلگرام فعال نیست.", is_error=True)
+        with next(get_db()) as db:
+            admin_ids = crud.get_admin_ids(db)
+        if not self.bot_app or not admin_ids: return self.window().show_toast("ربات تلگرام یا ادمین تنظیم نشده است.", is_error=True)
         d = BASE_DIR / "db" / "backups"
         if not d.exists(): return
         files = sorted(d.glob("*.db"), key=os.path.getmtime, reverse=True)
@@ -813,7 +845,7 @@ class SettingsWidget(QWidget):
         self.window().show_toast("در حال ارسال به تلگرام...")
         try:
             with open(latest, 'rb') as doc:
-                await self.bot_app.bot.send_document(chat_id=ADMIN_USER_IDS[0], document=doc, caption=f"📦 Backup {datetime.now().strftime('%Y-%m-%d')}")
+                await self.bot_app.bot.send_document(chat_id=admin_ids[0], document=doc, caption=f"📦 Backup {datetime.now().strftime('%Y-%m-%d')}")
             self.window().show_toast("بک‌آپ در تلگرام ذخیره شد.")
         except Exception as e: self.window().show_toast(f"خطا: {e}", is_error=True)
 

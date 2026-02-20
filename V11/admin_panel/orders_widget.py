@@ -91,6 +91,13 @@ class OrderDetailDialog(QDialog):
         
         header_layout.addWidget(title)
         header_layout.addStretch()
+
+        btn_copy_ship = QPushButton(" کپی پستی")
+        btn_copy_ship.setIcon(qta.icon("fa5s.copy", color="white"))
+        btn_copy_ship.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; border-radius: 5px; padding: 5px 10px;")
+        btn_copy_ship.clicked.connect(self.copy_shipping_info)
+
+        header_layout.addWidget(btn_copy_ship)
         header_layout.addWidget(btn_print)
         header_layout.addWidget(btn_close)
         layout.addWidget(header)
@@ -216,6 +223,17 @@ class OrderDetailDialog(QDialog):
         lay.addWidget(btn)
         lay.addStretch()
         return w
+
+    def copy_shipping_info(self):
+        text = (
+            f"📦 گیرنده: {self.order_data.get('user_name')}\n"
+            f"📞 تلفن: {self.order_data.get('phone')}\n"
+            f"📮 کد پستی: {self.order_data.get('postal_code') or '-'}\n"
+            f"📍 آدرس: {self.order_data.get('address')}"
+        )
+        QApplication.clipboard().setText(text)
+        if hasattr(self.parent_widget.window(), 'show_toast'):
+            self.parent_widget.window().show_toast("اطلاعات پستی کپی شد")
 
     def do_action(self, status):
         self.close()

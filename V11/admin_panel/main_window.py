@@ -238,6 +238,16 @@ class MainWindow(QMainWindow):
         self.switch_page(0)
         self.nav_buttons[0].setChecked(True)
 
+        # بررسی رمز عبور پیش‌فرض
+        QTimer.singleShot(2000, self._check_default_password)
+
+    def _check_default_password(self):
+        from db.database import SessionLocal
+        from db import crud
+        with SessionLocal() as db:
+            if crud.get_setting(db, "panel_password", "admin") == "admin":
+                QMessageBox.warning(self, "هشدار امنیتی", "شما هنوز از رمز عبور پیش‌فرض (admin) استفاده می‌کنید.\nلطفاً برای امنیت بیشتر در بخش تنظیمات آن را تغییر دهید.")
+
     def switch_page(self, page_id):
         """مدیریت جابجایی بین صفحات با Lazy Loading"""
         if page_id not in self.pages:

@@ -232,6 +232,16 @@ def get_contact_keyboard() -> ReplyKeyboardMarkup:
         one_time_keyboard=True
     )
 
+def get_payment_method_keyboard(zarinpal_enabled: bool = False) -> InlineKeyboardMarkup:
+    """انتخاب روش پرداخت."""
+    btns = []
+    if zarinpal_enabled:
+        btns.append([InlineKeyboardButton("💳 پرداخت آنلاین (زرین‌پال)", callback_data="pay_online")])
+
+    btns.append([InlineKeyboardButton("🧾 ارسال فیش واریزی (کارت به کارت)", callback_data="pay_receipt")])
+    btns.append([InlineKeyboardButton("🔙 انصراف", callback_data="main_menu")])
+    return InlineKeyboardMarkup(btns)
+
 def get_admin_order_keyboard(order_id: int, user_id: int) -> InlineKeyboardMarkup:
     """پنل مدیریت سفارش که به پی‌وی ادمین ارسال می‌شود."""
     return InlineKeyboardMarkup([
