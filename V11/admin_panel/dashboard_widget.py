@@ -455,7 +455,11 @@ class DashboardWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
-        self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white', animation=qta.Spin(self.btn_refresh)))
+        try:
+            self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white', animation=qta.Spin(self.btn_refresh)))
+        except RuntimeError:
+            return
+
         loop = asyncio.get_running_loop()
         
         try:
@@ -568,7 +572,10 @@ class DashboardWidget(QWidget):
             import traceback
             traceback.print_exc()
         finally:
-            self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white'))
+            try:
+                self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white'))
+            except RuntimeError:
+                pass
 
     def update_chart(self, canvas, dates, values, color):
         ax = canvas.axes
@@ -618,15 +625,23 @@ class DashboardWidget(QWidget):
 
     @asyncSlot()
     async def toggle_shop_status(self):
-        new_status = "true" if self.btn_status.isChecked() else "false"
+        try:
+            new_status = "true" if self.btn_status.isChecked() else "false"
+        except RuntimeError:
+            return
+
         await asyncio.get_running_loop().run_in_executor(
             None, lambda: crud.set_setting(next(get_db()), "tg_is_open", new_status)
         )
-        self.refresh_data()
+        await self.refresh_data()
 
     @asyncSlot()
     async def generate_sales_report(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره گزارش مالی", "Sales_Report.pdf", "PDF Files (*.pdf)")
+        try:
+            file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره گزارش مالی", "Sales_Report.pdf", "PDF Files (*.pdf)")
+        except RuntimeError:
+            return
+
         if not file_path: return
 
         loop = asyncio.get_running_loop()

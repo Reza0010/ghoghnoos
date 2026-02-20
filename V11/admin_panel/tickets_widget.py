@@ -102,7 +102,11 @@ class TicketsWidget(QWidget):
 
     @asyncSlot()
     async def refresh_tickets(self):
-        status = self.status_filter.currentText()
+        try:
+            status = self.status_filter.currentText()
+        except RuntimeError:
+            return
+
         if status == "همه": status = None
 
         loop = asyncio.get_running_loop()
@@ -131,7 +135,10 @@ class TicketsWidget(QWidget):
 
     @asyncSlot()
     async def load_ticket_details(self, item):
-        ticket_id = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            ticket_id = item.data(Qt.ItemDataRole.UserRole)
+        except RuntimeError:
+            return
         self._current_ticket_id = ticket_id
 
         loop = asyncio.get_running_loop()
@@ -164,7 +171,10 @@ class TicketsWidget(QWidget):
 
     @asyncSlot()
     async def send_reply(self):
-        text = self.reply_input.toPlainText().strip()
+        try:
+            text = self.reply_input.toPlainText().strip()
+        except RuntimeError:
+            return
         if not text or not self._current_ticket_id: return
 
         loop = asyncio.get_running_loop()
@@ -205,15 +215,18 @@ class TicketsWidget(QWidget):
 
     @asyncSlot()
     async def handle_close_ticket(self):
-        if not self._current_ticket_id: return
-        if QMessageBox.question(self, "بستن تیکت", "آیا از بستن این تیکت مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
-            loop = asyncio.get_running_loop()
+        try:
+            if not self._current_ticket_id: return
+            if QMessageBox.question(self, "بستن تیکت", "آیا از بستن این تیکت مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
+                loop = asyncio.get_running_loop()
 
-            def db_op():
-                with next(get_db()) as db:
-                    return crud.close_ticket(db, self._current_ticket_id)
+                def db_op():
+                    with next(get_db()) as db:
+                        return crud.close_ticket(db, self._current_ticket_id)
 
-            await loop.run_in_executor(None, db_op)
-            await self.refresh_tickets()
-            self.chat_view.clear()
-            self._current_ticket_id = None
+                await loop.run_in_executor(None, db_op)
+                await self.refresh_tickets()
+                self.chat_view.clear()
+                self._current_ticket_id = None
+        except RuntimeError:
+            pass

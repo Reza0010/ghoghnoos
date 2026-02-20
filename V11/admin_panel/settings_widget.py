@@ -704,11 +704,17 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         loop = asyncio.get_running_loop()
         try:
             data = await loop.run_in_executor(None, self._fetch_all_settings)
             # تلگرام و برندینگ
-            self.tg_shop_name.setText(data["tg_shop_name"])
+            try:
+                self.tg_shop_name.setText(data["tg_shop_name"])
+            except RuntimeError: return
             self.tg_toggle_status.setChecked(data["tg_is_open"] == "true")
             self.tg_shop_address.setPlainText(data["tg_shop_address"])
             self.tg_welcome_msg.setPlainText(data["tg_welcome_message"])
@@ -799,6 +805,10 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def save_settings(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         # نقش‌های ادمین
         roles = {
             "sales": [x.strip() for x in self.role_sales.text().split(',') if x.strip().isdigit()],
@@ -862,6 +872,10 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def update_bot_commands(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         if not self.bot_app: return QMessageBox.warning(self, "خطا", "ربات تلگرام متصل نیست.")
         try:
             from telegram import BotCommand

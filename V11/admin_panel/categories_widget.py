@@ -291,6 +291,10 @@ class CategoriesWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         self.tree.clear()
         loop = asyncio.get_running_loop()
         try:
@@ -395,7 +399,10 @@ class CategoriesWidget(QWidget):
 
     @asyncSlot()
     async def save_category(self):
-        name = self.inp_name.text().strip()
+        try:
+            name = self.inp_name.text().strip()
+        except RuntimeError: return
+
         if not name:
             return QMessageBox.warning(self, "خطا", "نام دسته‌بندی الزامی است.")
 
@@ -420,7 +427,9 @@ class CategoriesWidget(QWidget):
 
     @asyncSlot()
     async def delete_category(self):
-        if not self.selected_cat_id: return
+        try:
+            if not self.selected_cat_id: return
+        except RuntimeError: return
         
         msg = "آیا از حذف این دسته مطمئن هستید؟\n(کالاهای زیرمجموعه حذف نخواهند شد)"
         if QMessageBox.question(self, "تایید", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:

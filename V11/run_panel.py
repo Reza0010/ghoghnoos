@@ -78,13 +78,17 @@ class ApplicationManager:
 
         # ۲. بررسی رمز عبور (Login)
         if not await self.show_login():
-            sys.exit(0)
+            await self.shutdown()
+            return
 
         # ۳. ایجاد پنجره
         self.window = MainWindow(bot_application=None, rubika_client=None)
         self.window.show()
         # ۴. استارت ربات‌های پس‌زمینه
         self.start_background_bots()
+
+        # ۵. تلاش برای اتصال کلاینت‌های پنل (بدون بلاک کردن UI)
+        QTimer.singleShot(500, lambda: asyncio.create_task(self.connect_light_clients()))
 
     async def show_login(self) -> bool:
         """نمایش دیالوگ ورود و تایید رمز"""
@@ -97,9 +101,6 @@ class ApplicationManager:
 
         login = LoginDialog(verify)
         return login.exec() == LoginDialog.DialogCode.Accepted
-        # ۴. تلاش برای اتصال کلاینت‌های پنل (بدون بلاک کردن UI)
-        # استفاده از تایمر برای اینکه اگر اینترنت قطع بود، کل برنامه فریز نشود
-        QTimer.singleShot(500, lambda: asyncio.create_task(self.connect_light_clients()))
 
     def start_background_bots(self):
         """اجرای ربات‌ها در ترد کاملاً مجزا"""
@@ -137,6 +138,24 @@ class ApplicationManager:
 
     async def shutdown(self):
         logger.info("Shutting down...")
+
+        if self.window:
+            if self.window.bot_application:
+                try:
+                    await self.window.bot_application.stop()
+                    await self.window.bot_application.shutdown()
+                except Exception as e:
+                    logger.error(f"Error stopping TG client: {e}")
+            self.window.close()
+
+        # کنسل کردن تمام تسک‌های در حال اجرا برای جلوگیری از RuntimeError در ویجت‌ها
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
         self.loop.stop()
 
 def main():

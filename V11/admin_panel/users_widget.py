@@ -474,6 +474,10 @@ class UsersWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         while self.flow_layout.count():
             item = self.flow_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
@@ -549,6 +553,10 @@ class UsersWidget(QWidget):
 
     @asyncSlot()
     async def broadcast(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         text, ok = QInputDialog.getText(self, "پیام همگانی", "متن پیام:")
         if ok and text:
             self.window().show_toast(f"در حال ارسال به {len(self.selected_ids)} کاربر...")

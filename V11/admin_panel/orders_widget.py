@@ -518,7 +518,11 @@ class OrdersWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
-        self.btn_refresh.setEnabled(False)
+        try:
+            self.btn_refresh.setEnabled(False)
+        except RuntimeError:
+            return
+
         self.search_inp.clear()
         for col in self.columns_map.values(): col.clear_all()
 
@@ -549,7 +553,10 @@ class OrdersWidget(QWidget):
         except Exception as e:
             logger.error(f"Refresh Error: {e}")
         finally:
-            self.btn_refresh.setEnabled(True)
+            try:
+                self.btn_refresh.setEnabled(True)
+            except RuntimeError:
+                pass
 
     def _add_card_to_column(self, data):
         status = data['status']
@@ -744,6 +751,10 @@ class OrdersWidget(QWidget):
 
     @asyncSlot()
     async def export_to_excel(self):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
+
         if pd is None:
             QMessageBox.warning(self, "خطا", "کتابخانه pandas نصب نیست.")
             return

@@ -564,11 +564,18 @@ class ProductsWidget(QWidget):
         dialog.exec()
 
     @asyncSlot()
-    async def refresh_data_slot(self): await self.refresh_data()
+    async def refresh_data_slot(self):
+        try:
+            await self.refresh_data()
+        except RuntimeError:
+            pass
 
     async def refresh_data(self):
-        for i in reversed(range(self.grid_layout.count())): 
-            if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+        try:
+            for i in reversed(range(self.grid_layout.count())):
+                if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+        except RuntimeError:
+            return
         self.selected_ids.clear(); self.update_bulk_toolbar()
         
         loop = asyncio.get_running_loop()
@@ -641,13 +648,19 @@ class ProductsWidget(QWidget):
 
     @asyncSlot()
     async def delete_product_single(self, pid):
-        if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: crud.delete_product(next(get_db()), pid))
-            await self.refresh_data()
+        try:
+            if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: crud.delete_product(next(get_db()), pid))
+                await self.refresh_data()
+        except RuntimeError:
+            pass
 
     @asyncSlot()
     async def duplicate_product(self, pid):
+        try:
+            if not self.isVisible(): return
+        except RuntimeError: return
         loop = asyncio.get_running_loop()
         try:
             def db_op():
@@ -668,11 +681,14 @@ class ProductsWidget(QWidget):
 
     @asyncSlot()
     async def delete_bulk_slot(self):
-        if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
-            ids = list(self.selected_ids)
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: crud.bulk_delete_products(next(get_db()), ids))
-            await self.refresh_data()
+        try:
+            if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
+                ids = list(self.selected_ids)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: crud.bulk_delete_products(next(get_db()), ids))
+                await self.refresh_data()
+        except RuntimeError:
+            pass
 
     # Import/Export Logic (خلاصه شده)
     def export_data_slot(self):
