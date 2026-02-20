@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تایید سفارش - RAYNA</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f8f9fa; /* پس‌زمینه روشن‌تر برای حس تمیزی */
+            color: #333;
+        }
+
+        .container {
+            max-width: 700px; /* باریک‌تر برای تمرکز کامل */
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل هدر */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+        .header-actions a {
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .header-actions a:hover {
+            color: #333;
+        }
+        
+        /* ------------------- */
+        /* استایل اختصاصی صفحه تایید سفارش */
+        /* ------------------- */
+        .confirmation-page {
+            padding: 80px 0; /* فاصله عمودی بیشتر برای حس آرامش */
+            text-align: center;
+        }
+
+        .success-icon {
+            font-size: 4.5rem;
+            color: #2ecc71;
+            margin-bottom: 25px;
+            animation: scaleIn 0.6s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .confirmation-page h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #212529; رنگ تیره‌تر برای کنتراست بهتر */
+            margin: 0 0 15px 0;
+        }
+
+        .order-number {
+            font-size: 1.1rem;
+            color: #6c757d;
+            margin-bottom: 50px;
+        }
+        .order-number strong {
+            color: #495057;
+            font-weight: 700;
+        }
+
+        /* --- کارت‌های اطلاعاتی --- */
+        .info-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            margin-bottom: 25px;
+            text-align: right;
+        }
+
+        .info-card h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #212529;
+            margin: 0 0 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info-card h3 i {
+            font-size: 1rem;
+            color: #007bff;
+        }
+
+        .info-card p,
+        .info-item {
+            font-size: 1rem;
+            color: #495057;
+            line-height: 1.8;
+            margin: 8px 0;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .info-item:last-child {
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #e74c3c;
+            padding-top: 20px;
+            margin-top: 10px;
+        }
+
+        /* --- دکمه‌های اقدام --- */
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        .action-btn {
+            padding: 14px 28px;
+            border-radius: 50px; /* گردتر برای حس مدرن */
+            font-size: 1rem;
+            font-weight: 700;
+            font-family: 'Vazirmatn', sans-serif;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .action-btn.primary {
+            background-color: #212529;
+            color: #fff;
+        }
+        .action-btn.primary:hover {
+            background-color: #343a40;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+
+        .action-btn.secondary {
+            background-color: transparent;
+            color: #007bff;
+            border: 2px solid #007bff;
+        }
+        .action-btn.secondary:hover {
+            background-color: #007bff;
+            color: #fff;
+            transform: translateY(-3px);
+        }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+        @media (max-width: 768px) {
+            .confirmation-page { padding: 50px 0; }
+            .confirmation-page h1 { font-size: 1.9rem; }
+            .success-icon { font-size: 4rem; }
+            .info-card { padding: 25px; }
+            .action-buttons { flex-direction: column; align-items: center; }
+            .action-btn { width: 100%; max-width: 280px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- هدر سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <nav class="header-actions">
+                    <a href="index.html">بازگشت به فروشگاه</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- محتوای اصلی صفحه تایید سفارش -->
+    <main class="confirmation-page">
+        <div class="container">
+            
+            <!-- آیکون و پیام موفقیت -->
+            <i class="fas fa-check-circle success-icon"></i>
+            <h1>سفارش شما با موفقیت ثبت شد!</h1>
+            <p class="order-number">شماره سفارش: <strong>#12345-67890</strong></p>
+
+            <!-- کارت جزئیات سفارش -->
+            <div class="info-card">
+                <h3><i class="fas fa-receipt"></i> جزئیات سفارش</h3>
+                <div class="info-item">
+                    <span>مانتو کتی کرم (تعداد: ۱)</span>
+                    <span>۴۵۰,۰۰۰ تومان</span>
+                </div>
+                <div class="info-item">
+                    <span>شلوار راحتی مشکی (تعداد: ۲)</span>
+                    <span>۵۸۰,۰۰۰ تومان</span>
+                </div>
+                <div class="info-item">
+                    <span>هزینه ارسال</span>
+                    <span>۳۰,۰۰۰ تومان</span>
+                </div>
+                <div class="info-item">
+                    <span>مبلغ نهایی</span>
+                    <span>۱,۰۶۰,۰۰۰ تومان</span>
+                </div>
+            </div>
+
+            <!-- کارت جزئیات تحویل -->
+            <div class="info-card">
+                <h3><i class="fas fa-truck"></i> جزئیات تحویل</h3>
+                <p><strong>آدرس:</strong> تهران، خیابان ولیعصر، کوچه گلستان، پلاک ۱۲، طبقه سوم</p>
+                <p><strong>تحویل به:</strong> سارا محمدی</p>
+                <p><strong>وضعیت:</strong> <span style="color: #f39c12;">در حال پردازش</span></p>
+            </div>
+
+            <!-- دکمه‌های اقدام -->
+            <div class="action-buttons">
+                <a href="index.html" class="action-btn primary">ادامه خرید</a>
+                <a href="#" class="action-btn secondary" title="این صفحه در حال حاضر موجود نیست">پیگیری سفارش</a>
+            </div>
+
+        </div>
+    </main>
+
+</body>
+</html>

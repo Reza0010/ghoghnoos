@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAYNA - فروشگاه آنلاین لباس</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل بنر بالای سایت */
+        /* ------------------- */
+        .top-banner {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            text-align: center;
+            padding: 12px 0;
+            font-size: 0.95rem;
+            border-bottom: 2px solid #34495e;
+        }
+
+        /* ------------------- */
+        /* استایل هدر اصلی سایت */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 20px;
+            border: 1px solid #e0e0e0;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            flex-grow: 1;
+            max-width: 500px;
+        }
+
+        .search-bar:focus-within {
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.25);
+        }
+
+        .search-bar input {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            color: #333;
+        }
+
+        .search-bar input::placeholder {
+            color: #999;
+        }
+
+        .search-bar i {
+            color: #6c757d;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            margin-left: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .header-actions a {
+            color: #333;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .header-actions a span {
+            font-size: 0.9rem;
+            margin-right: 5px;
+        }
+
+        .header-actions a:hover {
+            color: #007bff;
+        }
+        
+        /* --- استایل جدید برای خطوط جداکننده در هدر --- */
+        .header-actions a:nth-child(2),
+        .header-actions a:nth-child(3) {
+            position: relative;
+            padding-right: 25px; /* ایجاد فضا برای خط */
+        }
+
+        .header-actions a:nth-child(2)::before,
+        .header-actions a:nth-child(3)::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 20px; /* ارتفاع خط */
+            width: 1px;
+            background-color: #ccc; /* رنگ خط */
+        }
+        
+        .cart-count-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #e74c3c;
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* ------------------- */
+        /* استایل نوار دسته‌بندی اصلی (اصلاح شده) */
+        /* ------------------- */
+        .category-nav {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .category-nav ul {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .category-nav ul li a {
+            display: block;
+            padding: 15px 20px;
+            color: #555;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            font-size: 1.1rem;
+        }
+
+        .category-nav ul li a:hover {
+            background-color: #e9ecef;
+            color: #007bff;
+        }
+        
+        /* --- استایل جدید برای خط جداکننده بین آیتم‌ها --- */
+        .category-nav ul li:nth-child(3) {
+            border-right: 1px solid #dcdcdc; /* تغییر از border-left به border-right */
+        }
+        .category-nav ul li:nth-child(3) a {
+            padding-right: 35px; /* تغییر از padding-left به padding-right */
+        }
+
+        /* ------------------- */
+        /* استایل بخش محصولات جدید (استوری) */
+        /* ------------------- */
+        .new-products {
+            background-color: #ffffff;
+            padding: 30px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .products-stories-container {
+            display: flex;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            gap: 15px;
+            scrollbar-width: thin; 
+            scrollbar-color: #ccc #f1f1f1;
+        }
+        .products-stories-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .products-stories-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .products-stories-container::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        .product-story {
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 100px;
+            cursor: pointer;
+        }
+
+        .story-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            padding: 3px;
+            background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);
+            margin-bottom: 8px;
+            transition: transform 0.2s ease;
+        }
+        
+        .product-story:hover .story-circle {
+            transform: scale(1.05);
+        }
+
+        .story-circle img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid white;
+            object-fit: cover;
+        }
+
+        .product-story p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #555;
+            text-align: center;
+        }
+
+        /* ------------------- */
+        /* استایل بنر اصلی سایت */
+        /* ------------------- */
+        .main-banner img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* ------------------- */
+        /* استایل بخش فروش ویژه هفتگی */
+        /* ------------------- */
+        .weekly-specials {
+            background-color: #ffffff;
+            padding: 40px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .specials-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            position: relative;
+            padding-top: 45px;
+            margin-bottom: 30px;
+        }
+
+        .specials-title-container {
+            position: relative;
+        }
+
+        .specials-header h2 {
+            position: absolute;
+            top: 10px;
+            right: 0;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #f0f0f0;
+            z-index: 1;
+            white-space: nowrap;
+            letter-spacing: 2px;
+        }
+
+        .specials-header h3 {
+            position: relative;
+            z-index: 2;
+            font-size: 2rem;
+            color: #333;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .specials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #c0392b;
+        }
+
+        .special-product-card {
+            background-color: #fff;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .special-product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+
+        .special-product-card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+        }
+
+        .special-product-card h4 {
+            font-size: 1rem;
+            margin: 15px 10px 5px;
+            color: #333;
+        }
+
+        .special-product-card .price {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 10px 0;
+        }
+
+        .discount-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #e74c3c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            z-index: 10;
+        }
+        
+        /* ------------------- */
+        /* استایل بخش دسته بندی محصولات */
+        /* ------------------- */
+        .categories-section {
+            background-color: #ffffff;
+            padding: 40px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .categories-section .section-title {
+            text-align: center;
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 40px;
+            font-weight: 700;
+        }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 30px;
+        }
+
+        .category-item {
+            display: flex;
+            flex-direction: column; /* این دستور آیتم‌ها را عمودی چین می‌کند (عکس بالا، متن پایین) */
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #555;
+            padding: 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .category-item:hover {
+            background-color: #f8f9fa;
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .category-item img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 50%; /* این دستور عکس را گرد می‌کند */
+            margin-bottom: 15px; /* این دستور فاصله بین عکس و متن را ایجاد می‌کند */
+        }
+
+        .category-item p {
+            margin: 0;
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+
+        /* ------------------- */
+        /* استایل بخش محصولات مردانه و زنانه */
+        /* ------------------- */
+        .products-section {
+            background-color: #ffffff;
+            padding: 40px 0;
+        }
+
+        .section-header-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            color: #333;
+            margin: 0;
+            font-weight: 700;
+            position: relative;
+            z-index: 2;
+        }
+
+        .section-title-shadow {
+            position: absolute;
+            top: -35px;
+            right: 0;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #f0f0f0;
+            z-index: 1;
+            white-space: nowrap;
+            letter-spacing: 2px;
+            margin: 0;
+        }
+
+        .view-all-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.95rem;
+            padding: 10px 20px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background-color: transparent;
+            transition: all 0.3s ease;
+        }
+
+        .view-all-link:hover {
+            color: #fff;
+            background-color: #333;
+            text-decoration: none;
+        }
+
+        .highlight-red {
+            color: #e74c3c;
+        }
+
+        .products-grid {
+            display: inline-flex;
+            gap: 25px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: #ccc #f1f1f1;
+            width: 100%;
+        }
+
+        .products-grid::-webkit-scrollbar {
+            height: 8px;
+        }
+        .products-grid::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .products-grid::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        .product-card {
+            background-color: #fff;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            min-width: 220px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+
+        .product-card .image-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .product-card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .product-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .product-card .card-body {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .product-card h4 {
+            font-size: 1rem;
+            margin: 0 0 5px;
+            color: #333;
+        }
+
+        .product-card .price {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        
+        .product-card .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+        }
+
+        .add-to-cart-btn {
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .add-to-cart-btn:hover {
+            background-color: #555;
+        }
+        
+        .wishlist-icon {
+            cursor: pointer;
+            color: #ccc;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+        }
+        
+        .wishlist-icon.active {
+            color: #e74c3c;
+        }
+
+        /* ------------------- */
+        /* استایل بخش پیگیری سفارش */
+        /* ------------------- */
+        .order-tracking-page {
+            background-color: #f4f4f4;
+            padding: 50px 0;
+        }
+
+        .order-tracking-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #333;
+            margin: 0 0 40px 0;
+            position: relative;
+        }
+
+        .order-tracking-title::after {
+            content: '';
+            display: block;
+            width: 30px;
+            height: 4px;
+            background-color: #000;
+            margin: 20px auto 0;
+            border-radius: 2px;
+        }
+
+        .tracking-container {
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            gap: 0;
+            max-width: 900px;
+            margin: 0 auto;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        .tracking-form-column {
+            background-color: #ffffff;
+            padding: 60px 50px;
+            flex-basis: 60%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .tracking-form-column p {
+            font-size: 1.5rem;
+            color: #555;
+            margin: 0 0 30px 0;
+            font-weight: 400;
+            line-height: 1.8;
+        }
+
+        .tracking-form-column input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .tracking-form-column button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            font-family: 'Vazirmatn', sans-serif;
+            color: #fff;
+            background-color: #e74c3c;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .tracking-form-column button:hover {
+            background-color: #c0392b;
+        }
+
+        .tracking-info-column {
+            background-color: #f8f9fa;
+            padding: 60px 40px;
+            flex-basis: 40%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .tracking-info-column h3 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            margin: 0 0 20px 0;
+        }
+
+        .tracking-info-column p {
+            font-size: 1.1rem;
+            color: #555;
+            margin: 0 0 30px 0;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: #e74c3c;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1rem;
+            padding: 12px 25px;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+        }
+
+        .back-button:hover {
+            background-color: #c0392b;
+            color: #fff;
+        }
+        
+        /* ------------------- */
+        /* استایل مودال (پنجره استوری و ورود) */
+        /* ------------------- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            position: relative;
+        }
+        
+        .modal-content img {
+            max-width: 90%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .modal-close:hover,
+        .modal-close:focus {
+            color: #bbb;
+        }
+        
+        /* استایل مودال ورود */
+        .login-modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 40px;
+            border: none;
+            width: 90%;
+            max-width: 450px;
+            border-radius: 8px;
+            font-family: 'Vazirmatn', sans-serif;
+            text-align: center;
+            position: relative;
+        }
+        
+        .login-modal-content h2 {
+            margin-bottom: 30px;
+            font-weight: 700;
+        }
+        
+        .login-modal-content input {
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        
+        .login-modal-content button {
+            width: 100%;
+            padding: 12px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        
+        .login-modal-content button:hover {
+            background-color: #555;
+        }
+        
+        /* استایل مودال علاقه مندی ها */
+        .wishlist-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: none;
+            width: 90%;
+            max-width: 800px;
+            border-radius: 8px;
+            font-family: 'Vazirmatn', sans-serif;
+            text-align: right;
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .wishlist-modal-content h2 {
+            margin-bottom: 20px;
+            font-weight: 700;
+            text-align: center;
+        }
+        
+        .wishlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+        }
+        
+        .wishlist-item {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .wishlist-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .wishlist-item h4 {
+            font-size: 0.9rem;
+            margin: 0 0 5px;
+        }
+        
+        .wishlist-item .price {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* ------------------- */
+        /* استایل اعلان (Notification) */
+        /* ------------------- */
+        .notification {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2ecc71;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, top 0.5s ease-in-out;
+            font-weight: 500;
+        }
+        
+        .notification.show {
+            opacity: 1;
+            top: 80px;
+        }
+
+        /* ------------------- */
+        /* استایل فوتر */
+        /* ------------------- */
+        footer {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 60px 0 20px;
+            margin-top: 50px;
+            border-top: 5px solid #e74c3c;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .footer-column {
+            flex-basis: 23%;
+            min-width: 250px;
+        }
+
+        .footer-column h4 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #ffffff;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .footer-column h4::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 40px;
+            height: 2px;
+            background-color: #e74c3c;
+        }
+
+        .footer-column p {
+            line-height: 1.8;
+            font-size: 0.95rem;
+            color: #bdc3c7;
+        }
+
+        .footer-column ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-column ul li {
+            margin-bottom: 12px;
+        }
+
+        .footer-column ul li a {
+            color: #bdc3c7;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s ease, padding-right 0.3s ease;
+        }
+
+        .footer-column ul li a:hover {
+            color: #e74c3c;
+            padding-right: 5px;
+        }
+        
+        .footer-column .contact-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            color: #bdc3c7;
+            font-size: 0.95rem;
+        }
+        
+        .footer-column .contact-item i {
+            color: #e74c3c;
+            margin-left: 15px;
+            font-size: 1.1rem;
+        }
+
+        .newsletter-form {
+            display: flex;
+            margin-top: 20px;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .newsletter-form input {
+            flex-grow: 1;
+            border: none;
+            padding: 12px 15px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-size: 0.9rem;
+        }
+        
+        .newsletter-form button {
+            background-color: #e74c3c;
+            color: #fff;
+            border: none;
+            padding: 0 20px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .newsletter-form button:hover {
+            background-color: #c0392b;
+        }
+
+        .social-icons {
+            margin-top: 20px;
+        }
+
+        .social-icons a {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            background-color: #34495e;
+            color: #ecf0f1;
+            border-radius: 50%;
+            margin-left: 10px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .social-icons a:hover {
+            background-color: #e74c3c;
+            transform: translateY(-3px);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #34495e;
+            padding: 20px 0;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #95a5a6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .payment-logos img {
+            height: 30px;
+            margin-right: 10px;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+        
+        .payment-logos img:hover {
+            opacity: 1;
+        }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+
+        /* برای صفحات کوچکتر از 992px (تبلت‌های کوچک و موبایل) */
+        @media (max-width: 992px) {
+            .header-content {
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            .search-bar {
+                order: 3;
+                flex-basis: 100%;
+                max-width: 100%;
+            }
+            .header-actions {
+                order: 2;
+            }
+            .logo {
+                order: 1;
+            }
+            .footer-column {
+                flex-basis: 45%;
+            }
+        }
+
+        /* برای صفحات کوچکتر از 768px (موبایل) */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 15px;
+            }
+
+            header {
+                padding: 15px 0;
+            }
+
+            /* هدر */
+            .header-actions a span {
+                display: none; /* مخفی کردن متن در موبایل */
+            }
+            .header-actions {
+                gap: 15px;
+            }
+            .header-actions a {
+                font-size: 1.5rem; /* بزرگتر کردن آیکون‌ها */
+            }
+
+            /* نوار دسته‌بندی */
+            .category-nav ul li a {
+                font-size: 0.9rem;
+                padding: 12px 15px;
+            }
+            .category-nav ul li:nth-child(3) a {
+                padding-right: 25px;
+            }
+
+            /* بخش محصولات */
+            .specials-grid {
+                grid-template-columns: 1fr; /* تک ستونه در موبایل */
+                padding: 15px;
+            }
+            .special-product-card img {
+                height: 200px;
+            }
+
+            .section-header-wrapper {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .section-title {
+                font-size: 1.5rem;
+            }
+            .section-title-shadow {
+                font-size: 2.5rem;
+                top: -25px;
+            }
+            .view-all-link {
+                align-self: flex-end;
+            }
+            .product-card {
+                min-width: 160px; /* کوچک‌تر کردن کارت‌ها */
+            }
+            .product-card img {
+                height: 200px;
+            }
+            .add-to-cart-btn {
+                font-size: 0.8rem;
+                padding: 6px 12px;
+            }
+
+            /* بخش پیگیری سفارش */
+            .tracking-container {
+                flex-direction: column;
+            }
+            .tracking-form-column, .tracking-info-column {
+                flex-basis: 100%;
+                padding: 40px 30px;
+            }
+            .tracking-form-column p {
+                font-size: 1.2rem;
+            }
+            .order-tracking-title {
+                font-size: 2rem;
+            }
+
+            /* فوتر */
+            .footer-content {
+                flex-direction: column;
+            }
+            .footer-column {
+                flex-basis: 100%;
+                text-align: center;
+            }
+            .footer-column h4::after {
+                right: 50%;
+                transform: translateX(50%);
+            }
+            .footer-column .contact-item {
+                justify-content: center;
+            }
+            .footer-bottom {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+        
+        /* برای صفحات خیلی کوچک (زیر 480px) */
+        @media (max-width: 480px) {
+            .specials-header h3 {
+                font-size: 1.5rem;
+            }
+            .specials-header h2 {
+                font-size: 2.5rem;
+            }
+            .section-title {
+                font-size: 1.3rem;
+            }
+            .section-title-shadow {
+                font-size: 2rem;
+            }
+            .product-card {
+                min-width: 140px;
+            }
+            .product-card h4 {
+                font-size: 0.9rem;
+            }
+            .product-card .price {
+                font-size: 1rem;
+            }
+            .categories-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+            }
+            .category-item img {
+                width: 60px;
+                height: 60px;
+            }
+            .category-item p {
+                font-size: 0.9rem;
+            }
+            .login-modal-content, .wishlist-modal-content {
+                width: 95%;
+                padding: 15px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- بنر خطی بالای سایت -->
+    <div class="top-banner">
+        <div class="container">
+            <p>استایلت رو بساز</p>
+        </div>
+    </div>
+
+    <!-- هدر اصلی سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="جست و جو میان هزاران محصول و برند متنوع....">
+                </div>
+                <nav class="header-actions">
+                    <a href="#" id="wishlist-link" title="علاقه مندی ها">
+                        <i class="fas fa-heart"></i>
+                        <span>علاقه مندی‌ها</span>
+                        <span class="cart-count-badge" id="wishlist-count" style="display: none;">0</span>
+                    </a>
+                    <a href="#" id="login-link" title="ورود یا عضویت">
+                        <i class="fas fa-user"></i>
+                        <span>ورود یا عضویت</span>
+                    </a>
+                    <a href="#" title="سبد خرید">
+                        <i class="fas fa-shopping-bag"></i>
+                        <span id="cart-total">۰</span>
+                        <span>تومان</span>
+                        <span class="cart-count-badge" id="cart-count" style="display: none;">0</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- نوار دسته‌بندی اصلی -->
+    <nav class="category-nav">
+        <div class="container">
+            <ul>
+                <li><a href="#">زنانه</a></li>
+                <li><a href="#">مردانه</a></li>
+                <li><a href="#">لباس</a></li>
+                <li><a href="#">اکسسوری</a></li>
+                <li><a href="#">کیف و کفش</a></li>
+                <li><a href="#">جوراب</a></li>
+                <li><a href="#">کلاه و شال گردن</a></li>
+                <li><a href="#">شال و روسری</a></li>
+                <li><a href="#">باکس</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- بخش محصولات جدید (استوری) -->
+    <section class="new-products">
+        <div class="container">
+            <div class="products-stories-container">
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product1/800/800.jpg" data-name="مانتو کتی کرم">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product1/200/200.jpg" alt="محصول جدید ۱"></div>
+                    <p>مانتو کتی</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product2/800/800.jpg" data-name="شلوار راحتی مشکی">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product2/200/200.jpg" alt="محصول جدید ۲"></div>
+                    <p>شلوار راحتی</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product3/800/800.jpg" data-name="بلوز حریر یقه‌هفت">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product3/200/200.jpg" alt="محصول جدید ۳"></div>
+                    <p>بلوز حریر</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product4/800/800.jpg" data-name="کفش کالج سفید">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product4/200/200.jpg" alt="محصول جدید ۴"></div>
+                    <p>کفش کالج</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product5/800/800.jpg" data-name="ساعت مچی کلاسیک">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product5/200/200.jpg" alt="محصول جدید ۵"></div>
+                    <p>ساعت مچی</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product6/800/800.jpg" data-name="کیف دوشی چرم">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product6/200/200.jpg" alt="محصول جدید ۶"></div>
+                    <p>کیف دوشی</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product7/800/800.jpg" data-name="عینک آفتابی">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product7/200/200.jpg" alt="محصول جدید ۷"></div>
+                    <p>عینک آفتابی</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product8/800/800.jpg" data-name="ست شال و کلاه">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product8/200/200.jpg" alt="محصول جدید ۸"></div>
+                    <p>ست شال و کلاه</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product9/800/800.jpg" data-name="کمربند چرم">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product9/200/200.jpg" alt="محصول جدید ۹"></div>
+                    <p>کمربند چرم</p>
+                </a>
+                <a href="#" class="product-story" data-image="https://picsum.photos/seed/product10/800/800.jpg" data-name="ست شال و کلاه">
+                    <div class="story-circle"><img src="https://picsum.photos/seed/product10/200/200.jpg" alt="محصول جدید ۱۰"></div>
+                    <p>ست شال و کلاه</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- بنر اصلی سایت -->
+    <section class="main-banner">
+        <img src="https://picsum.photos/seed/banner/1200/400.jpg" alt="بنر اصلی سایت">
+    </section>
+
+    <!-- بخش فروش ویژه هفتگی -->
+    <section class="weekly-specials">
+        <div class="container">
+            <div class="specials-header">
+                <div class="specials-title-container">
+                    <h2>WEEKLY SPECIALS</h2>
+                    <h3>فروش ویژه هفتگی</h3>
+                </div>
+                <a href="#" class="view-all-link">مشاهده و خرید <i class="fas fa-arrow-left"></i></a>
+            </div>
+            <div class="specials-grid">
+                <!-- محصول ۱ -->
+                <div class="special-product-card" data-id="special1" data-name="K31531s وضع جلد" data-price="120000">
+                    <span class="discount-badge">٪۲۰</span>
+                    <img src="https://z-cdn-media.chatglm.cn/files/6d407598-d617-4f94-a47d-62a11dc512d3_%D9%81%D9%82%D9%81%D9%82%D9%81%D8%BA%D9%82.jpg?auth_key=1863557327-3c883abb9cc3486eaa6b589725dad1e6-0-cd26a4b4f9162eca281382261c8d9a68" alt="K31531s وضع جلد">
+                    <h4>K31531s وضع جلد</h4>
+                    <p class="price">AV.000 تومان</p>
+                    <div class="actions">
+                        <button class="add-to-cart-btn">افزودن به سبد</button>
+                        <i class="far fa-heart wishlist-icon"></i>
+                    </div>
+                </div>
+                <!-- محصول ۲ -->
+                <div class="special-product-card" data-id="special2" data-name="M31886 کلاه پشمی" data-price="85000">
+                    <span class="discount-badge">٪۱۵</span>
+                    <img src="https://picsum.photos/seed/special2/300/400.jpg" alt="M31886 کلاه پشمی">
+                    <h4>M31886 کلاه پشمی</h4>
+                    <p class="price">ميل.000 تومان</p>
+                    <div class="actions">
+                        <button class="add-to-cart-btn">افزودن به سبد</button>
+                        <i class="far fa-heart wishlist-icon"></i>
+                    </div>
+                </div>
+                <!-- محصول ۳ -->
+                <div class="special-product-card" data-id="special3" data-name="مانتو اسپرت" data-price="150000">
+                    <span class="discount-badge">٪۳۰</span>
+                    <img src="https://picsum.photos/seed/special3/300/400.jpg" alt="مانتو اسپرت">
+                    <h4>مانتو اسپرت</h4>
+                    <p class="price">AV.000 تومان</p>
+                    <div class="actions">
+                        <button class="add-to-cart-btn">افزودن به سبد</button>
+                        <i class="far fa-heart wishlist-icon"></i>
+                    </div>
+                </div>
+                <!-- محصول ۴ -->
+                <div class="special-product-card" data-id="special4" data-name="شال و روسری" data-price="95000">
+                    <span class="discount-badge">٪۲۵</span>
+                    <img src="https://picsum.photos/seed/special4/300/400.jpg" alt="شال و روسری">
+                    <h4>شال و روسری</h4>
+                    <p class="price">ميل.000 تومان</p>
+                    <div class="actions">
+                        <button class="add-to-cart-btn">افزودن به سبد</button>
+                        <i class="far fa-heart wishlist-icon"></i>
+                    </div>
+                </div>
+                <!-- محصول ۵ -->
+                <div class="special-product-card" data-id="special5" data-name="ست لباس ورزشی" data-price="220000">
+                    <span class="discount-badge">٪۱۰</span>
+                    <img src="https://picsum.photos/seed/special5/300/400.jpg" alt="ست لباس ورزشی">
+                    <h4>ست لباس ورزشی</h4>
+                    <p class="price">AV.000 تومان</p>
+                    <div class="actions">
+                        <button class="add-to-cart-btn">افزودن به سبد</button>
+                        <i class="far fa-heart wishlist-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- بخش دسته بندی محصولات -->
+    <section class="categories-section">
+        <div class="container">
+            <h2 class="section-title">دسته بندی محصولات</h2>
+            <div class="categories-grid">
+                <a href="#" class="category-item">
+                    <img src="https://picsum.photos/seed/womens-category/200/200.jpg" alt="زنانه">
+                    <p>زنانه</p>
+                </a>
+                <a href="#" class="category-item">
+                    <img src="https://picsum.photos/seed/mens-category/200/200.jpg" alt="مردانه">
+                    <p>مردانه</p>
+                </a>
+                <a href="#" class="category-item">
+                    <img src="https://picsum.photos/seed/shoes-category/200/200.jpg" alt="کیف و کفش">
+                    <p>کیف و کفش</p>
+                </a>
+                <a href="#" class="category-item">
+                    <img src="https://picsum.photos/seed/accessories-category/200/200.jpg" alt="اکسسوری">
+                    <p>اکسسوری</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- بخش پرفروش ترین محصولات مردانه -->
+    <section class="products-section">
+        <div class="container">
+            <div class="section-header-wrapper">
+                <div>
+                    <h2 class="section-title-shadow">BEST FOR MEN</h2>
+                    <h2 class="section-title">پرفروش ترین محصولات <span class="highlight-red">مردانه</span></h2>
+                </div>
+                <a href="#" class="view-all-link">مشاهده و خرید <i class="fas fa-arrow-left"></i></a>
+            </div>
+            <div class="products-grid">
+                <div class="product-card" data-id="men1" data-name="پیراهن مردانه رسمی" data-price="750000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/menshirt1/300/400.jpg" alt="پیراهن مردانه رسمی">
+                    </div>
+                    <div class="card-body">
+                        <h4>پیراهن مردانه رسمی</h4>
+                        <p class="price">۷۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="men2" data-name="شلوار کتان مردانه" data-price="580000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/menpants1/300/400.jpg" alt="شلوار کتان مردانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>شلوار کتان مردانه</h4>
+                        <p class="price">۵۸۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="men3" data-name="کفش روزمره مردانه" data-price="1100000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/menshoes1/300/400.jpg" alt="کفش روزمره مردانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>کفش روزمره مردانه</h4>
+                        <p class="price">۱,۱۰۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="men4" data-name="ساعت مچی اسپرت" data-price="920000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/menwatch1/300/400.jpg" alt="ساعت مچی اسپرت">
+                    </div>
+                    <div class="card-body">
+                        <h4>ساعت مچی اسپرت</h4>
+                        <p class="price">۹۲۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="men5" data-name="تیشرت یقه گرد" data-price="290000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/mentshirt1/300/400.jpg" alt="تیشرت یقه گرد">
+                    </div>
+                    <div class="card-body">
+                        <h4>تیشرت یقه گرد</h4>
+                        <p class="price">۲۹۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- بخش پرفروش ترین محصولات زنانه -->
+    <section class="products-section">
+        <div class="container">
+            <div class="section-header-wrapper">
+                <div>
+                    <h2 class="section-title-shadow">BEST FOR WOMEN</h2>
+                    <h2 class="section-title">پرفروش ترین محصولات <span class="highlight-red">زنانه</span></h2>
+                </div>
+                <a href="#" class="view-all-link">مشاهده و خرید <i class="fas fa-arrow-left"></i></a>
+            </div>
+            <div class="products-grid">
+                <div class="product-card" data-id="women1" data-name="بلوز زنانه کرم" data-price="850000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/womenshirt1/300/400.jpg" alt="بلوز زنانه کرم">
+                    </div>
+                    <div class="card-body">
+                        <h4>بلوز زنانه کرم</h4>
+                        <p class="price">۸۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="women2" data-name="مانتو مجلسی" data-price="1200000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/womensdress1/300/400.jpg" alt="مانتو مجلسی">
+                    </div>
+                    <div class="card-body">
+                        <h4>مانتو مجلسی</h4>
+                        <p class="price">۱,۲۰۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="women3" data-name="کفش پاشنه زنانه" data-price="950000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/womenshoes1/300/400.jpg" alt="کفش پاشنه زنانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>کفش پاشنه زنانه</h4>
+                        <p class="price">۹۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="women4" data-name="کیف دوشی زنانه" data-price="780000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/womensbag1/300/400.jpg" alt="کیف دوشی زنانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>کیف دوشی زنانه</h4>
+                        <p class="price">۷۸۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="product-card" data-id="women5" data-name="شلوارک زنانه" data-price="520000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/womenshorts1/300/400.jpg" alt="شلوارک زنانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>شلوارک زنانه</h4>
+                        <p class="price">۵۲۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- بخش پرفروش ترین محصولات -->
+    <section class="products-section">
+        <div class="container">
+            <div class="section-header-wrapper">
+                <div>
+                    <h2 class="section-title-shadow">BEST ACCESSORIES</h2>
+                    <h2 class="section-title"><span class="highlight-red">پرفروش ترین</span> محصولات</h2>
+                </div>
+                <a href="#" class="view-all-link">مشاهده و خرید <i class="fas fa-arrow-left"></i></a>
+            </div>
+            <div class="products-grid">
+                <!-- محصول ۱ -->
+                <div class="product-card" data-id="acc1" data-name="عینک آفتابی مردانه" data-price="450000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc1/300/400.jpg" alt="عینک آفتابی مردانه">
+                    </div>
+                    <div class="card-body">
+                        <h4>عینک آفتابی مردانه</h4>
+                        <p class="price">۴۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۲ -->
+                <div class="product-card" data-id="acc2" data-name="گردنبند استیل" data-price="320000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc2/300/400.jpg" alt="گردنبند استیل">
+                    </div>
+                    <div class="card-body">
+                        <h4>گردنبند استیل</h4>
+                        <p class="price">۳۲۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۳ -->
+                <div class="product-card" data-id="acc3" data-name="دستبند چرم طبیعی" data-price="280000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc3/300/400.jpg" alt="دستبند چرم طبیعی">
+                    </div>
+                    <div class="card-body">
+                        <h4>دستبند چرم طبیعی</h4>
+                        <p class="price">۲۸۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۴ -->
+                <div class="product-card" data-id="acc4" data-name="کلاه لبه دار زمستانی" data-price="550000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc4/300/400.jpg" alt="کلاه لبه دار زمستانی">
+                    </div>
+                    <div class="card-body">
+                        <h4>کلاه لبه دار زمستانی</h4>
+                        <p class="price">۵۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۵ -->
+                <div class="product-card" data-id="acc5" data-name="روسری ابریشمی" data-price="780000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc5/300/400.jpg" alt="روسری ابریشمی">
+                    </div>
+                    <div class="card-body">
+                        <h4>روسری ابریشمی</h4>
+                        <p class="price">۷۸۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۶ -->
+                <div class="product-card" data-id="acc6" data-name="کمربند کلاسیک" data-price="650000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc6/300/400.jpg" alt="کمربند کلاسیک">
+                    </div>
+                    <div class="card-body">
+                        <h4>کمربند کلاسیک</h4>
+                        <p class="price">۶۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۷ -->
+                <div class="product-card" data-id="acc7" data-name="جوراب شیکی" data-price="150000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc7/300/400.jpg" alt="جوراب شیکی">
+                    </div>
+                    <div class="card-body">
+                        <h4>جوراب شیکی</h4>
+                        <p class="price">۱۵۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- محصول ۸ -->
+                <div class="product-card" data-id="acc8" data-name="ساعت هوشمند" data-price="2100000">
+                    <div class="image-container">
+                        <img src="https://picsum.photos/seed/acc8/300/400.jpg" alt="ساعت هوشمند">
+                    </div>
+                    <div class="card-body">
+                        <h4>ساعت هوشمند</h4>
+                        <p class="price">۲,۱۰۰,۰۰۰ تومان</p>
+                        <div class="actions">
+                            <button class="add-to-cart-btn">افزودن به سبد</button>
+                            <i class="far fa-heart wishlist-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- بخش پیگیری سفارش -->
+    <section class="order-tracking-page">
+        <div class="container">
+            <h2 class="order-tracking-title">پیگیری <span class="highlight-red">سفارشات</span></h2>
+            <div class="tracking-container">
+                <div class="tracking-form-column">
+                    <p>لطفاً کد و یا شماره سفارش خود را وارد کنید</p>
+                    <input type="text" placeholder="لطفاً کد و یا شماره سفارش خود را وارد کنید">
+                    <button type="submit">پیگیری سفارش</button>
+                </div>
+                <div class="tracking-info-column">
+                    <h3>مرور سفارش شما</h3>
+                    <p>javad13080@gmail.com</p>
+                    <a href="#" class="back-button">بازگشت به سفارش <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- فوتر سایت -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-column">
+                    <h4>درباره RAYNA</h4>
+                    <p>RAYNA یک فروشگاه آنلاین مدرن برای ارائه بهترین و جدیدترین لباس‌های زنانه و مردانه با کیفیت بالا و طراحی‌های منحصر به فرد است. ما به دنبال ایجاد تجربه‌ای لذت‌بخش از خرید آنلاین برای شما هستیم.</p>
+                    <div class="social-icons">
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-telegram"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                    </div>
+                </div>
+                <div class="footer-column">
+                    <h4>لینک‌های سریع</h4>
+                    <ul>
+                        <li><a href="#">درباره ما</a></li>
+                        <li><a href="#">تماس با ما</a></li>
+                        <li><a href="#">وبلاگ</a></li>
+                        <li><a href="#">سوالات متداول</a></li>
+                        <li><a href="#">قوانین و مقررات</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>دسته‌بندی‌ها</h4>
+                    <ul>
+                        <li><a href="#">لباس زنانه</a></li>
+                        <li><a href="#">لباس مردانه</a></li>
+                        <li><a href="#">اکسسوری</a></li>
+                        <li><a href="#">کیف و کفش</a></li>
+                        <li><a href="#">شال و روسری</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>تماس با ما</h4>
+                    <div class="contact-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>تهران، خیابان ولیعصر، پلاک ۱۲۳</span>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-phone-alt"></i>
+                        <span>۰۲۱-۸۸XXXXXX</span>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>info@rayna.com</span>
+                    </div>
+                    <h4 style="margin-top: 20px;">عضویت در خبرنامه</h4>
+                    <form class="newsletter-form">
+                        <input type="email" placeholder="ایمیل خود را وارد کنید">
+                        <button type="submit"><i class="fas fa-paper-plane"></i></button>
+                    </form>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; ۱۴۰۳ تمامی حقوق برای فروشگاه RAYNA محفوظ است.</p>
+                <div class="payment-logos">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" alt="Visa">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" alt="Mastercard">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/ZarinPal_logo.svg/2048px-ZarinPal_logo.svg.png" alt="Zarinpal">
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- مودال تصویر محصول -->
+    <div id="image-modal" class="modal">
+        <span class="modal-close">&times;</span>
+        <div class="modal-content">
+            <img id="modal-image" src="" alt="">
+        </div>
+    </div>
+
+    <!-- مودال ورود -->
+    <div id="login-modal" class="modal">
+        <div class="login-modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>ورود به حساب کاربری</h2>
+            <form id="login-form">
+                <input type="email" placeholder="ایمیل" required>
+                <input type="password" placeholder="رمز عبور" required>
+                <button type="submit">ورود</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- مودال علاقه مندی ها -->
+    <div id="wishlist-modal" class="modal">
+        <div class="wishlist-modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>لیست علاقه مندی‌ها</h2>
+            <div class="wishlist-grid" id="wishlist-grid-container">
+                <!-- آیتم‌ها با جاوااسکریپت اضافه می‌شوند -->
+            </div>
+        </div>
+    </div>
+
+    <!-- اعلان -->
+    <div id="notification" class="notification"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- State Management ---
+            let cart = [];
+            let wishlist = [];
+
+            // --- DOM Elements ---
+            const cartTotalElement = document.getElementById('cart-total');
+            const cartCountBadge = document.getElementById('cart-count');
+            const wishlistCountBadge = document.getElementById('wishlist-count');
+            const wishlistLink = document.getElementById('wishlist-link');
+            const loginLink = document.getElementById('login-link');
+            const notification = document.getElementById('notification');
+
+            // --- Modal Elements ---
+            const imageModal = document.getElementById('image-modal');
+            const modalImage = document.getElementById('modal-image');
+            const loginModal = document.getElementById('login-modal');
+            const wishlistModal = document.getElementById('wishlist-modal');
+            const wishlistGridContainer = document.getElementById('wishlist-grid-container');
+            const modalCloseButtons = document.querySelectorAll('.modal-close');
+
+            // --- Utility Functions ---
+            function showNotification(message, duration = 3000) {
+                notification.textContent = message;
+                notification.classList.add('show');
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, duration);
+            }
+
+            function updateCartUI() {
+                const total = cart.reduce((sum, item) => sum + item.price, 0);
+                cartTotalElement.textContent = total.toLocaleString('fa-IR');
+                cartCountBadge.textContent = cart.length;
+                cartCountBadge.style.display = cart.length > 0 ? 'block' : 'none';
+            }
+            
+            function updateWishlistUI() {
+                wishlistCountBadge.textContent = wishlist.length;
+                wishlistCountBadge.style.display = wishlist.length > 0 ? 'block' : 'none';
+            }
+            
+            function renderWishlistModal() {
+                wishlistGridContainer.innerHTML = '';
+                if (wishlist.length === 0) {
+                    wishlistGridContainer.innerHTML = '<p style="text-align: center; width: 100%;">محصولی در لیست علاقه مندی شما وجود ندارد.</p>';
+                    return;
+                }
+                wishlist.forEach(item => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'wishlist-item';
+                    itemElement.innerHTML = `
+                        <img src="https://picsum.photos/seed/${item.id}/200/200.jpg" alt="${item.name}">
+                        <h4>${item.name}</h4>
+                        <p class="price">${item.price.toLocaleString('fa-IR')} تومان</p>
+                    `;
+                    wishlistGridContainer.appendChild(itemElement);
+                });
+            }
+
+            function isProductInWishlist(productId) {
+                return wishlist.some(item => item.id === productId);
+            }
+
+            // --- Event Listeners ---
+
+            // 1. Modal Close Buttons
+            modalCloseButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    imageModal.style.display = 'none';
+                    loginModal.style.display = 'none';
+                    wishlistModal.style.display = 'none';
+                });
+            });
+
+            // 2. Close modal on outside click
+            window.addEventListener('click, function(event) {
+                if (event.target === imageModal || event.target === loginModal || event.target === wishlistModal) {
+                    event.target.style.display = 'none';
+                }
+            });
+
+            // 3. Product Stories (Open Image Modal)
+            document.querySelectorAll('.product-story').forEach(story => {
+                story.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    modalImage.src = story.dataset.image;
+                    imageModal.style.display = 'block';
+                });
+            });
+
+            // 4. Login Link (Open Login Modal)
+            loginLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                loginModal.style.display = 'block';
+            });
+
+            // 5. Wishlist Link (Open Wishlist Modal)
+            wishlistLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                renderWishlistModal();
+                wishlistModal.style.display = 'block';
+            });
+
+            // 6. Add to Cart Buttons
+            document.querySelectorAll('.add-to-cart-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const card = button.closest('.product-card, .special-product-card');
+                    const product = {
+                        id: card.dataset.id,
+                        name: card.dataset.name,
+                        price: parseInt(card.dataset.price)
+                    };
+                    cart.push(product);
+                    updateCartUI();
+                    showNotification(`${product.name} به سبد خرید اضافه شد.`);
+                });
+            });
+
+            // 7. Wishlist Icons (Toggle)
+            document.querySelectorAll('.wishlist-icon').forEach(icon => {
+                const card = icon.closest('.product-card, .special-product-card');
+                const product = {

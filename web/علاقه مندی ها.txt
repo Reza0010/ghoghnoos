@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>علاقه‌مندی‌های من - RAYNA</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل هدر */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        .header-actions a {
+            color: #333;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+        .header-actions a span {
+            font-size: 0.9rem;
+            margin-right: 5px;
+        }
+        .header-actions a:hover {
+            color: #007bff;
+        }
+        
+        /* ------------------- */
+        /* استایل اختصاصی صفحه علاقه‌مندی‌ها (نسخه مجله‌ای) */
+        /* ------------------- */
+        .wishlist-page {
+            padding: 40px 0;
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        /* --- ستون کناری مدیریت لیست‌ها (مینیمال) --- */
+        .wishlist-sidebar {
+            flex: 0 0 260px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+        .create-list-btn {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #007bff;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .create-list-btn:hover {
+            transform: scale(1.1);
+        }
+        .create-list-btn.active {
+            color: #dc3545;
+        }
+
+        /* --- فرم ایجاد لیست جدید (Inline) --- */
+        .new-list-form {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: none; /* به صورت پیش‌فرض مخفی است */
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 200px; /* مقدار کافی برای نمایش محتوا */
+                padding-top: 20px;
+                padding-bottom: 20px;
+            }
+        }
+        .new-list-form input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        .new-list-form input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        .new-list-form-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .new-list-form button {
+            flex-grow: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .confirm-btn {
+            background-color: #007bff;
+            color: white;
+        }
+        .confirm-btn:hover {
+            background-color: #0056b3;
+        }
+        .cancel-btn {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .cancel-btn:hover {
+            background-color: #dee2e6;
+        }
+
+        .wishlist-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .wishlist-list li {
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .wishlist-list li:hover {
+            background-color: #f8f9fa;
+        }
+        .wishlist-list li.active {
+            background-color: #e7f1ff;
+            color: #007bff;
+            font-weight: 500;
+        }
+        .wishlist-list li .list-actions {
+            display: flex;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .wishlist-list li:hover .list-actions,
+        .wishlist-list li.active .list-actions {
+            opacity: 1;
+        }
+        .list-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #6c757d;
+            transition: color 0.2s;
+        }
+        .list-actions button.delete {
+            color: #dc3545;
+        }
+        .list-actions button:hover {
+            color: #333;
+        }
+
+        /* --- ستون اصلی محتوا --- */
+        .main-content {
+            flex-grow: 1;
+        }
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+        .page-header p {
+            font-size: 1.1rem;
+            color: #6c757d;
+            margin: 0;
+        }
+
+        /* --- گرید ماسونری --- */
+        .masonry-grid {
+            column-count: 4;
+            column-gap: 25px;
+        }
+        .wishlist-item-card {
+            break-inside: avoid;
+            margin-bottom: 25px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.5s ease;
+            position: relative;
+        }
+        .wishlist-item-card.hiding {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        .wishlist-item-card.hidden {
+            display: none;
+        }
+        .wishlist-item-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 25px rgba(0,0,0,0.12);
+        }
+        .wishlist-item-card.hero {
+            grid-column: span 2;
+            grid-row: span 2;
+        }
+        .hero .image-container {
+            height: 450px;
+        }
+        .hero .card-body {
+            padding: 25px;
+        }
+        .hero h4 {
+            font-size: 1.5rem;
+        }
+        .hero .price {
+            font-size: 1.5rem;
+        }
+        
+        .wishlist-item-card .image-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .wishlist-item-card img {
+            width: 100%;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.4s ease;
+        }
+        .hero img { height: 450px; object-fit: cover; }
+        .wishlist-item-card:not(.hero) img { height: 250px; object-fit: cover; }
+
+        .wishlist-item-card:hover img {
+            transform: scale(1.05);
+        }
+        .wishlist-item-card .card-body {
+            padding: 20px;
+        }
+        .wishlist-item-card h4 {
+            font-size: 1.1rem;
+            margin: 0 0 10px;
+            color: #333;
+            font-weight: 500;
+        }
+        .wishlist-item-card .price {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        
+        /* --- اورلی عملیات --- */
+        .item-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .wishlist-item-card:hover .item-overlay {
+            opacity: 1;
+        }
+        .overlay-btn {
+            background-color: #fff;
+            color: #333;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .overlay-btn:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.05);
+        }
+        .overlay-btn.delete {
+            background-color: #dc3545;
+            color: #fff;
+        }
+        .overlay-btn.delete:hover {
+            background-color: #c82333;
+        }
+
+        /* --- حالت خالی --- */
+        .empty-wishlist {
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .empty-wishlist i {
+            font-size: 6rem;
+            color: #dee2e6;
+            margin-bottom: 20px;
+        }
+        .empty-wishlist h3 {
+            font-size: 1.8rem;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .empty-wishlist p {
+            font-size: 1rem;
+            color: #6c757d;
+            margin-bottom: 30px;
+        }
+        .empty-wishlist .btn-primary {
+            background-color: #333;
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .empty-wishlist .btn-primary:hover {
+            background-color: #555;
+            transform: translateY(-2px);
+        }
+
+        /* --- اعلان (Toast) --- */
+        .toast {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+        @media (max-width: 1200px) {
+            .masonry-grid { column-count: 3; }
+        }
+        @media (max-width: 992px) {
+            .wishlist-page { flex-direction: column; }
+            .wishlist-sidebar {
+                flex: 1;
+                width: 100%;
+                position: static;
+                order: 2;
+            }
+            .main-content { order: 1; }
+        }
+        @media (max-width: 768px) {
+            .masonry-grid { column-count: 2; column-gap: 15px; }
+            .wishlist-item-card:not(.hero) img { height: 200px; }
+            .hero img { height: 300px; }
+            .page-header h1 { font-size: 2rem; }
+        }
+        @media (max-width: 480px) {
+            .masonry-grid { column-count: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- هدر سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <nav class="header-actions">
+                    <a href="category.html" title="فروشگاه">
+                        <i class="fas fa-store"></i>
+                        <span>فروشگاه</span>
+                    </a>
+                    <a href="#" title="ورود یا عضویت">
+                        <i class="fas fa-user"></i>
+                        <span>ورود یا عضویت</span>
+                    </a>
+                    <a href="cart.html" title="سبد خرید">
+                        <i class="fas fa-shopping-bag"></i>
+                        <span>۰</span>
+                        <span>تومان</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- محتوای اصلی صفحه علاقه‌مندی‌ها -->
+    <main class="wishlist-page">
+        <div class="container">
+            
+            <!-- ستون کناری مدیریت لیست‌ها -->
+            <aside class="wishlist-sidebar">
+                <div class="sidebar-header">
+                    <h3>لیست‌های من</h3>
+                    <button class="create-list-btn" id="create-list-btn" title="ایجاد لیست جدید">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                </div>
+
+                <!-- فرم ایجاد لیست جدید (Inline) -->
+                <div class="new-list-form" id="new-list-form">
+                    <input type="text" id="new-list-name-input" placeholder="نام لیست را وارد کنید..." maxlength="30">
+                    <div class="new-list-form-buttons">
+                        <button class="cancel-btn" id="cancel-new-list-btn">انصراف</button>
+                        <button class="confirm-btn" id="confirm-new-list-btn">ایجاد</button>
+                    </div>
+                </div>
+
+                <ul class="wishlist-list" id="wishlist-list">
+                    <!-- لیست‌ها به صورت داینامیک اینجا اضافه می‌شوند -->
+                </ul>
+            </aside>
+
+            <!-- ستون اصلی محتوا -->
+            <section class="main-content">
+                <!-- عنوان صفحه -->
+                <div class="page-header">
+                    <h1 id="page-title">علاقه‌مندی‌های من</h1>
+                    <p id="page-subtitle">کالکشن شخصی و الهام‌بخش شما.</p>
+                </div>
+
+                <!-- گرید ماسونری -->
+                <div class="masonry-grid" id="masonry-grid">
+                    <!-- محصولات به صورت داینامیک اینجا اضافه می‌شوند -->
+                </div>
+
+                <!-- حالت خالی -->
+                <div class="empty-wishlist" id="empty-wishlist" style="display: none;">
+                    <i class="far fa-heart"></i>
+                    <h3>کالکشن شما خالی است!</h3>
+                    <p>بیایید اولین لیست خود را بسازید و محصولات مورد علاقه‌تان را اضافه کنید.</p>
+                    <a href="#" class="btn-primary" id="create-first-list-btn">ساخت لیست جدید</a>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const masonryGrid = document.getElementById('masonry-grid');
+            const emptyWishlist = document.getElementById('empty-wishlist');
+            const pageTitle = document.getElementById('page-title');
+            const pageSubtitle = document.getElementById('page-subtitle');
+            const wishlistList = document.getElementById('wishlist-list');
+
+            // --- عناصر فرم جدید ---
+            const createListBtn = document.getElementById('create-list-btn');
+            const createFirstListBtn = document.getElementById('create-first-list-btn');
+            const newListForm = document.getElementById('new-list-form');
+            const newListNameInput = document.getElementById('new-list-name-input');
+            const confirmNewListBtn = document.getElementById('confirm-new-list-btn');
+            const cancelNewListBtn = document.getElementById('cancel-new-list-btn');
+
+            // --- داده‌های نمونه برای علاقه‌مندی‌ها ---
+            const wishlists = {
+                "عمومی": [
+                    { id: 'w1', name: 'مانتو کتی کلاسیک', price: 450000, image: 'https://picsum.photos/seed/wish1/400/600.jpg' },
+                    { id: 'w2', name: 'شال حریر ابریشمی', price: 250000, image: 'https://picsum.photos/seed/wish2/400/300.jpg' },
+                    { id: 'w3', name: 'ست بلوز و شلوارک', price: 490000, image: 'https://picsum.photos/seed/wish3/400/500.jpg' },
+                    { id: 'w4', name: 'کاپشن بهاری', price: 550000, image: 'https://picsum.photos/seed/wish4/400/450.jpg' },
+                    { id: 'w5', name: 'مانتو مجلسی بلند', price: 750000, image: 'https://picsum.photos/seed/wish5/400/550.jpg' },
+                ],
+                "ایده‌های هدیه": [
+                    { id: 'w6', name: 'جعبه آرایشی', price: 350000, image: 'https://picsum.photos/seed/wish6/400/400.jpg' },
+                    { id: 'w7', name: 'عطر زنانه', price: 850000, image: 'https://picsum.photos/seed/wish7/400/350.jpg' },
+                ]
+            };
+            let currentListName = Object.keys(wishlists)[0] || null;
+
+            // --- توابع کمکی ---
+            function showToast(message) {
+                const toastEl = document.createElement('div');
+                toastEl.className = 'toast';
+                toastEl.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+                document.body.appendChild(toastEl);
+                setTimeout(() => toastEl.classList.add('show'), 10);
+                setTimeout(() => {
+                    toastEl.classList.remove('show');
+                    setTimeout(() => document.body.removeChild(toastEl), 500);
+                }, 3000);
+            }
+
+            function renderWishlistList() {
+                wishlistList.innerHTML = '';
+                const listNames = Object.keys(wishlists);
+                
+                if (listNames.length === 0) {
+                    wishlistList.innerHTML = '<li style="padding: 20px; text-align: center; color: #aaa;">لیستی یافت نشد</li>';
+                    return;
+                }
+
+                listNames.forEach(listName => {
+                    const li = document.createElement('li');
+                    li.dataset.listName = listName;
+                    if (listName === currentListName) {
+                        li.classList.add('active');
+                    }
+                    li.innerHTML = `
+                        <span>${listName}</span>
+                        <div class="list-actions">
+                            <button class="edit" title="تغییر نام"><i class="fas fa-edit"></i></button>
+                            <button class="delete" title="حذف لیست"><i class="fas fa-trash"></i></button>
+                        </div>
+                    `;
+                    li.addEventListener('click', (e) => {
+                        if (!e.target.closest('.list-actions')) {
+                            switchToList(listName);
+                        }
+                    });
+                    wishlistList.appendChild(li);
+                });
+            }
+
+            function renderMasonryGrid() {
+                masonryGrid.innerHTML = '';
+                const items = currentListName ? wishlists[currentListName] : [];
+
+                if (items.length === 0) {
+                    emptyWishlist.style.display = 'block';
+                    masonryGrid.style.display = 'none';
+                } else {
+                    emptyWishlist.style.display = 'none';
+                    masonryGrid.style.display = 'block';
+
+                    items.forEach((item, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'wishlist-item-card';
+                        if (index === 0) card.classList.add('hero'); // اولین محصول را Hero می‌کند
+                        card.dataset.id = item.id;
+                        card.innerHTML = `
+                            <div class="image-container">
+                                <img src="${item.image}" alt="${item.name}">
+                                <div class="item-overlay">
+                                    <button class="overlay-btn add-to-cart-btn">افزودن به سبد</button>
+                                    <button class="overlay-btn delete" title="حذف از لیست">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <h4>${item.name}</h4>
+                                <p class="price">${Number(item.price).toLocaleString('fa-IR')} تومان</p>
+                            </div>
+                        `;
+                        masonryGrid.appendChild(card);
+                    });
+
+                    attachItemEvents();
+                }
+            }
+
+            function attachItemEvents() {
+                document.querySelectorAll('.add-to-cart-btn').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const itemName = e.target.closest('.wishlist-item-card').querySelector('h4').textContent;
+                        showToast(`${itemName} به سبد خرید اضافه شد.`);
+                    });
+                });
+
+                document.querySelectorAll('.overlay-btn.delete').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const card = e.target.closest('.wishlist-item-card');
+                        removeItem(card);
+                    });
+                });
+            }
+
+            function removeItem(card) {
+                card.classList.add('hiding');
+                setTimeout(() => {
+                    const itemId = card.dataset.id;
+                    const index = wishlists[currentListName].findIndex(item => item.id === itemId);
+                    if (index > -1) {
+                        wishlists[currentListName].splice(index, 1);
+                    }
+                    renderMasonryGrid();
+                }, 400);
+            }
+
+            function switchToList(listName) {
+                currentListName = listName;
+                pageTitle.textContent = listName;
+                pageSubtitle.textContent = `کالکشن شخصی و الهام‌بخش "${listName}".`;
+                renderWishlistList();
+                renderMasonryGrid();
+            }
+            
+            // --- مدیریت فرم ایجاد لیست جدید (Inline) ---
+            function showNewListForm() {
+                newListForm.style.display = 'block';
+                wishlistList.style.display = 'none';
+                createListBtn.classList.add('active');
+                createListBtn.innerHTML = '<i class="fas fa-times-circle"></i>';
+                newListNameInput.value = '';
+                newListNameInput.focus();
+            }
+
+            function hideNewListForm() {
+                newListForm.style.display = 'none';
+                wishlistList.style.display = 'block';
+                createListBtn.classList.remove('active');
+                createListBtn.innerHTML = '<i class="fas fa-plus-circle"></i>';
+            }
+
+            createListBtn.addEventListener('click', () => {
+                if (createListBtn.classList.contains('active')) {
+                    hideNewListForm();
+                } else {
+                    showNewListForm();
+                }
+            });
+            createFirstListBtn.addEventListener('click', showNewListForm);
+            
+            cancelNewListBtn.addEventListener('click', hideNewListForm);
+            
+            confirmNewListBtn.addEventListener('click', () => {
+                const listName = newListNameInput.value.trim();
+                if (listName && !wishlists[listName]) {
+                    wishlists[listName] = [];
+                    hideNewListForm();
+                    renderWishlistList();
+                    switchToList(listName);
+                    showToast(`لیست "${listName}" با موفقیت ایجاد شد.`);
+                } else {
+                    alert('نام لیست معتبر نیست یا از قبل وجود دارد.');
+                }
+            });
+
+            // رویدادهای کلیک برای دکمه‌های ویرایش و حذف لیست
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.list-actions .delete')) {
+                    const li = e.target.closest('li');
+                    const listName = li.dataset.listName;
+                    if (confirm(`آیا از حذف لیست "${listName}" مطمئن هستید؟`)) {
+                        delete wishlists[listName];
+                        if (currentListName === listName) {
+                            const remainingLists = Object.keys(wishlists);
+                            currentListName = remainingLists.length > 0 ? remainingLists[0] : null;
+                        }
+                        renderWishlistList();
+                        renderMasonryGrid();
+                        showToast(`لیست "${listName}" حذف شد.`);
+                    }
+                }
+                if (e.target.closest('.list-actions .edit')) {
+                    const li = e.target.closest('li');
+                    const oldName = li.dataset.listName;
+                    const newName = prompt('نام جدید را وارد کنید:', oldName);
+                    if (newName && newName !== oldName && !wishlists[newName]) {
+                        wishlists[newName] = wishlists[oldName];
+                        delete wishlists[oldName];
+                        if (currentListName === oldName) currentListName = newName;
+                        renderWishlistList();
+                        renderMasonryGrid();
+                    }
+                }
+            });
+
+            // --- مقداردهی اولیه ---
+            renderWishlistList();
+            renderMasonryGrid();
+        });
+    </script>
+
+</body>
+</html>

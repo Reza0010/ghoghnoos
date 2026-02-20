@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسویه حساب - RAYNA</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت (کپی شده از صفحه اصلی) */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل هدر */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        .header-actions a {
+            color: #333;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .header-actions a span {
+            font-size: 0.9rem;
+            margin-right: 5px;
+        }
+        .header-actions a:hover {
+            color: #007bff;
+        }
+        
+        /* ------------------- */
+        /* استایل اختصاصی صفحه تسویه حساب مرحله‌ای */
+        /* ------------------- */
+        .checkout-page {
+            padding: 40px 0;
+            min-height: calc(100vh - 200px);
+        }
+
+        .checkout-container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        /* --- نوار پیشرفت (Progress Bar) --- */
+        .progress-bar-container {
+            background-color: #ffffff;
+            padding: 30px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+        .progress-bar-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 40px;
+            right: 40px;
+            height: 2px;
+            background-color: #e0e0e0;
+            transform: translateY(-50%);
+            z-index: 0;
+        }
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+            flex: 1;
+        }
+        .progress-step .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+            color: #aaa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .progress-step.active .step-number {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .progress-step.completed .step-number {
+            background-color: #2ecc71;
+            color: #fff;
+        }
+        .progress-step .step-title {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #777;
+            text-align: center;
+        }
+        .progress-step.active .step-title {
+            color: #007bff;
+        }
+        .progress-step.completed .step-title {
+            color: #2ecc71;
+        }
+
+        /* --- ستون فرم --- */
+        .checkout-form-column {
+            flex: 2;
+        }
+
+        .checkout-step {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            display: none;
+        }
+        .checkout-step.active {
+            display: block;
+        }
+
+        .checkout-step h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            font-size: 1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.25);
+        }
+        
+        /* --- استایل بخش روش ارسال و پرداخت --- */
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .radio-option:hover {
+            background-color: #f8f9fa;
+        }
+        .radio-option.selected {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+        .radio-option .radio-custom {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ccc;
+            border-radius: 50%;
+            margin-left: 15px;
+            position: relative;
+            transition: border-color 0.3s ease;
+        }
+        .radio-option.selected .radio-custom {
+            border-color: #007bff;
+        }
+        .radio-option.selected .radio-custom::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background-color: #007bff;
+            border-radius: 50%;
+        }
+        .radio-option .option-details {
+            flex-grow: 1;
+        }
+        .radio-option .option-details h4 {
+            margin: 0 0 5px;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        .radio-option .option-details p {
+            margin: 0;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        .radio-option .option-price {
+            font-weight: 700;
+            color: #333;
+        }
+
+        /* --- مرحله بازبینی نهایی --- */
+        .review-summary {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .review-summary h4 {
+            margin-top: 0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .review-summary p {
+            margin: 5px 0;
+            color: #555;
+        }
+
+        /* --- دکمه‌های ناوبری مراحل --- */
+        .step-navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            gap: 15px;
+        }
+        .nav-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .nav-btn:hover {
+            transform: translateY(-2px);
+        }
+        .nav-btn.prev {
+            background-color: #6c757d;
+            color: white;
+        }
+        .nav-btn.prev:hover {
+            background-color: #5a6268;
+        }
+        .nav-btn.next {
+            background-color: #007bff;
+            color: white;
+        }
+        .nav-btn.next:hover {
+            background-color: #0056b3;
+        }
+        .nav-btn.submit {
+            background-color: #e74c3c;
+            color: white;
+            font-size: 1.1rem;
+            padding: 15px 30px;
+        }
+        .nav-btn.submit:hover {
+            background-color: #c0392b;
+        }
+
+        /* --- ستون خلاصه سفارش (چسبنده) --- */
+        .order-summary-column {
+            flex: 1;
+            position: sticky;
+            top: 100px;
+        }
+        .summary-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .summary-card h3 {
+            background-color: #f8f9fa;
+            padding: 20px;
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #333;
+            text-align: center;
+        }
+        .summary-items { padding: 20px; }
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .summary-item img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        .summary-item .item-details { flex-grow: 1; }
+        .summary-item .item-details h4 { margin: 0 0 5px; font-size: 1rem; font-weight: 500; }
+        .summary-item .item-details p { margin: 0; color: #777; font-size: 0.9rem; }
+        .summary-item .item-price { font-weight: 700; color: #333; }
+        .summary-totals {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .total-row.grand-total {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #e74c3c;
+            padding-top: 10px;
+            border-top: 1px dashed #ccc;
+        }
+        .discount-code-section {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .discount-form {
+            display: flex;
+            gap: 10px;
+        }
+        .discount-form input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Vazirmatn', sans-serif;
+        }
+        .discount-form button {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .discount-form button:hover { background-color: #555; }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+        @media (max-width: 992px) {
+            .checkout-container { flex-direction: column; }
+            .order-summary-column { position: static; width: 100%; margin-top: 30px; }
+            .form-row { flex-direction: column; gap: 0; }
+            .progress-bar-container { padding: 20px 10px; }
+            .progress-step .step-title { font-size: 0.7rem; }
+        }
+        @media (max-width: 768px) {
+            .checkout-step { padding: 25px; }
+            .checkout-step h2 { font-size: 1.5rem; }
+            .step-navigation { flex-direction: column; }
+            .nav-btn { width: 100%; text-align: center; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- هدر سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <nav class="header-actions">
+                    <a href="index.html" title="بازگشت به فروشگاه">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>بازگشت به فروشگاه</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- محتوای اصلی صفحه تسویه حساب -->
+    <main class="checkout-page">
+        <div class="container">
+            
+            <!-- نوار پیشرفت (۴ مرحله‌ای) -->
+            <div class="progress-bar-container">
+                <div class="progress-step active" id="step-1-progress">
+                    <div class="step-number">1</div>
+                    <div class="step-title">اطلاعات تماس</div>
+                </div>
+                <div class="progress-step" id="step-2-progress">
+                    <div class="step-number">2</div>
+                    <div class="step-title">آدرس تحویل</div>
+                </div>
+                <div class="progress-step" id="step-3-progress">
+                    <div class="step-number">3</div>
+                    <div class="step-title">ارسال و پرداخت</div>
+                </div>
+                <div class="progress-step" id="step-4-progress">
+                    <div class="step-number">4</div>
+                    <div class="step-title">بازبینی و تایید</div>
+                </div>
+            </div>
+
+            <div class="checkout-container">
+                
+                <!-- ستون فرم‌های مرحله‌ای -->
+                <section class="checkout-form-column">
+                    <form id="checkout-form">
+                        
+                        <!-- مرحله ۱: اطلاعات تماس -->
+                        <div class="checkout-step active" id="step-1">
+                            <h2>اطلاعات تماس</h2>
+                            <div class="form-row">
+                                <div class="form-group"><label for="firstName">نام *</label><input type="text" id="firstName" name="firstName" required></div>
+                                <div class="form-group"><label for="lastName">نام خانوادگی *</label><input type="text" id="lastName" name="lastName" required></div>
+                            </div>
+                            <div class="form-group"><label for="email">ایمیل *</label><input type="email" id="email" name="email" placeholder="example@email.com" required></div>
+                            <div class="form-group"><label for="phone">شماره موبایل *</label><input type="tel" id="phone" name="phone" placeholder="09xx xxx xxxx" required></div>
+                        </div>
+
+                        <!-- مرحله ۲: آدرس تحویل -->
+                        <div class="checkout-step" id="step-2">
+                            <h2>آدرس تحویل</h2>
+                            <div class="form-group">
+                                <label for="province">استان *</label>
+                                <select id="province" name="province" required onchange="updateCities()">
+                                    <option value="">انتخاب کنید...</option>
+                                    <option value="alborz">البرز</option>
+                                    <option value="ardabil">اردبیل</option>
+                                    <option value="east-azerbaijan">آذربایجان شرقی</option>
+                                    <option value="west-azerbaijan">آذربایجان غربی</option>
+                                    <option value="bushehr">بوشهر</option>
+                                    <option value="chaharmahal-bakhtiari">چهارمحال و بختیاری</option>
+                                    <option value="fars">فارس</option>
+                                    <option value="gilan">گیلان</option>
+                                    <option value="golestan">گلستان</option>
+                                    <option value="hamadan">همدان</option>
+                                    <option value="hormozgan">هرمزگان</option>
+                                    <option value="ilam">ایلام</option>
+                                    <option value="isfahan">اصفهان</option>
+                                    <option value="kerman">کرمان</option>
+                                    <option value="kermanshah">کرمانشاه</option>
+                                    <option value="kohgiluyeh-boyer-ahmad">کهگیلویه و بویراحمد</option>
+                                    <option value="kurdistan">کردستان</option>
+                                    <option value="lorestan">لرستان</option>
+                                    <option value="markazi">مرکزی</option>
+                                    <option value="mazandaran">مازندران</option>
+                                    <option value="north-khorasan">خراسان شمالی</option>
+                                    <option value="qazvin">قزوین</option>
+                                    <option value="qom">قم</option>
+                                    <option value="razavi-khorasan">خراسان رضوی</option>
+                                    <option value="semnan">سمنان</option>
+                                    <option value="sistan-baluchestan">سیستان و بلوچستان</option>
+                                    <option value="tehran">تهران</option>
+                                    <option value="yazd">یزد</option>
+                                    <option value="south-khorasan">خراسان جنوبی</option>
+                                    <option value="zanjan">زنجان</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="city">شهر *</label>
+                                <select id="city" name="city" required>
+                                    <option value="">ابتدا استان را انتخاب کنید</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label for="address">آدرس دقیق *</label><input type="text" id="address" name="address" placeholder="خیابان، کوچه، پلاک، طبقه..." required></div>
+                            <div class="form-group"><label for="postalCode">کد پستی *</label><input type="text" id="postalCode" name="postalCode" placeholder="xxxxxxxxxx" maxlength="10" required></div>
+                        </div>
+
+                        <!-- مرحله ۳: روش ارسال و پرداخت -->
+                        <div class="checkout-step" id="step-3">
+                            <h2>روش ارسال و پرداخت</h2>
+                            <h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 20px;">روش ارسال</h3>
+                            <div class="shipping-options">
+                                <label class="radio-option selected"><input type="radio" name="shippingMethod" value="pishtaz" checked><span class="radio-custom"></span><div class="option-details"><h4>پست پیشتاز</h4><p>تحویل در ۳ تا ۵ روز کاری</p></div><span class="option-price">۳۰,۰۰۰ تومان</span></label>
+                                <label class="radio-option"><input type="radio" name="shippingMethod" value="motor"><span class="radio-custom"></span><div class="option-details"><h4>پیک موتوری (فقط تهران)</h4><p>تحویل در همان روز</p></div><span class="option-price">۵۰,۰۰۰ تومان</span></label>
+                            </div>
+                            <h3 style="font-size: 1.3rem; font-weight: 700; margin: 30px 0 20px;">روش پرداخت</h3>
+                            <div class="payment-options">
+                                <label class="radio-option selected"><input type="radio" name="paymentMethod" value="online" checked><span class="radio-custom"></span><div class="option-details"><h4>پرداخت آنلاین</h4><p>پرداخت امن از طریق درگاه بانکی</p></div></label>
+                                <label class="radio-option"><input type="radio" name="paymentMethod" value="cod"><span class="radio-custom"></span><div class="option-details"><h4>پرداخت در محل (COD)</h4><p>پرداخت هزینه به مامور پست</p></div></label>
+                            </div>
+                        </div>
+
+                        <!-- مرحله ۴: بازبینی و تایید نهایی -->
+                        <div class="checkout-step" id="step-4">
+                            <h2>بازبینی و تایید نهایی سفارش</h2>
+                            <div class="review-summary">
+                                <h4>اطلاعات تماس</h4>
+                                <p id="review-name">-</p>
+                                <p id="review-phone">-</p>
+                                <p id="review-email">-</p>
+                            </div>
+                            <div class="review-summary">
+                                <h4>آدرس تحویل</h4>
+                                <p id="review-address">-</p>
+                            </div>
+                            <div class="review-summary">
+                                <h4>روش ارسال</h4>
+                                <p id="review-shipping">-</p>
+                            </div>
+                            <div class="review-summary">
+                                <h4>روش پرداخت</h4>
+                                <p id="review-payment">-</p>
+                            </div>
+                            <p style="text-align: center; color: #777; margin-top: 20px;">
+                                با کلیک روی دکمه "پرداخت و نهایی کردن سفارش"، سفارش شما نهایی شده و به درگاه پرداخت هدایت خواهید شد.
+                            </p>
+                        </div>
+
+                        <!-- دکمه‌های ناوبری -->
+                        <div class="step-navigation">
+                            <button type="button" class="nav-btn prev" id="prevBtn" onclick="changeStep(-1)" style="display: none;">قبلی</button>
+                            <button type="button" class="nav-btn next" id="nextBtn" onclick="changeStep(1)">بعدی</button>
+                            <button type="submit" class="nav-btn submit" id="submitBtn" form="checkout-form" style="display: none;">پرداخت و نهایی کردن سفارش</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- ستون خلاصه سفارش -->
+                <aside class="order-summary-column">
+                    <div class="summary-card">
+                        <h3>خلاصه سفارش</h3>
+                        <div class="summary-items">
+                            <div class="summary-item"><img src="https://picsum.photos/seed/checkoutitem1/200/200.jpg" alt="محصول ۱"><div class="item-details"><h4>مانتو کتی کرم</h4><p>تعداد: ۱</p></div><span class="item-price">۴۵۰,۰۰۰ تومان</span></div>
+                            <div class="summary-item"><img src="https://picsum.photos/seed/checkoutitem2/200/200.jpg" alt="محصول ۲"><div class="item-details"><h4>شلوار راحتی مشکی</h4><p>تعداد: ۲</p></div><span class="item-price">۵۸۰,۰۰۰ تومان</span></div>
+                        </div>
+                        <div class="summary-totals">
+                            <div class="total-row"><span>جمع کل:</span><span>۱,۰۳۰,۰۰۰ تومان</span></div>
+                            <div class="total-row"><span>هزینه ارسال:</span><span id="shipping-cost">۳۰,۰۰۰ تومان</span></div>
+                            <div class="total-row grand-total"><span>مبلغ نهایی:</span><span id="final-total">۱,۰۶۰,۰۰۰ تومان</span></div>
+                        </div>
+                        <div class="discount-code-section">
+                            <form class="discount-form" onsubmit="event.preventDefault(); alert('کد تخفیف اعمال شد!');">
+                                <input type="text" placeholder="کد تخفیف">
+                                <button type="submit">اعمال</button>
+                            </form>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        // داده‌های استان‌ها و شهرهای مربوطه
+        const provinceData = {
+            "tehran": ["تهران", "شمیرانات", "دماوند", "فیروزکوه", "ورامین", "پردیس", "اسلام‌شهر", "رباط‌کریم"],
+            "alborz": ["کرج", "اشتهارد", "طالقان", "نظرآباد", "ساوجبلاغ", "کرج"],
+            "isfahan": ["اصفهان", "کاشان", "خمینی‌شهر", "نجف‌آباد", "شاهین‌شهر", "مبارکه", "فلاورجان"],
+            "fars": ["شیراز", "مرودشت", "جهرم", "فسا", "آباده", "زرقان", "لار"],
+            "khuzestan": ["اهواز", "آبادان", "خرمشهر", "اندیمشک", "دزفول", "شوش", "مسجد سلیمان"],
+            "khorasan-razavi": ["مشهد", "نیشابور", "سبزوار", "گناباد", "تایباد", "قوچان", "کاشمر"],
+            // می‌توانید بقیه استان‌ها و شهرها را به همین شکل اضافه کنید
+        };
+
+        function updateCities() {
+            const provinceSelect = document.getElementById("province");
+            const citySelect = document.getElementById("city");
+            const selectedProvince = provinceSelect.value;
+
+            // پاک کردن لیست شهرها
+            citySelect.innerHTML = '<option value="">در حال بارگذاری...</option>';
+
+            if (selectedProvince) {
+                const cities = provinceData[selectedProvince];
+                if (cities) {
+                    citySelect.innerHTML = '<option value="">انتخاب کنید...</option>';
+                    cities.forEach(city => {
+                        const option = document.createElement("option");
+                        option.value = city;
+                        option.textContent = city;
+                        citySelect.appendChild(option);
+                    });
+                } else {
+                    citySelect.innerHTML = '<option value="">شهری برای این استان یافت نشد</option>';
+                }
+            } else {
+                citySelect.innerHTML = '<option value="">ابتدا استان را انتخاب کنید</option>';
+            }
+        }
+
+
+        function showStep(step) {
+            document.querySelectorAll('.checkout-step').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.progress-step').forEach(p => p.classList.remove('active', 'completed'));
+            
+            document.getElementById(`step-${step}`).classList.add('active');
+            document.getElementById(`step-${step}-progress`).classList.add('active');
+
+            for (let i = 1; i < step; i++) {
+                document.getElementById(`step-${i}-progress`).classList.add('completed');
+            }
+
+            document.getElementById('prevBtn').style.display = (step === 1) ? 'none' : 'inline-block';
+            document.getElementById('nextBtn').style.display = (step === totalSteps) ? 'none' : 'inline-block';
+            document.getElementById('submitBtn').style.display = (step === totalSteps) ? 'inline-block' : 'none';
+
+            if (step === totalSteps) {
+                populateReviewSummary();
+            }
+        }
+
+        function changeStep(direction) {
+            if (direction === 1 && currentStep === totalSteps) return;
+            if (direction === -1 && currentStep === 1) return;
+
+            currentStep += direction;
+            showStep(currentStep);
+        }
+
+        function populateReviewSummary() {
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const provinceText = document.getElementById('province').options[document.getElementById('province').selectedIndex].text;
+            const cityText = document.getElementById('city').value;
+            const address = document.getElementById('address').value;
+            const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked');
+            const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked');
+
+            document.getElementById('review-name').textContent = `${firstName} ${lastName}`;
+            document.getElementById('review-email').textContent = email;
+            document.getElementById('review-phone').textContent = phone;
+            document.getElementById('review-address').textContent = `${provinceText}, ${cityText}, ${address}`;
+            
+            if(shippingMethod) {
+                const shippingLabel = shippingMethod.closest('.radio-option').querySelector('h4').textContent;
+                document.getElementById('review-shipping').textContent = shippingLabel;
+            }
+
+            if(paymentMethod) {
+                const paymentLabel = paymentMethod.closest('.radio-option').querySelector('h4').textContent;
+                document.getElementById('review-payment').textContent = paymentLabel;
+            }
+        }
+
+        document.querySelectorAll('.radio-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const name = this.querySelector('input[type="radio"]').name;
+                document.querySelectorAll(`input[name="${name}"]`).forEach(radio => {
+                    radio.closest('.radio-option').classList.remove('selected');
+                });
+                this.classList.add('selected');
+
+                if (name === 'shippingMethod') {
+                    const shippingCost = this.querySelector('.option-price').textContent;
+                    document.getElementById('shipping-cost').textContent = shippingCost;
+                    const subtotal = 1030000;
+                    const shippingValue = parseInt(shippingCost.replace(/[^0-9]/g, ''));
+                    const finalTotal = subtotal + shippingValue;
+                    document.getElementById('final-total').textContent = finalTotal.toLocaleString('fa-IR') + ' تومان';
+                }
+            });
+        });
+
+        document.getElementById('checkout-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            alert('سفارش شما با موفقیت ارسال شد! به درگاه پرداخت هدایت می‌شوید.');
+            // window.location.href = 'order-confirmation.html';
+        });
+
+    </script>
+
+</body>
+</html>

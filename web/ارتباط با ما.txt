@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تماس با ما - RAYNA</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل هدر */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        .header-actions a {
+            color: #333;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .header-actions a span {
+            font-size: 0.9rem;
+            margin-right: 5px;
+        }
+        .header-actions a:hover {
+            color: #007bff;
+        }
+        
+        /* ------------------- */
+        /* استایل اختصاصی صفحه تماس با ما */
+        /* ------------------- */
+        .contact-page {
+            padding: 60px 0;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        .page-header h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: #333;
+            margin: 0 0 15px 0;
+        }
+        .page-header p {
+            font-size: 1.2rem;
+            color: #6c757d;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .contact-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            margin-bottom: 60px;
+        }
+
+        .contact-form-column {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+        }
+        .contact-form-column h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            font-size: 1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.25);
+        }
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .submit-btn:hover {
+            background-color: #555;
+            transform: translateY(-2px);
+        }
+
+        .contact-info-column {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .info-card {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+        }
+        .info-card h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info-card h3 i {
+            color: #007bff;
+            font-size: 1.2rem;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            color: #555;
+        }
+        .info-item i {
+            color: #e74c3c;
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+        .info-item a {
+            color: #007bff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        .info-item a:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+        .social-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background-color: #f1f3f5;
+            color: #555;
+            border-radius: 50%;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+        .social-links a:hover {
+            background-color: #007bff;
+            color: #fff;
+            transform: translateY(-3px);
+        }
+
+        /* --- بخش نقشه --- */
+        .map-section {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            margin-bottom: 60px;
+        }
+        .map-section iframe {
+            width: 100%;
+            height: 400px;
+            border: 0;
+            border-radius: 8px;
+        }
+
+        /* --- بخش سوالات متداول --- */
+        .faq-section {
+            background-color: #ffffff;
+            padding: 60px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+        }
+        .faq-section h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 40px;
+        }
+        .faq-item {
+            border-bottom: 1px solid #e9ecef;
+        }
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+        .faq-question {
+            padding: 20px 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            transition: color 0.3s ease;
+        }
+        .faq-question:hover {
+            color: #007bff;
+        }
+        .faq-question i {
+            transition: transform 0.3s ease;
+        }
+        .faq-item.active .faq-question i {
+            transform: rotate(180deg);
+        }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out, padding 0.4s ease-out;
+            color: #6c757d;
+            line-height: 1.8;
+        }
+        .faq-item.active .faq-answer {
+            max-height: 500px;
+            padding: 0 0 20px 0;
+        }
+
+        /* --- اعلان (Toast) --- */
+        .toast {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+        @media (max-width: 992px) {
+            .contact-container {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+        @media (max-width: 768px) {
+            .contact-page { padding: 40px 0; }
+            .page-header h1 { font-size: 2.2rem; }
+            .page-header p { font-size: 1.1rem; }
+            .contact-form-column, .info-card, .map-section { padding: 25px; }
+            .faq-section { padding: 40px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- هدر سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <nav class="header-actions">
+                    <a href="index.html" title="فروشگاه">
+                        <i class="fas fa-store"></i>
+                        <span>فروشگاه</span>
+                    </a>
+                    <a href="wishlist.html" title="علاقه مندی ها">
+                        <i class="fas fa-heart"></i>
+                        <span>علاقه مندی‌ها</span>
+                    </a>
+                    <a href="cart.html" title="سبد خرید">
+                        <i class="fas fa-shopping-bag"></i>
+                        <span>۰</span>
+                        <span>تومان</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- محتوای اصلی صفحه تماس با ما -->
+    <main class="contact-page">
+        <div class="container">
+            
+            <!-- عنوان صفحه -->
+            <div class="page-header">
+                <h1>با ما در ارتباط باشید</h1>
+                <p>ما همیشه آماده پاسخگویی به سوالات شما هستیم. لطفاً از طریق یکی از راه‌های زیر با ما تماس بگیرید.</p>
+            </div>
+
+            <div class="contact-container">
+                
+                <!-- ستون فرم تماس -->
+                <section class="contact-form-column">
+                    <h2>ارسال پیام</h2>
+                    <form id="contact-form">
+                        <div class="form-group">
+                            <label for="name">نام و نام خانوادگی *</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">ایمیل *</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="subject">موضوع پیام *</label>
+                            <input type="text" id="subject" name="subject" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">متن پیام *</label>
+                            <textarea id="message" name="message" required></textarea>
+                        </div>
+                        <button type="submit" class="submit-btn">ارسال پیام</button>
+                    </form>
+                </section>
+
+                <!-- ستون اطلاعات تماس -->
+                <section class="contact-info-column">
+                    <div class="info-card">
+                        <h3><i class="fas fa-phone-alt"></i> تماس تلفنی</h3>
+                        <div class="info-item">
+                            <i class="fas fa-phone"></i>
+                            <span>۰۲۱-۸۸۸۸۷۷۷۷</span>
+                        </div>
+                        <p>شنبه تا جمعه، از ساعت ۹ صبح تا ۶ بعد از ظهر</p>
+                    </div>
+
+                    <div class="info-card">
+                        <h3><i class="fas fa-envelope"></i> ایمیل</h3>
+                        <div class="info-item">
+                            <i class="fas fa-envelope"></i>
+                            <span><a href="mailto:support@rayna.com">support@rayna.com</a></span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <h3><i class="fas fa-map-marker-alt"></i> آدرس فروشگاه</h3>
+                        <div class="info-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>تهران، خیابان ولیعصر، پلاک ۱۲۲</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <h3><i class="fas fa-share-alt"></i> شبکه‌های اجتماعی</h3>
+                        <div class="social-links">
+                            <a href="#" title="اینستاگرام"><i class="fab fa-instagram"></i></a>
+                            <a href="#" title="تلگرام"><i class="fab fa-telegram"></i></a>
+                            <a href="#" title="توییتر"><i class="fab fa-twitter"></i></a>
+                            <a href="#" title="لینکدین"><i class="fab fa-linkedin"></i></a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- بخش نقشه -->
+            <section class="map-section">
+                <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3932.8864182!2d-51.2448144494767!3d35.711655416023!2m3!1f0x0x0:0x0!3m2!1i1024!2i768!4f13.1!2m1!1e0!2m0!2m0!5e0!3m2!1sen!2sIR!4v168635424638!5m2!2sen!2sIR!4f1" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </section>
+
+            <!-- بخش سوالات متداول -->
+            <section class="faq-section">
+                <h2>سوالات متداول</h2>
+                
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>چگونه می‌توانم سفارش خود را پیگیری کنم؟</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>پس از ثبت سفارش، یک شماره پیگیری منحصر به فرد برای شما ارسال می‌شود. شما همچنین می‌توانید با وارد کردن این شماره در بخش "پیگیری سفارش" در حساب کاربری خود، از وضعیت دقیق سفارش مطلع شوید.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>آیا امکان بازگرداندن کالا وجود دارد؟</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>بله، شما می‌توانید تا ۷ روز پس از دریافت کالا، درخواست بازگردشت خود را از طریق حساب کاربری یا تماس با پشتیبانی ثبت کنید. کالا باید بسته‌بندی اصلی و سالم داشته باشد.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>روش‌های پرداخت شما چیست؟</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>ما تمام کارت‌های بانکی عضو شاپ را می‌پذیریم. همچنین شما می‌توانید در محل سفارش خود هزینه را به صورت نقدی پرداخت کنید.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // --- مدیریت فرم تماس ---
+            const contactForm = document.getElementById('contact-form');
+            contactForm.addEventListener('submit', function(event) {
+                event.preventDefault(); // جلوگیری از ارسال واقعی فرم
+
+                // در اینجا می‌توانید منطق ارسال فرم (مثلاً با fetch به یک API) را قرار دهید
+                // برای نمایش دمو، ما فقط یک اعلان نمایش می‌دهیم
+                showToast('پیام شما با موفقیت ارسال شد! در اسرع وقت با شما تماس خواهیم گرفت.');
+
+                // پاک کردن فرم پس از ارسال
+                contactForm.reset();
+            });
+
+            // --- مدیریت بخش سوالات متداول (آکاردئون) ---
+            const faqItems = document.querySelectorAll('.faq-item');
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question');
+                question.addEventListener('click', () => {
+                    const isActive = item.classList.contains('active');
+                    
+                    // بستن همه آیتم‌های دیگر
+                    faqItems.forEach(otherItem => {
+                        if (otherItem !== item) {
+                            otherItem.classList.remove('active');
+                        }
+                    });
+
+                    // تغییر وضعیت آیتم فعلی
+                    item.classList.toggle('active');
+                });
+            });
+
+            // --- تابع اعلان (Toast) ---
+            function showToast(message) {
+                const toastEl = document.createElement('div');
+                toastEl.className = 'toast';
+                toastEl.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+                document.body.appendChild(toastEl);
+                
+                setTimeout(() => toastEl.classList.add('show'), 10);
+                
+                setTimeout(() => {
+                    toastEl.classList.remove('show');
+                    setTimeout(() => {
+                        document.body.removeChild(toastEl);
+                    }, 500);
+                }, 3000);
+            }
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>صفحه محصول لباس - RAYNA</title>
+    <style>
+        /* استایل‌های کلی صفحه */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            background-color: #f8f8f8;
+        }
+
+        /* استایل‌های هدر سایت */
+        .site-header {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            padding: 20px 40px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e0e0e0;
+            gap: 20px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .icon-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .icon-button:hover {
+            transform: scale(1.1);
+        }
+
+        .header-icon {
+            width: 24px;
+            height: 24px;
+            fill: none;
+            stroke: #333;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .logo-link .logo {
+            height: 50px;
+            display: block;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .logo-link:hover .logo {
+            opacity: 0.8;
+        }
+
+        .search-form {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 5px 15px;
+            width: 100%;
+        }
+
+        .search-input {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .search-input::placeholder {
+            color: #aaa;
+        }
+
+        .search-button-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            margin-left: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-label {
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin-right: 8px;
+        }
+
+        .header-separator {
+            width: 1px;
+            height: 24px;
+            background-color: #d0d0d0;
+            margin: 0 15px;
+        }
+
+        /* استایل‌های نوار دسته‌بندی */
+        .category-nav {
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0 40px;
+        }
+
+        .category-nav ul {
+            display: flex;
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .category-nav ul::-webkit-scrollbar {
+            display: none;
+        }
+
+        .category-nav li {
+            display: flex;
+            align-items: center;
+        }
+
+        .category-nav li a {
+            display: block;
+            color: #555;
+            text-align: center;
+            padding: 15px 20px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .category-nav li a:hover {
+            background-color: #e0e0e0;
+            color: #000;
+            border-radius: 5px;
+        }
+
+        .category-separator {
+            width: 1px;
+            height: 20px;
+            background-color: #d0d0d0;
+        }
+
+        /* استایل‌های بخش اصلی محصول */
+        .product-page-wrapper {
+            display: flex;
+            flex-direction: row-reverse;
+            gap: 30px;
+            padding: 40px;
+            max-width: 1400px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+
+        /* بخش گزینه‌های محصول در سمت راست */
+        .product-options {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .product-options p {
+            font-size: 14px;
+            color: #555;
+            margin: 0;
+        }
+
+        .product-options h4 {
+            font-size: 16px;
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+
+        .size-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .size-option {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            font-size: 14px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .size-option:hover {
+            border-color: #333;
+        }
+
+        .size-option.active {
+            background-color: #333;
+            color: #fff;
+            border-color: #333;
+        }
+
+        .color-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .color-swatch {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px #ccc;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .color-swatch.active {
+            box-shadow: 0 0 0 2px #333;
+        }
+
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            gap: 5px;
+        }
+
+        .quantity-btn {
+            background: #ffffff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 42px;
+            height: 42px;
+            cursor: pointer;
+            font-size: 22px;
+            color: #555;
+            transition: background-color 0.2s, color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .quantity-btn:hover {
+            background-color: #f0f0f0;
+        }
+
+        #quantity-value {
+            min-width: 45px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            padding: 0;
+            border: none;
+            background: transparent;
+        }
+
+        .price-separator {
+            width: 100%;
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 15px 0;
+        }
+
+        .price-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .price-label {
+            font-size: 18px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .price-display {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .add-to-cart-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+
+        .add-to-cart-button:hover {
+            background-color: #218838;
+        }
+
+        /* بخش اطلاعات محصول در ستون وسط */
+        .product-details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-right: 1px solid #e0e0e0;
+            padding-right: 30px;
+        }
+
+        .product-details h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        .product-features {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .product-features li {
+            font-size: 14px;
+            color: #555;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .product-features li:last-child {
+            border-bottom: none;
+        }
+
+        .product-features li::before {
+            content: '✓';
+            color: #28a745;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        /* بخش گالری تصاویر در سمت چپ */
+        .product-image-gallery {
+            flex: 2;
+            display: flex;
+            flex-direction: row-reverse;
+            gap: 0;
+        }
+
+        .main-image-container {
+            flex: 2;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        .main-image-container img {
+            max-width: 100%;
+            max-height: 500px;
+            display: block;
+        }
+
+        .thumbnail-gallery {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .thumbnail-gallery img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.3s, opacity 0.3s;
+        }
+
+        .thumbnail-gallery img:hover {
+            opacity: 0.8;
+        }
+
+        .thumbnail-gallery img.active {
+            border-color: #007bff;
+        }
+        
+        /* استایل برای نوتیفیکیشن */
+        #cart-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #28a745;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+            pointer-events: none;
+        }
+
+        #cart-notification.show {
+            opacity: 1;
+        }
+
+        /* استایل برای بخش توضیحات محصول (با عرض کامل و شیک) */
+        .product-description-full-width {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 40px 50px; /* پدینگ بیشتر برای فضای داخلی */
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); /* سایه کمی قوی‌تر */
+            border-top: 3px solid #28a745; /* خط رنگی بالای کادر برای جذابیت */
+        }
+
+        .product-description-full-width h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin: 0 0 25px 0;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eeeeee; /* خط جداکننده زیر عنوان */
+        }
+
+        .description-icon {
+            width: 24px;
+            height: 24px;
+            stroke: #28a745; /* رنگ آیکون هماهنگ با سایت */
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .product-description-full-width p {
+            font-size: 15px;
+            color: #555;
+            line-height: 1.9;
+            text-align: justify;
+        }
+
+        /* استایل برای بخش محصولات مرتبط */
+        .related-products-section {
+            max-width: 1400px;
+            margin: 40px auto;
+            padding: 0 40px;
+        }
+
+        .related-products-section h2 {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .related-products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .related-product-card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .related-product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        }
+
+        .related-product-card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+        }
+
+        .related-product-card h4 {
+            font-size: 16px;
+            color: #333;
+            margin: 15px 10px 5px 10px;
+        }
+
+        .related-product-card p {
+            font-size: 15px;
+            font-weight: bold;
+            color: #555;
+            margin: 5px 10px 20px 10px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- نوتیفیکیشن افزودن به سبد خرید -->
+    <div id="cart-notification">محصول با موفقیت به سبد خرید اضافه شد!</div>
+
+    <!-- بخش بالای سایت (هدر) -->
+    <header class="site-header">
+        <!-- لوگو در سمت راست -->
+        <a href="/" class="logo-link">
+            <img src="https://z-cdn-media.chatglm.cn/files/225eefce-7112-4e5c-b931-abd9095a0b81_87.jpg?auth_key=1864054990-64c6088293d14e25a34126af016dd2b5-0-0584c80d4d6e04760ebd43ea76d3c971" alt="لوگو RAYNA" class="logo">
+        </a>
+
+        <!-- جعبه جستجو که کشیده شده -->
+        <form class="search-form" action="/search" method="get">
+            <button type="submit" class="search-button-icon" aria-label="جستجو">
+                <svg class="header-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+            <input type="text" class="search-input" placeholder="جست و جو میان هزاران محصول و برند متنوع....">
+        </form>
+
+        <!-- کانتینر سمت راست: آیکون‌ها -->
+        <div class="header-actions">
+            <!-- آیکون لیست علاقه مندی ها با متن -->
+            <button class="icon-button" aria-label="لیست علاقه‌مندی‌ها">
+                <svg class="header-icon" viewBox="0 0 24 24">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span class="icon-label">علاقه مندی ها</span>
+            </button>
+
+            <!-- خط جداکننده اول -->
+            <div class="header-separator"></div>
+
+            <!-- آیکون ورود یا عضویت با متن -->
+            <button class="icon-button" aria-label="ورود یا عضویت">
+                <svg class="header-icon" viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span class="icon-label">ورود یا عضویت</span>
+            </button>
+
+            <!-- خط جداکننده دوم -->
+            <div class="header-separator"></div>
+
+            <!-- آیکون سبد خرید با متن "0 تومان" -->
+            <button class="icon-button" aria-label="سبد خرید">
+                <svg class="header-icon" viewBox="0 0 24 24">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+                <span class="icon-label" id="cart-total-price">0 تومان</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- نوار دسته‌بندی نهایی -->
+    <nav class="category-nav">
+        <ul>
+            <li><a href="#">زنانه</a></li>
+            <li><a href="#">مردانه</a></li>
+            <!-- خط جداکننده -->
+            <li><div class="category-separator"></div></li>
+            <!-- آیتم‌های جدید بعد از خط -->
+            <li><a href="#">لباس</a></li>
+            <li><a href="#">اکسسوری</a></li>
+            <li><a href="#">کیف</a></li>
+            <li><a href="#">کفش</a></li>
+            <li><a href="#">جوراب</a></li>
+            <li><a href="#">کلاه و شال گردن</a></li>
+            <li><a href="#">شال و روسری</a></li>
+            <li><a href="#">باکس</a></li>
+        </ul>
+    </nav>
+
+    <!-- بخش اصلی محصول با چیدمان جدید -->
+    <main class="product-page-wrapper">
+        <!-- بخش گزینه‌های محصول در سمت راست -->
+        <section class="product-options">
+            <p><strong>شناسه محصول:</strong> RAYNA-BH-001</p>
+            <p><strong>دسته بندی:</strong> زنانه > پیراهن</p>
+            
+            <div class="size-selector">
+                <h4>انتخاب سایز:</h4>
+                <div class="size-options">
+                    <button class="size-option" data-size="S" data-price="530000">S</button>
+                    <button class="size-option" data-size="M" data-price="540000">M</button>
+                    <button class="size-option active" data-size="L" data-price="550000">L</button>
+                    <button class="size-option" data-size="XL" data-price="560000">XL</button>
+                </div>
+            </div>
+
+            <div class="color-selector">
+                <h4>انتخاب رنگ:</h4>
+                <div class="color-options">
+                    <div class="color-swatch active" data-color="khaki" style="background-color: #F0E68C;" title="کرم"></div>
+                    <div class="color-swatch" data-color="black" style="background-color: #000000;" title="مشکی"></div>
+                    <div class="color-swatch" data-color="skyblue" style="background-color: #87CEEB;" title="آبی آسمانی"></div>
+                </div>
+            </div>
+
+            <div class="quantity-selector">
+                <!-- این فیلد مخفی برای ارسال مقدار تعداد در فرم استفاده می‌شود -->
+                <input type="hidden" id="quantity" name="quantity" value="1">
+                <button class="quantity-btn minus">-</button>
+                <span id="quantity-value">1</span>
+                <button class="quantity-btn plus">+</button>
+            </div>
+
+            <!-- خط جداکننده و قیمت محصول -->
+            <div class="price-separator hidden"></div>
+            <div class="price-container hidden">
+                <span class="price-label">قیمت کل:</span>
+                <p class="price-display">۰ تومان</p>
+            </div>
+
+            <button class="add-to-cart-button">افزودن به سبد خرید</button>
+        </section>
+
+        <!-- بخش اطلاعات محصول در ستون وسط -->
+        <section class="product-details">
+            <h1>پیراهن زنانه RAYNA مدل بهاری</h1>
+            <ul class="product-features">
+                <li>جنس: پنبه‌ای نرم و خنک</li>
+                <li>مدل: یقه اسکی، آستین کوتاه</li>
+                <li>مناسب فصل: بهار و تابستان</li>
+                <li>قابل شستشو با دست و ماشین لباسشویی</li>
+                <li>کشیده در قسمت کمر برای فرم بهتر</li>
+            </ul>
+        </section>
+
+        <!-- بخش گالری تصاویر در سمت چپ -->
+        <section class="product-image-gallery">
+            <div class="main-image-container">
+                <img id="main-product-image" src="https://z-cdn-media.chatglm.cn/files/51fe2d09-ed10-432e-b34f-ec9ff8c7a31e_pasted_image_1764065504809.png?auth_key=1864065521-74dbeafadfe84c60910a9c4bef0a9f62-0-a815a372dfd380c0fb337d36aba6d5a0" alt="تصویر اصلی محصول">
+            </div>
+            <div class="thumbnail-gallery">
+                <img src="https://z-cdn-media.chatglm.cn/files/51fe2d09-ed10-432e-b34f-ec9ff8c7a31e_pasted_image_1764065504809.png?auth_key=1864065521-74dbeafadfe84c60910a9c4bef0a9f62-0-a815a372dfd380c0fb337d36aba6d5a0" alt="تصویر محصول ۱" class="thumbnail-image active">
+                <img src="https://picsum.photos/id/20/100/100" alt="تصویر محصول ۲" class="thumbnail-image">
+                <img src="https://picsum.photos/id/30/100/100" alt="تصویر محصول ۳" class="thumbnail-image">
+                <img src="https://picsum.photos/id/40/100/100" alt="تصویر محصول ۴" class="thumbnail-image">
+            </div>
+        </section>
+    </main>
+
+    <!-- بخش جدید توضیحات محصول با عرض کامل و شیک -->
+    <section class="product-description-full-width">
+        <h3>
+            <svg class="description-icon" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14,2 14,8 20,8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10,9 9,9 8,9"></polyline>
+            </svg>
+            توضیحات محصول
+        </h3>
+        <p>
+            با فرارسیدن فصل بهار، مجموعه RAYNA پیراهن مدل "بهاری" را معرفی می‌کند؛ طراحی‌ای که الهام گرفته از طراوت و سرزندگی طبیعت است. این پیراهن با استفاده از بهترین الیاف پنبه‌ای، حس نرمی و خنکی را در طول روز برای شما به ارمغان می‌آورد. یقه اسکی کلاسیک در کنار آستین‌های کوتاه، استایلی راحت و در عین حال شیک برای موقعیت‌های مختلف فراهم می‌کند. چه یک روز کاری پر مشغله داشته باشید و چه یک دورهمی دوستانه در فضای باز، این پیراهن انتخابی هوشمندانه برای به نمایش گذاشتن سلیقه شماست. برش دقیق و دوخت تمیز، ضامن ماندگاری و زیبایی این محصول در طول زمان خواهد بود.
+        </p>
+    </section>
+
+    <!-- بخش جدید محصولات مرتبط -->
+    <section class="related-products-section">
+        <h2>محصولات مرتبط</h2>
+        <div class="related-products-grid">
+            <div class="related-product-card">
+                <img src="https://picsum.photos/id/101/300/400" alt="محصول مرتبط ۱">
+                <h4>بلوز زنانه کلاهدار</h4>
+                <p>۴۸۰,۰۰۰ تومان</p>
+            </div>
+            <div class="related-product-card">
+                <img src="https://picsum.photos/id/102/300/400" alt="محصول مرتبط ۲">
+                <h4>شلوار کتان گشاد</h4>
+                <p>۶۲۰,۰۰۰ تومان</p>
+            </div>
+            <div class="related-product-card">
+                <img src="https://picsum.photos/id/103/300/400" alt="محصول مرتبط ۳">
+                <h4>مانتو نخی آستین پفی</h4>
+                <p>۷۵۰,۰۰۰ تومان</p>
+            </div>
+            <div class="related-product-card">
+                <img src="https://picsum.photos/id/104/300/400" alt="محصول مرتبط ۴">
+                <h4>تاپ حریر ساده</h4>
+                <p>۳۹۰,۰۰۰ تومان</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- جاوا اسکریپت برای تعامل گالری و گزینه‌ها -->
+    <script>
+        // --- تعامل گالری تصاویر ---
+        const thumbnails = document.querySelectorAll('.thumbnail-image');
+        const mainImage = document.getElementById('main-product-image');
+
+        thumbnails.forEach(thumbnail => {
+            thumbnail.addEventListener('click', function() {
+                mainImage.src = this.src;
+                thumbnails.forEach(thumb => thumb.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // --- منطق قیمت و سبد خرید ---
+        const CART_KEY = 'rayna_shopping_cart';
+        const sizeOptions = document.querySelectorAll('.size-option');
+        const colorSwatches = document.querySelectorAll('.color-swatch');
+        const minusBtn = document.querySelector('.quantity-btn.minus');
+        const plusBtn = document.querySelector('.quantity-btn.plus');
+        const quantityValueSpan = document.getElementById('quantity-value');
+        const quantityInput = document.getElementById('quantity');
+        const priceSeparator = document.querySelector('.price-separator');
+        const priceContainer = document.querySelector('.price-container');
+        const priceDisplay = document.querySelector('.price-display');
+        const addToCartBtn = document.querySelector('.add-to-cart-button');
+        const notification = document.getElementById('cart-notification');
+        const cartTotalPriceElement = document.getElementById('cart-total-price');
+
+        let selectedSize = 'L';
+        let selectedColor = 'khaki';
+        let quantity = 1;
+        let currentUnitPrice = 550000; // قیمت پیش‌فرض برای سایز L
+
+        // تابع برای گرفتن سبد خرید از localStorage
+        function getCart() {
+            const cart = localStorage.getItem(CART_KEY);
+            return cart ? JSON.parse(cart) : [];
+        }
+
+        // تابع برای ذخیره سبد خرید در localStorage
+        function saveCart(cart) {
+            localStorage.setItem(CART_KEY, JSON.stringify(cart));
+        }
+
+        // تابع برای فرمت‌سازی قیمت به ریال
+        function formatPrice(price) {
+            return price.toLocaleString('fa-IR') + ' تومان';
+        }
+
+        // تابع برای به‌روزرسانی نمایش قیمت در هدر
+        function updateCartHeader() {
+            const cart = getCart();
+            const grandTotal = cart.reduce((total, item) => total + item.totalPrice, 0);
+            cartTotalPriceElement.textContent = formatPrice(grandTotal);
+        }
+
+        // تابع برای به‌روزرسانی نمایش قیمت محصول
+        function updatePriceDisplay() {
+            const totalPrice = currentUnitPrice * quantity;
+            priceDisplay.textContent = formatPrice(totalPrice);
+            priceSeparator.classList.remove('hidden');
+            priceContainer.classList.remove('hidden');
+        }
+
+        // تابع برای نمایش نوتیفیکیشن
+        function showNotification(message) {
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000); // مخفی شدن بعد از ۳ ثانیه
+        }
+
+        // --- تعامل انتخاب سایز ---
+        sizeOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                sizeOptions.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                selectedSize = this.dataset.size;
+                currentUnitPrice = parseInt(this.dataset.price);
+                updatePriceDisplay();
+            });
+        });
+
+        // --- تعامل انتخاب رنگ ---
+        colorSwatches.forEach(swatch => {
+            swatch.addEventListener('click', function() {
+                colorSwatches.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                selectedColor = this.dataset.color;
+                updatePriceDisplay();
+            });
+        });
+
+        // --- تعامل انتخاب‌کننده تعداد ---
+        minusBtn.addEventListener('click', () => {
+            if (quantity > 1) {
+                quantity--;
+                quantityValueSpan.textContent = quantity;
+                quantityInput.value = quantity;
+                updatePriceDisplay();
+            }
+        });
+
+        plusBtn.addEventListener('click', () => {
+            if (quantity < 99) {
+                quantity++;
+                quantityValueSpan.textContent = quantity;
+                quantityInput.value = quantity;
+                updatePriceDisplay();
+            }
+        });
+
+        // --- تعامل افزودن به سبد خرید ---
+        addToCartBtn.addEventListener('click', () => {
+            const product = {
+                id: 'RAYNA-BH-001', // شناسه یکتا برای محصول
+                name: 'پیراهن زنانه RAYNA مدل بهاری',
+                size: selectedSize,
+                color: selectedColor,
+                quantity: quantity,
+                unitPrice: currentUnitPrice,
+                totalPrice: currentUnitPrice * quantity
+            };
+
+            // گرفتن سبد فعلی و اضافه کردن محصول جدید
+            const cart = getCart();
+            cart.push(product);
+            saveCart(cart);
+
+            // به‌روزرسانی UI
+            updateCartHeader();
+            showNotification('محصول با موفقیت به سبد خرید اضافه شد!');
+        });
+
+        // بررسی وضعیت اولیه و نمایش قیمت
+        updatePriceDisplay();
+        updateCartHeader(); // به‌روزرسانی سبد خرید در هدر در اولین بارگذاری
+
+    </script>
+
+</body>
+</html>

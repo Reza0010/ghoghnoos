@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لباس زنانه - RAYNA</title>
+    
+    <!-- فونت فارسی -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- آیکون‌ها -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ------------------- */
+        /* تنظیمات کلی و فونت */
+        /* ------------------- */
+        body {
+            margin: 0;
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ------------------- */
+        /* استایل هدر */
+        /* ------------------- */
+        header {
+            background-color: #ffffff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        .logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+        }
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 20px;
+            border: 1px solid #e0e0e0;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            flex-grow: 1;
+            max-width: 500px;
+        }
+        .search-bar:focus-within {
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.25);
+        }
+        .search-bar input {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 1rem;
+            font-family: 'Vazirmatn', sans-serif;
+            color: #333;
+        }
+        .search-bar input::placeholder {
+            color: #999;
+        }
+        .search-bar i {
+            color: #6c757d;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            margin-left: 10px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+        .header-actions a {
+            color: #333;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+        .header-actions a span {
+            font-size: 0.9rem;
+            margin-right: 5px;
+        }
+        .header-actions a:hover {
+            color: #007bff;
+        }
+        
+        /* ------------------- */
+        /* استایل نوار دسته‌بندی اصلی */
+        /* ------------------- */
+        .category-nav {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .category-nav ul {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+        .category-nav ul li a {
+            display: block;
+            padding: 15px 20px;
+            color: #555;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            font-size: 1.1rem;
+        }
+        .category-nav ul li a:hover {
+            background-color: #e9ecef;
+            color: #007bff;
+        }
+
+        /* ------------------- */
+        /* استایل اختصاصی صفحه لیست محصولات */
+        /* ------------------- */
+        .listing-page {
+            padding: 40px 0;
+        }
+        .listing-container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        /* --- اعلان (Toast Notification) --- */
+        .toast {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* --- ستون فیلترها (مدرن) --- */
+        .filter-sidebar {
+            flex: 0 0 270px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+        .filter-widget {
+            border-bottom: 1px solid #f1f3f5;
+            overflow: hidden;
+        }
+        .filter-widget:last-child {
+            border-bottom: none;
+        }
+        .filter-header {
+            padding: 15px 20px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        .filter-header:hover {
+            background-color: #f8f9fa;
+        }
+        .filter-header i {
+            transition: transform 0.3s ease;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        .filter-widget.collapsed .filter-header i {
+            transform: rotate(180deg);
+        }
+        .filter-content {
+            padding: 0 20px;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+        }
+        .filter-widget.collapsed .filter-content {
+            max-height: 0;
+            padding: 0 20px;
+        }
+
+        /* --- استایل‌های خاص هر فیلتر --- */
+        .filter-widget ul {
+            list-style: none;
+            padding: 15px 0;
+            margin: 0;
+        }
+        .filter-widget ul li {
+            margin-bottom: 12px;
+        }
+        .filter-widget ul li label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: #555;
+            transition: color 0.2s;
+        }
+        .filter-widget ul li label:hover {
+            color: #333;
+        }
+        .filter-widget ul li input[type="checkbox"] {
+            margin-left: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        /* --- فیلتر رنگ (سواچ) --- */
+        .color-swatches {
+            padding: 15px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+        .color-swatch.selected {
+            border-color: #333;
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333;
+        }
+
+        /* --- فیلتر قیمت (اسلایدر و دکمه) --- */
+        .price-slider-container {
+            padding: 15px 0;
+        }
+        .price-slider {
+            position: relative;
+            height: 5px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .price-slider-progress {
+            height: 100%;
+            background-color: #007bff;
+            border-radius: 5px;
+            position: absolute;
+            right: 0; /* از راست شروع می‌شود */
+            left: 0;
+        }
+        .price-slider input[type="range"] {
+            position: absolute;
+            width: 100%;
+            height: 5px;
+            background: none;
+            pointer-events: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .price-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: #007bff;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .price-slider input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        .price-range-display {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .price-input-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .price-btn {
+            background-color: #e9ecef;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #495057;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .price-btn:hover {
+            background-color: #dee2e6;
+            border-color: #adb5bd;
+        }
+        .price-btn:active {
+            transform: scale(0.95);
+        }
+        .price-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        #price-min-value, #price-max-value {
+            min-width: 70px;
+            text-align: center;
+            font-weight: 500;
+            color: #333;
+        }
+
+        /* --- دکمه پاک کردن همه --- */
+        .clear-filters-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0 0 12px 12px;
+            color: #6c757d;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .clear-filters-btn:hover {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .clear-filters-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* --- ستون اصلی محصولات --- */
+        .main-content {
+            flex-grow: 1;
+        }
+        
+        /* --- تگ‌های فیلتر فعال --- */
+        .active-filters-container {
+            background-color: #ffffff;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            min-height: 60px;
+        }
+        .active-filter-pill {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .active-filter-pill i {
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .active-filter-pill i:hover {
+            color: #333;
+        }
+
+        .listing-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+        .listing-results-count {
+            font-size: 1rem;
+            color: #555;
+        }
+        .listing-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .listing-controls select {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-size: 0.9rem;
+        }
+        .view-toggle {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .view-toggle button {
+            background: #fff;
+            border: none;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+            font-size: 1rem;
+            color: #6c757d;
+        }
+        .view-toggle button.active {
+            background-color: #333;
+            color: #fff;
+        }
+
+        /* --- گرید محصولات --- */
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 25px;
+        }
+        .product-card {
+            background-color: #fff;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .product-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 25px rgba(0,0,0,0.12);
+        }
+        .product-card.hidden {
+            display: none;
+        }
+        .product-card .badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #e74c3c;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            z-index: 10;
+        }
+        .product-card .image-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .product-card img {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.4s ease;
+        }
+        .product-card:hover img {
+            transform: scale(1.08);
+        }
+        .product-card .card-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+        .product-card h4 {
+            font-size: 1rem;
+            margin: 0 0 10px;
+            color: #333;
+            font-weight: 500;
+        }
+        .product-card .price {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        .product-card .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+        }
+        .add-to-cart-btn {
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Vazirmatn', sans-serif;
+            font-weight: 500;
+            transition: background-color 0.3s ease, transform 0.2s;
+            font-size: 0.9rem;
+        }
+        .add-to-cart-btn:hover {
+            background-color: #555;
+            transform: translateY(-2px);
+        }
+        .wishlist-icon {
+            cursor: pointer;
+            color: #ccc;
+            font-size: 1.3rem;
+            transition: color 0.3s ease, transform 0.2s;
+        }
+        .wishlist-icon:hover {
+            transform: scale(1.1);
+        }
+        .wishlist-icon.active {
+            color: #e74c3c;
+        }
+        
+        /* --- حالت نمایش لیست --- */
+        .products-list {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .products-list.active {
+            display: flex;
+        }
+        .product-card.list-view {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            text-align: right;
+            padding: 20px;
+        }
+        .product-card.list-view .image-container {
+            width: 200px;
+            height: 200px;
+            flex-shrink: 0;
+            margin-left: 20px;
+        }
+        .product-card.list-view img {
+            width: 100%;
+            height: 100%;
+        }
+        .product-card.list-view .card-body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .product-card.list-view .actions {
+            margin-top: 0;
+        }
+
+
+        /* --- صفحه‌بندی --- */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 50px;
+        }
+        .pagination a, .pagination span {
+            padding: 12px 18px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            color: #555;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .pagination a:hover {
+            background-color: #f8f9fa;
+            border-color: #007bff;
+            color: #007bff;
+        }
+        .pagination .current {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: #fff;
+        }
+
+        /* ========================= */
+        /* ====== استایل‌های واکنش‌گرا (Responsive) ====== */
+        /* ========================= */
+        @media (max-width: 992px) {
+            .listing-container { flex-direction: column; }
+            .filter-sidebar {
+                flex: 1;
+                width: 100%;
+                position: fixed;
+                top: 0;
+                right: -100%;
+                height: 100vh;
+                z-index: 1001;
+                overflow-y: auto;
+                transition: right 0.4s ease;
+                border-radius: 0;
+            }
+            .filter-sidebar.active { right: 0; box-shadow: -5px 0 15px rgba(0,0,0,0.2); }
+            .main-content { order: -1; }
+            .listing-header { flex-direction: column; gap: 15px; align-items: flex-start; }
+            .listing-header .listing-controls { width: 100%; justify-content: space-between; }
+        }
+        @media (max-width: 768px) {
+            .products-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+            .product-card img { height: 220px; }
+            .listing-header { padding: 15px; }
+            .filter-sidebar { padding: 0; }
+            .filter-widget { border-bottom: 1px solid #f1f3f5; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- هدر سایت -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="https://z-cdn-media.chatglm.cn/files/27b083d3-41e6-4576-986e-a826e3f4f206_32342.jpg?auth_key=1863544098-57b16ddd4db5486498368ffed67e629a-0-3e6b9f95d4deaa7563bdcb14c2cc2244" alt="لوگو متنی RAYNA">
+                </div>
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="جست و جو میان هزاران محصول و برند متنوع....">
+                </div>
+                <nav class="header-actions">
+                    <a href="#" title="علاقه مندی ها">
+                        <i class="fas fa-heart"></i>
+                        <span>علاقه مندی‌ها</span>
+                    </a>
+                    <a href="#" title="ورود یا عضویت">
+                        <i class="fas fa-user"></i>
+                        <span>ورود یا عضویت</span>
+                    </a>
+                    <a href="#" title="سبد خرید">
+                        <i class="fas fa-shopping-bag"></i>
+                        <span>۰</span>
+                        <span>تومان</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- نوار دسته‌بندی اصلی -->
+    <nav class="category-nav">
+        <div class="container">
+            <ul>
+                <li><a href="#">زنانه</a></li>
+                <li><a href="#">مردانه</a></li>
+                <li><a href="#">لباس</a></li>
+                <li><a href="#">اکسسوری</a></li>
+                <li><a href="#">کیف و کفش</a></li>
+                <li><a href="#">جوراب</a></li>
+                <li><a href="#">کلاه و شال گردن</a></li>
+                <li><a href="#">شال و روسری</a></li>
+                <li><a href="#">باکس</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- محتوای اصلی صفحه لیست محصولات -->
+    <main class="listing-page">
+        <div class="container">
+            <div class="listing-container">
+                
+                <!-- ستون فیلترها (مدرن) -->
+                <aside class="filter-sidebar" id="filter-sidebar">
+                    <!-- فیلتر دسته‌بندی -->
+                    <div class="filter-widget">
+                        <div class="filter-header">
+                            <span>دسته‌بندی‌ها</span>
+                            <i class="fas fa-chevron-up"></i>
+                        </div>
+                        <div class="filter-content">
+                            <ul>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="category" value="mantoo"> مانتو</label></li>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="category" value="shalvar"> شلوار</label></li>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="category" value="blouse"> بلوز و تیشرت</label></li>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="category" value="shal"> شال و روسری</label></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- فیلتر برند -->
+                    <div class="filter-widget">
+                        <div class="filter-header">
+                            <span>برند</span>
+                            <i class="fas fa-chevron-up"></i>
+                        </div>
+                        <div class="filter-content">
+                            <ul>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="brand" value="rayna"> RAYNA</label></li>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="brand" value="zara"> ZARA</label></li>
+                                <li><label><input type="checkbox" class="filter-checkbox" data-filter="brand" value="hm"> H&M</label></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- فیلتر رنگ (سواچ) -->
+                    <div class="filter-widget">
+                        <div class="filter-header">
+                            <span>رنگ</span>
+                            <i class="fas fa-chevron-up"></i>
+                        </div>
+                        <div class="filter-content">
+                            <div class="color-swatches">
+                                <div class="color-swatch" style="background-color: #000000;" data-color="black" title="مشکی"></div>
+                                <div class="color-swatch" style="background-color: #FFFFFF; border: 1px solid #ddd;" data-color="white" title="سفید"></div>
+                                <div class="color-swatch" style="background-color: #F5DEB3;" data-color="cream" title="کرم"></div>
+                                <div class="color-swatch" style="background-color: #000080;" data-color="navy" title="سرمه‌ای"></div>
+                                <div class="color-swatch" style="background-color: #808080;" data-color="gray" title="طوسی"></div>
+                                <div class="color-swatch" style="background-color: #FFC0CB;" data-color="pink" title="صورتی"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- فیلتر قیمت (اسلایدر و دکمه) -->
+                    <div class="filter-widget">
+                        <div class="filter-header">
+                            <span>محدوده قیمت</span>
+                            <i class="fas fa-chevron-up"></i>
+                        </div>
+                        <div class="filter-content">
+                            <div class="price-slider-container">
+                                <div class="price-slider">
+                                    <div class="price-slider-progress"></div>
+                                    <input type="range" class="range-min" min="0" max="1000000" value="100000" step="10000">
+                                    <input type="range" class="range-max" min="0" max="1000000" value="800000" step="10000">
+                                </div>
+                                <div class="price-range-display">
+                                    <div class="price-input-group">
+                                        <span>از:</span>
+                                        <button type="button" class="price-btn" id="price-min-decrease">-</button>
+                                        <span id="price-min-value">۱۰۰,۰۰۰</span>
+                                        <button type="button" class="price-btn" id="price-min-increase">+</button>
+                                    </div>
+                                    <div class="price-input-group">
+                                        <span>تا:</span>
+                                        <button type="button" class="price-btn" id="price-max-decrease">-</button>
+                                        <span id="price-max-value">۸۰۰,۰۰۰</span>
+                                        <button type="button" class="price-btn" id="price-max-increase">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- دکمه پاک کردن همه -->
+                    <button class="clear-filters-btn" id="clear-filters-btn" disabled>پاک کردن همه فیلترها</button>
+                </aside>
+
+                <!-- ستون اصلی محصولات -->
+                <section class="main-content">
+                    <!-- تگ‌های فیلتر فعال -->
+                    <div class="active-filters-container" id="active-filters-container">
+                        <span style="color: #aaa;">فیلتری فعال نیست</span>
+                    </div>
+
+                    <!-- نوار ابزار بالای صفحه -->
+                    <div class="listing-header">
+                        <div class="listing-results-count">
+                            نمایش <span id="product-count">12</span> محصول
+                        </div>
+                        <div class="listing-controls">
+                            <!-- دکمه فیلتر برای موبایل -->
+                            <button class="view-toggle" id="mobile-filter-btn" style="display: none; padding: 10px 15px;">
+                                <i class="fas fa-filter"></i> فیلتر
+                            </button>
+                            <select name="sort">
+                                <option value="default">مرتب‌سازی: پیش‌فرض</option>
+                                <option value="popularity">محبوب‌ترین</option>
+                                <option value="newest">جدیدترین</option>
+                                <option value="price-low">ارزان‌ترین</option>
+                                <option value="price-high">گران‌ترین</option>
+                            </select>
+                            <div class="view-toggle">
+                                <button class="active" id="grid-view-btn" title="نمایش شبکه‌ای"><i class="fas fa-th"></i></button>
+                                <button id="list-view-btn" title="نمایش لیستی"><i class="fas fa-list"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- گرید محصولات -->
+                    <div class="products-grid" id="products-grid">
+                        <!-- محصولات با data-attributes برای فیلتر کردن -->
+                        <div class="product-card" data-category="mantoo" data-brand="rayna" data-color="black" data-price="450000">
+                            <span class="badge">جدید</span>
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat1/300/400.jpg" alt="مانتو کتی">
+                            </div>
+                            <div class="card-body">
+                                <h4>مانتو کتی کلاسیک</h4>
+                                <p class="price">۴۵۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="shalvar" data-brand="zara" data-color="black" data-price="290000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat2/300/400.jpg" alt="شلوار راحتی">
+                            </div>
+                            <div class="card-body">
+                                <h4>شلوار راحتی مشکی</h4>
+                                <p class="price">۲۹۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="blouse" data-brand="hm" data-color="cream" data-price="380000">
+                            <span class="badge">تخفیف</span>
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat3/300/400.jpg" alt="بلوز حریر">
+                            </div>
+                            <div class="card-body">
+                                <h4>بلوز حریر یقه‌هفت</h4>
+                                <p class="price">۳۸۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="mantoo" data-brand="rayna" data-color="white" data-price="350000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat4/300/400.jpg" alt="مانتو اسپرت">
+                            </div>
+                            <div class="card-body">
+                                <h4>مانتو اسپرت کوتاه</h4>
+                                <p class="price">۳۵۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="shalvar" data-brand="zara" data-color="cream" data-price="320000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat5/300/400.jpg" alt="شلوار کتان">
+                            </div>
+                            <div class="card-body">
+                                <h4>شلوار کتان دم‌پا</h4>
+                                <p class="price">۳۲۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="blouse" data-brand="hm" data-color="black" data-price="180000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat6/300/400.jpg" alt="تیشرت یقه‌گرد">
+                            </div>
+                            <div class="card-body">
+                                <h4>تیشرت یقه‌گرد ساده</h4>
+                                <p class="price">۱۸۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="shal" data-brand="rayna" data-color="white" data-price="250000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat7/300/400.jpg" alt="شال حریر">
+                            </div>
+                            <div class="card-body">
+                                <h4>شال حریر ابریشمی</h4>
+                                <p class="price">۲۵۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="mantoo" data-brand="zara" data-color="black" data-price="750000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat8/300/400.jpg" alt="مانتو مجلسی">
+                            </div>
+                            <div class="card-body">
+                                <h4>مانتو مجلسی بلند</h4>
+                                <p class="price">۷۵۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="blouse" data-brand="hm" data-color="cream" data-price="490000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat9/300/400.jpg" alt="بلوز شلوارک">
+                            </div>
+                            <div class="card-body">
+                                <h4>ست بلوز و شلوارک</h4>
+                                <p class="price">۴۹۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="mantoo" data-brand="rayna" data-color="white" data-price="410000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat10/300/400.jpg" alt="سارافون">
+                            </div>
+                            <div class="card-body">
+                                <h4>سارافون تابستانی</h4>
+                                <p class="price">۴۱۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="blouse" data-brand="zara" data-color="black" data-price="360000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat11/300/400.jpg" alt="شومیز">
+                            </div>
+                            <div class="card-body">
+                                <h4>شومیز گلدار</h4>
+                                <p class="price">۳۶۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-card" data-category="shalvar" data-brand="hm" data-color="cream" data-price="550000">
+                            <div class="image-container">
+                                <img src="https://picsum.photos/seed/cat12/300/400.jpg" alt="کاپشن">
+                            </div>
+                            <div class="card-body">
+                                <h4>کاپشن بهاری</h4>
+                                <p class="price">۵۵۰,۰۰۰ تومان</p>
+                                <div class="actions">
+                                    <button class="add-to-cart-btn">افزودن به سبد</button>
+                                    <i class="far fa-heart wishlist-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- حالت نمایش لیست (کپی شده از گرید) -->
+                    <div class="products-list" id="products-list"></div>
+
+                    <!-- صفحه‌بندی -->
+                    <div class="pagination">
+                        <a href="#"><i class="fas fa-chevron-right"></i></a>
+                        <a href="#">۱</a>
+                        <span class="current">۲</span>
+                        <a href="#">۳</a>
+                        <a href="#">۴</a>
+                        <a href="#">۵</a>
+                        <a href="#"><i class="fas fa-chevron-left"></i></a>
+                    </div>
+
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // --- عناصر اصلی ---
+        const filterSidebar = document.getElementById('filter-sidebar');
+        const productsGrid = document.getElementById('products-grid');
+        const productsList = document.getElementById('products-list');
+        const gridViewBtn = document.getElementById('grid-view-btn');
+        const listViewBtn = document.getElementById('list-view-btn');
+        const mobileFilterBtn = document.getElementById('mobile-filter-btn');
+        const productCount = document.getElementById('product-count');
+        const activeFiltersContainer = document.getElementById('active-filters-container');
+        const clearFiltersBtn = document.getElementById('clear-filters-btn');
+
+        // --- عناصر اسلایدر قیمت ---
+        const rangeMin = document.querySelector('.range-min');
+        const rangeMax = document.querySelector('.range-max');
+        const priceMinValue = document.getElementById('price-min-value');
+        const priceMaxValue = document.getElementById('price-max-value');
+        const priceSliderProgress = document.querySelector('.price-slider-progress');
+
+        // --- دکمه‌های کنترل قیمت ---
+        const priceMinDecreaseBtn = document.getElementById('price-min-decrease');
+        const priceMinIncreaseBtn = document.getElementById('price-min-increase');
+        const priceMaxDecreaseBtn = document.getElementById('price-max-decrease');
+        const priceMaxIncreaseBtn = document.getElementById('price-max-increase');
+        
+        const priceStep = 10000; // گام افزایش یا کاهش قیمت (۱۰ هزار تومان)
+
+        // --- وضعیت فیلترهای فعلی ---
+        let activeFilters = {
+            category: [],
+            brand: [],
+            color: null,
+            priceMin: 100000,
+            priceMax: 800000
+        };
+
+        // --- توابع کمکی ---
+        function showToast(message) {
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast';
+            toastEl.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+            document.body.appendChild(toastEl);
+            setTimeout(() => toastEl.classList.add('show'), 10);
+            setTimeout(() => {
+                toastEl.classList.remove('show');
+                setTimeout(() => document.body.removeChild(toastEl), 500);
+            }, 3000);
+        }
+
+        function updateProductCount() {
+            const visibleProducts = productsGrid.querySelectorAll('.product-card:not(.hidden)').length;
+            productCount.textContent = visibleProducts;
+        }
+        
+        function updateActiveFilterPills() {
+            activeFiltersContainer.innerHTML = ''; // پاک کردن تگ‌های قبلی
+            let hasAnyFilter = false;
+
+            // تگ برای دسته‌بندی‌ها
+            activeFilters.category.forEach(cat => {
+                hasAnyFilter = true;
+                const pill = document.createElement('span');
+                pill.className = 'active-filter-pill';
+                pill.innerHTML = `دسته‌بندی: ${cat} <i class="fas fa-times"></i>`;
+                pill.querySelector('i').addEventListener('click', () => removeFilter('category', cat));
+                activeFiltersContainer.appendChild(pill);
+            });
+
+            // تگ برای برندها
+            activeFilters.brand.forEach(b => {
+                hasAnyFilter = true;
+                const pill = document.createElement('span');
+                pill.className = 'active-filter-pill';
+                pill.innerHTML = `برند: ${b} <i class="fas fa-times"></i>`;
+                pill.querySelector('i').addEventListener('click', () => removeFilter('brand', b));
+                activeFiltersContainer.appendChild(pill);
+            });
+            
+            // تگ برای رنگ
+            if (activeFilters.color) {
+                hasAnyFilter = true;
+                const colorName = {black: 'مشکی', white: 'سفید', cream: 'کرم', navy: 'سرمه‌ای', gray: 'طوسی', pink: 'صورتی'}[activeFilters.color];
+                const pill = document.createElement('span');
+                pill.className = 'active-filter-pill';
+                pill.innerHTML = `رنگ: ${colorName} <i class="fas fa-times"></i>`;
+                pill.querySelector('i').addEventListener('click', () => removeFilter('color', activeFilters.color));
+                activeFiltersContainer.appendChild(pill);
+            }
+
+            // تگ برای قیمت
+            if (activeFilters.priceMin > 0 || activeFilters.priceMax < 1000000) {
+                hasAnyFilter = true;
+                const pill = document.createElement('span');
+                pill.className = 'active-filter-pill';
+                pill.innerHTML = `قیمت: ${Number(activeFilters.priceMin).toLocaleString('fa-IR')} - ${Number(activeFilters.priceMax).toLocaleString('fa-IR')} <i class="fas fa-times"></i>`;
+                pill.querySelector('i').addEventListener('click', () => {
+                    activeFilters.priceMin = 0;
+                    activeFilters.priceMax = 1000000;
+                    rangeMin.value = 0;
+                    rangeMax.value = 1000000;
+                    updatePriceSlider();
+                    applyFilters();
+                });
+                activeFiltersContainer.appendChild(pill);
+            }
+            
+            clearFiltersBtn.disabled = !hasAnyFilter;
+            if (!hasAnyFilter) {
+                activeFiltersContainer.innerHTML = '<span style="color: #aaa;">فیلتری فعال نیست</span>';
+            }
+        }
+        
+        function removeFilter(type, value) {
+            if (type === 'category' || type === 'brand') {
+                const index = activeFilters[type].indexOf(value);
+                if (index > -1) activeFilters[type].splice(index, 1);
+                document.querySelector(`input[data-filter="${type}"][value="${value}"]`).checked = false;
+            } else if (type === 'color') {
+                activeFilters.color = null;
+                document.querySelector(`.color-swatch[data-color="${value}"]`).classList.remove('selected');
+            }
+            applyFilters();
+        }
+
+        function applyFilters() {
+            document.querySelectorAll('.product-card').forEach(card => {
+                let show = true;
+                const price = parseInt(card.dataset.price);
+
+                // فیلتر دسته‌بندی
+                if (activeFilters.category.length > 0 && !activeFilters.category.includes(card.dataset.category)) {
+                    show = false;
+                }
+                // فیلتر برند
+                if (activeFilters.brand.length > 0 && !activeFilters.brand.includes(card.dataset.brand)) {
+                    show = false;
+                }
+                // فیلتر رنگ
+                if (activeFilters.color && card.dataset.color !== activeFilters.color) {
+                    show = false;
+                }
+                // فیلتر قیمت
+                if (price < activeFilters.priceMin || price > activeFilters.priceMax) {
+                    show = false;
+                }
+
+                card.classList.toggle('hidden', !show);
+            });
+            updateProductCount();
+            updateActiveFilterPills();
+        }
+        
+        // --- 1. مدیریت آکاردئون فیلترها ---
+        document.querySelectorAll('.filter-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const widget = header.parentElement;
+                widget.classList.toggle('collapsed');
+            });
+        });
+
+        // --- 2. مدیریت فیلترهای چک‌باکس ---
+        document.querySelectorAll('.filter-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const filterType = checkbox.dataset.filter;
+                const value = checkbox.value;
+                if (checkbox.checked) {
+                    if (!activeFilters[filterType].includes(value)) {
+                        activeFilters[filterType].push(value);
+                    }
+                } else {
+                    const index = activeFilters[filterType].indexOf(value);
+                    if (index > -1) activeFilters[filterType].splice(index, 1);
+                }
+                applyFilters();
+            });
+        });
+
+        // --- 3. مدیریت فیلتر رنگ (سواچ) ---
+        document.querySelectorAll('.color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                swatch.classList.add('selected');
+                activeFilters.color = swatch.dataset.color;
+                applyFilters();
+            });
+        });
+
+        // --- 4. مدیریت اسلایدر و دکمه‌های قیمت ---
+        function updatePriceSlider() {
+            const minVal = parseInt(rangeMin.value);
+            const maxVal = parseInt(rangeMax.value);
+
+            activeFilters.priceMin = minVal;
+            activeFilters.priceMax = maxVal;
+            
+            priceMinValue.textContent = Number(minVal).toLocaleString('fa-IR');
+            priceMaxValue.textContent = Number(maxVal).toLocaleString('fa-IR');
+            
+            const percentMin = ((minVal - rangeMin.min) / (rangeMin.max - rangeMin.min)) * 100;
+            const percentMax = ((maxVal - rangeMax.min) / (rangeMax.max - rangeMax.min)) * 100;
+            priceSliderProgress.style.right = `${100 - percentMax}%`;
+            priceSliderProgress.style.left = `${percentMin}%`;
+
+            // غیرفعال یا فعال کردن دکمه‌ها
+            priceMinDecreaseBtn.disabled = minVal <= 0;
+            priceMinIncreaseBtn.disabled = minVal >= (maxVal - priceStep);
+            priceMaxDecreaseBtn.disabled = maxVal <= (minVal + priceStep);
+            priceMaxIncreaseBtn.disabled = maxVal >= 1000000;
+        }
+
+        rangeMin.addEventListener('input', () => {
+            rangeMin.max = parseInt(rangeMax.value) - priceStep;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        rangeMax.addEventListener('input', () => {
+            rangeMax.min = parseInt(rangeMin.value) + priceStep;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        priceMinDecreaseBtn.addEventListener('click', () => {
+            const currentVal = parseInt(rangeMin.value);
+            const newVal = Math.max(0, currentVal - priceStep);
+            rangeMin.value = newVal;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        priceMinIncreaseBtn.addEventListener('click', () => {
+            const currentVal = parseInt(rangeMin.value);
+            const maxAllowed = parseInt(rangeMax.value) - priceStep;
+            const newVal = Math.min(maxAllowed, currentVal + priceStep);
+            rangeMin.value = newVal;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        priceMaxDecreaseBtn.addEventListener('click', () => {
+            const currentVal = parseInt(rangeMax.value);
+            const minAllowed = parseInt(rangeMin.value) + priceStep;
+            const newVal = Math.max(minAllowed, currentVal - priceStep);
+            rangeMax.value = newVal;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        priceMaxIncreaseBtn.addEventListener('click', () => {
+            const currentVal = parseInt(rangeMax.value);
+            const newVal = Math.min(1000000, currentVal + priceStep);
+            rangeMax.value = newVal;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        // --- 5. مدیریت دکمه پاک کردن همه ---
+        clearFiltersBtn.addEventListener('click', () => {
+            activeFilters = { category: [], brand: [], color: null, priceMin: 0, priceMax: 1000000 };
+            document.querySelectorAll('.filter-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.color-swatch').forEach(cs => cs.classList.remove('selected'));
+            rangeMin.value = 0;
+            rangeMax.value = 1000000;
+            rangeMin.max = 1000000;
+            rangeMax.min = 0;
+            updatePriceSlider();
+            applyFilters();
+        });
+
+        // --- 6. مدیریت دکمه علاقه مندی ---
+        document.querySelectorAll('.wishlist-icon').forEach(icon => {
+            icon.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const isActive = this.classList.contains('active');
+                this.classList.toggle('far', !isActive);
+                this.classList.toggle('fas', isActive);
+                showToast(isActive ? 'به علاقه‌مندی‌ها اضافه شد.' : 'از علاقه‌مندی‌ها حذف شد.');
+            });
+        });
+
+        // --- 7. مدیریت دکمه افزودن به سبد ---
+        document.querySelectorAll('.add-to-cart-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const productName = this.closest('.product-card').querySelector('h4').textContent;
+                showToast(`${productName} به سبد خرید اضافه شد.`);
+            });
+        });
+
+        // --- 8. مدیریت تغییر نما (گرید / لیست) ---
+        gridViewBtn.addEventListener('click', () => {
+            gridViewBtn.classList.add('active');
+            listViewBtn.classList.remove('active');
+            productsGrid.style.display = 'grid';
+            productsList.classList.remove('active');
+        });
+
+        listViewBtn.addEventListener('click', () => {
+            listViewBtn.classList.add('active');
+            gridViewBtn.classList.remove('active');
+            productsGrid.style.display = 'none';
+            
+            productsList.innerHTML = '';
+            productsGrid.querySelectorAll('.product-card').forEach(card => {
+                const listCard = card.cloneNode(true);
+                listCard.classList.add('list-view');
+                productsList.appendChild(listCard);
+            });
+            productsList.classList.add('active');
+        });
+
+        // --- 9. مدیریت فیلتر موبایل ---
+        const handleResize = () => {
+            if (window.innerWidth <= 992) {
+                mobileFilterBtn.style.display = 'block';
+            } else {
+                mobileFilterBtn.style.display = 'none';
+                filterSidebar.classList.remove('active');
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        mobileFilterBtn.addEventListener('click', () => filterSidebar.classList.toggle('active'));
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 992 && !filterSidebar.contains(e.target) && !mobileFilterBtn.contains(e.target)) {
+                filterSidebar.classList.remove('active');
+            }
+        });
+        
+        // --- مقداردهی اولیه ---
+        updatePriceSlider();
+        updateActiveFilterPills();
+    });
+    </script>
+
+</body>
+</html>
