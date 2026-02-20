@@ -41,6 +41,33 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // --- Sales Proof Notifications ---
+    const $salesNotif = $('#sales-notification');
+    if ($salesNotif.length && typeof rayna_sales_data !== 'undefined') {
+        function showRandomSale() {
+            const data = rayna_sales_data;
+            const name = data.names[Math.floor(Math.random() * data.names.length)];
+            const city = data.cities[Math.floor(Math.random() * data.cities.length)];
+            const img = data.images[Math.floor(Math.random() * data.images.length)];
+
+            $salesNotif.find('.buyer-name').text(name);
+            $salesNotif.find('.buyer-city').text(city);
+            $salesNotif.find('.buyer-img').attr('src', img);
+
+            $salesNotif.fadeIn(500).delay(5000).fadeOut(500);
+
+            // Schedule next one
+            setTimeout(showRandomSale, Math.random() * 20000 + 15000);
+        }
+
+        $salesNotif.find('.close-notification').on('click', function() {
+            $salesNotif.stop().fadeOut(300);
+        });
+
+        // Start after 5 seconds
+        setTimeout(showRandomSale, 5000);
+    }
+
     // --- Basic Interaction ---
     console.log('Rayna Professional Theme Initialized');
 });

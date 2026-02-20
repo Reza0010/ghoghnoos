@@ -9,6 +9,12 @@ require get_template_directory() . '/inc/customizer.php';
 // Plugin recommendations
 require get_template_directory() . '/inc/tgm-config.php';
 
+// Sales Notifications
+require get_template_directory() . '/inc/sales-notifications.php';
+
+// Demo Import Support
+require get_template_directory() . '/inc/demo-import.php';
+
 function rayna_setup() {
     // Add default posts and comments RSS feed links to head.
     add_theme_support( 'automatic-feed-links' );

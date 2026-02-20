@@ -68,6 +68,29 @@
         </div>
     </footer>
 
+    <!-- Mobile Bottom Navigation -->
+    <div class="mobile-bottom-nav">
+        <a href="<?php echo esc_url( home_url( '/' ) ); ?>">
+            <i class="fas fa-home"></i>
+            <span>خانه</span>
+        </a>
+        <a href="<?php echo class_exists( 'WooCommerce' ) ? wc_get_page_permalink( 'shop' ) : '#'; ?>">
+            <i class="fas fa-th-large"></i>
+            <span>فروشگاه</span>
+        </a>
+        <a href="<?php echo class_exists( 'WooCommerce' ) ? wc_get_cart_url() : '#'; ?>" class="mobile-cart-link">
+            <i class="fas fa-shopping-basket"></i>
+            <span>سبد خرید</span>
+            <?php if ( class_exists( 'WooCommerce' ) ) : ?>
+                <span class="badge"><?php echo WC()->cart->get_cart_contents_count(); ?></span>
+            <?php endif; ?>
+        </a>
+        <a href="<?php echo class_exists( 'WooCommerce' ) ? wc_get_page_permalink( 'myaccount' ) : '#'; ?>">
+            <i class="fas fa-user"></i>
+            <span>حساب من</span>
+        </a>
+    </div>
+
     <?php wp_footer(); ?>
 </body>
 </html>

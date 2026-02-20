@@ -26,6 +26,11 @@ function rayna_register_required_plugins() {
             'slug'      => 'zarinpal-woocommerce-payment-gateway',
             'required'  => false,
         ),
+        array(
+            'name'      => 'One Click Demo Import',
+            'slug'      => 'one-click-demo-import',
+            'required'  => false,
+        ),
     );
 
     // In a real theme, you'd call tgmpa( $plugins, $config );
