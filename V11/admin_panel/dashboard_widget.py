@@ -454,12 +454,12 @@ class DashboardWidget(QWidget):
             self._data_loaded = True
 
     @asyncSlot()
-    async def refresh_data(self, *args):
+    async def refresh_data(self, *args, **kwargs):
         try:
-            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
                 return
             self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white', animation=qta.Spin(self.btn_refresh)))
-        except RuntimeError:
+        except (RuntimeError, AttributeError):
             return
 
         loop = asyncio.get_running_loop()
@@ -516,11 +516,12 @@ class DashboardWidget(QWidget):
 
             data = await loop.run_in_executor(None, fetch_all)
             
-            # آپدیت کارت‌ها
-            self.card_total_rev.set_data(int(data['rev_tg'] + data['rev_rb']), trend_val=data['growth'])
-            self.card_aov.set_data(int(data['aov']))
-            self.card_orders.set_data(data['pending'])
-            self.card_users.set_data(data['users'])
+            # آپدیت کارت‌ها (با محافظت در برابر مقادیر None)
+            total_r = (data.get('rev_tg') or 0) + (data.get('rev_rb') or 0)
+            self.card_total_rev.set_data(int(total_r), trend_val=data.get('growth', 0))
+            self.card_aov.set_data(int(data.get('aov') or 0))
+            self.card_orders.set_data(data.get('pending') or 0)
+            self.card_users.set_data(data.get('users') or 0)
             
             # آپدیت نمودارها
             self.update_chart(self.chart_tg, data['dates'], data['tg_sales'], COLOR_BLUE)
@@ -626,8 +627,9 @@ class DashboardWidget(QWidget):
         """)
 
     @asyncSlot()
-    async def toggle_shop_status(self, *args):
+    async def toggle_shop_status(self, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             new_status = "true" if self.btn_status.isChecked() else "false"
         except RuntimeError:
             return
@@ -638,8 +640,9 @@ class DashboardWidget(QWidget):
         await self.refresh_data()
 
     @asyncSlot()
-    async def generate_sales_report(self, *args):
+    async def generate_sales_report(self, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره گزارش مالی", "Sales_Report.pdf", "PDF Files (*.pdf)")
         except RuntimeError:
             return

@@ -517,12 +517,12 @@ class OrdersWidget(QWidget):
             QMessageBox.warning(self, "هشدار", "کد رهگیری الزامی است.")
 
     @asyncSlot()
-    async def refresh_data(self, *args):
+    async def refresh_data(self, *args, **kwargs):
         try:
-            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
                 return
             self.btn_refresh.setEnabled(False)
-        except RuntimeError:
+        except (RuntimeError, AttributeError):
             return
 
         self.search_inp.clear()
@@ -624,7 +624,7 @@ class OrdersWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"{e}")
             
     @asyncSlot()
-    async def show_order_details(self, order_id):
+    async def show_order_details(self, order_id, *args, **kwargs):
         order_data = next((o for o in self.all_orders_cache if o['id'] == order_id), None)
         if order_data:
             dialog = OrderDetailDialog(order_data, self)
@@ -752,10 +752,11 @@ class OrdersWidget(QWidget):
         """
 
     @asyncSlot()
-    async def export_to_excel(self, *args):
+    async def export_to_excel(self, *args, **kwargs):
         try:
-            if not self.isVisible(): return
-        except RuntimeError: return
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
 
         if pd is None:
             QMessageBox.warning(self, "خطا", "کتابخانه pandas نصب نیست.")
@@ -781,34 +782,3 @@ class OrdersWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "خطا", str(e))
 
-    @asyncSlot()
-    async def show_order_details(self, order_id):
-        try:
-            with next(get_db()) as db:
-                order = crud.get_order_by_id(db, order_id)
-                if not order: return
-
-                details = f"""
-                📦 <b>جزئیات سفارش #{order.id}</b>
-                
-                👤 <b>مشتری:</b> {order.user.full_name if order.user else 'ناشناس'}
-                📱 <b>تلفن:</b> {order.phone_number or '-'}
-                📍 <b>آدرس:</b> {order.shipping_address or '-'}
-                📮 <b>کد پستی:</b> {order.postal_code or '-'}
-                
-                💰 <b>مبلغ کل:</b> {int(order.total_amount):,} تومان
-                🚚 <b>هزینه ارسال:</b> {int(order.shipping_cost):,} تومان
-                🏷 <b>وضعیت:</b> {order.status}
-                🕒 <b>تاریخ:</b> {order.created_at.strftime('%Y/%m/%d %H:%M')}
-                """
-
-                if order.tracking_code:
-                    details += f"\n📦 <b>کد رهگیری:</b> <code>{order.tracking_code}</code>"
-
-                details += "\n\n<b>--- محصولات ---</b>\n"
-                for item in order.items:
-                    details += f"\n🔸 {item.product.name if item.product else 'حذف شده'}\n   {item.quantity} × {int(item.price_at_purchase):,} = {int(item.quantity * item.price_at_purchase):,} ت"
-
-                QMessageBox.information(self, f"جزئیات سفارش #{order_id}", details)
-        except Exception as e:
-            QMessageBox.critical(self, "خطا", f"دریافت جزئیات با خطا مواجه شد: {str(e)}")

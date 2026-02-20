@@ -279,7 +279,7 @@ class ProductEditorDialog(QDialog):
         for v in data["variants"]: self.variant_mgr.add_row(v["name"], v["price_adjustment"], v["stock"])
 
     @asyncSlot()
-    async def save_product(self, *args):
+    async def save_product(self, *args, **kwargs):
         if not self.inp_name.text(): return QMessageBox.warning(self, "خطا", "نام الزامی است.")
         data = {
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
@@ -564,15 +564,15 @@ class ProductsWidget(QWidget):
         dialog.exec()
 
     @asyncSlot()
-    async def refresh_data_slot(self, *args):
+    async def refresh_data_slot(self, *args, **kwargs):
         try:
             await self.refresh_data()
-        except RuntimeError:
+        except Exception:
             pass
 
     async def refresh_data(self):
         try:
-            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
                 return
             for i in reversed(range(self.grid_layout.count())):
                 if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
@@ -649,8 +649,9 @@ class ProductsWidget(QWidget):
         self.lbl_sel_count.setText(f"{count} انتخاب شده")
 
     @asyncSlot()
-    async def delete_product_single(self, pid, *args):
+    async def delete_product_single(self, pid, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, lambda: crud.delete_product(next(get_db()), pid))
@@ -659,10 +660,11 @@ class ProductsWidget(QWidget):
             pass
 
     @asyncSlot()
-    async def duplicate_product(self, pid, *args):
+    async def duplicate_product(self, pid, *args, **kwargs):
         try:
-            if not self.isVisible(): return
-        except RuntimeError: return
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
         loop = asyncio.get_running_loop()
         try:
             def db_op():
@@ -682,8 +684,9 @@ class ProductsWidget(QWidget):
             logger.error(e)
 
     @asyncSlot()
-    async def delete_bulk_slot(self, *args):
+    async def delete_bulk_slot(self, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
                 ids = list(self.selected_ids)
                 loop = asyncio.get_running_loop()

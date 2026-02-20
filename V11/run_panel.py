@@ -34,34 +34,48 @@ logger = logging.getLogger("Launcher")
 # ترد ایزوله تلگرام
 # ==============================================================================
 def run_telegram_bot():
-    """اجرای ربات تلگرام در ترد مجزا با پشتیبانی از پراکسی"""
+    """اجرای ربات تلگرام در ترد مجزا با مدیریت دستی حلقه برای پایداری بیشتر"""
     if not TELEGRAM_BOT_TOKEN: return
 
-    async def start_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def main_loop():
         try:
             builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
             if PROXY_URL:
                 builder.proxy_url(PROXY_URL)
                 builder.get_updates_proxy_url(PROXY_URL)
-                logger.info(f"Connecting to Telegram via Proxy: {PROXY_URL}")
+                logger.info(f"Using Proxy: {PROXY_URL}")
 
             app = builder.build()
             setup_application_handlers(app)
 
-            logger.info("✅ Telegram Bot Polling Started")
-            # استفاده از run_polling با تنظیمات ایمن برای Thread
-            await app.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                stop_signals=None, # مهم: جلوگیری از تداخل با سیگنال‌های Qt
-                close_loop=False
-            )
-        except Exception as e:
-            logger.error(f"Telegram Bot Error: {e}")
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+            logger.info("✅ Telegram Bot Thread Polling Started")
 
-    # ایجاد لوپ جدید برای این ترد
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_bot())
+            # حلقه انتظار تا زمانی که ترد زنده است
+            while True:
+                await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            logger.info("TG Bot Thread Cancelled")
+        except Exception as e:
+            logger.error(f"TG Bot Fatal Error: {e}")
+        finally:
+            # پاکسازی منابع
+            if 'app' in locals():
+                try:
+                    await app.updater.stop()
+                    await app.stop()
+                    await app.shutdown()
+                except: pass
+
+    try:
+        loop.run_until_complete(main_loop())
+    except Exception as e:
+        logger.error(f"TG Thread Exception: {e}")
 # ==============================================================================
 # ترد ایزوله روبیکا
 # ==============================================================================
@@ -160,6 +174,7 @@ class ApplicationManager:
                     def running(self): return True
 
                 bot_obj = Bot(token=TELEGRAM_BOT_TOKEN, request=request)
+                await bot_obj.initialize()
                 self.window.bot_application = PanelBotWrapper(bot_obj)
                 logger.info("✅ Panel Telegram Client Connected (Direct Bot Mode)")
             except Exception as e:

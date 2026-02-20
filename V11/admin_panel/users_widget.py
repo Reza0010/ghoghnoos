@@ -473,10 +473,11 @@ class UsersWidget(QWidget):
     def _start_search(self): self.search_timer.start(300)
 
     @asyncSlot()
-    async def refresh_data(self, *args):
+    async def refresh_data(self, *args, **kwargs):
         try:
-            if not self.isVisible(): return
-        except RuntimeError: return
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
 
         while self.flow_layout.count():
             item = self.flow_layout.takeAt(0)
@@ -552,10 +553,11 @@ class UsersWidget(QWidget):
         self.lbl_sel.setText(f"{c} انتخاب شده")
 
     @asyncSlot()
-    async def broadcast(self, *args):
+    async def broadcast(self, *args, **kwargs):
         try:
-            if not self.isVisible(): return
-        except RuntimeError: return
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
 
         text, ok = QInputDialog.getText(self, "پیام همگانی", "متن پیام:")
         if ok and text:

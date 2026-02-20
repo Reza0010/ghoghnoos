@@ -101,9 +101,9 @@ class TicketsWidget(QWidget):
             self._data_loaded = True
 
     @asyncSlot()
-    async def refresh_tickets(self, *args):
+    async def refresh_tickets(self, *args, **kwargs):
         try:
-            if not self.isVisible() or (hasattr(self.window(), '_is_shutting_down') and self.window()._is_shutting_down):
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
                 return
             status = self.status_filter.currentText()
         except RuntimeError:
@@ -136,8 +136,9 @@ class TicketsWidget(QWidget):
             logger.error(f"Refresh tickets error: {e}")
 
     @asyncSlot()
-    async def load_ticket_details(self, item, *args):
+    async def load_ticket_details(self, item, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             ticket_id = item.data(Qt.ItemDataRole.UserRole)
         except RuntimeError:
             return
@@ -172,8 +173,9 @@ class TicketsWidget(QWidget):
             logger.error(f"Load ticket details error: {e}")
 
     @asyncSlot()
-    async def send_reply(self, *args):
+    async def send_reply(self, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             text = self.reply_input.toPlainText().strip()
         except RuntimeError:
             return
@@ -216,8 +218,9 @@ class TicketsWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"خطا در ارسال پاسخ: {e}")
 
     @asyncSlot()
-    async def handle_close_ticket(self, *args):
+    async def handle_close_ticket(self, *args, **kwargs):
         try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
             if not self._current_ticket_id: return
             if QMessageBox.question(self, "بستن تیکت", "آیا از بستن این تیکت مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
                 loop = asyncio.get_running_loop()
