@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 from typing import Optional, Dict, Any, List
 
 # واردات نسبتی به ساختار پروژه
@@ -36,14 +37,14 @@ class RubikaWorker:
             try:
                 # دریافت آپدیت‌ها (مدیریت offset داخل کلاینت انجام می‌شود)
                 updates = await self.api.get_updates(limit=20)
-                
+
                 if updates:
                     for update in updates:
                         try:
                             await self.process_update(update)
                         except Exception as inner_e:
                             logger.error(f"Error processing update: {inner_e}")
-                
+
                 # وقفه کوتاه برای کاهش فشار سرور
                 await asyncio.sleep(1.5)
 
@@ -62,13 +63,13 @@ class RubikaWorker:
         """توزیع‌کننده رویدادها (Dispatcher)"""
         # ساختار آپدیت طبق مدل Update در 03.txt
         update_type = update.get("type")
-        
+
         # ۱. پیام جدید (NewMessage)
         if update_type == "NewMessage":
             msg = update.get("new_message", {})
             chat_id = update.get("chat_id")
             sender_id = msg.get("sender_id")
-            
+
             # فیلتر پیام‌های خود ربات (جلوگیری از لوپ)
             if sender_id == self.bot_guid:
                 return
@@ -83,7 +84,7 @@ class RubikaWorker:
             elif text:
                 # اگر متن ارسال شده باشد
                 await self.handle_text_message(chat_id, sender_id, text)
-        
+
         # ۲. سایر رویدادها (StartedBot, StoppedBot, etc.)
         elif update_type == "StartedBot":
             user_id = update.get("chat_id") # در StartedBot معمولا chat_id همان کاربر است
@@ -97,9 +98,9 @@ class RubikaWorker:
         # ثبت یا آپدیت کاربر در دیتابیس
         with SessionLocal() as db:
             user = crud.get_or_create_user(db, user_id, "کاربر روبیکا", None, "rubika")
-        
+
         text = text.strip()
-        
+
         if text == "/start" or text == "🏠 بازگشت به منو":
             await self.send_main_menu(chat_id)
         elif text == "🛍 محصولات":
@@ -107,14 +108,14 @@ class RubikaWorker:
         elif text == "🛒 سبد خرید":
             await self.send_cart(chat_id, user_id)
         elif text == "📞 پشتیبانی":
-            await self.send_support(chat_id)
+            await self.send_support_menu(chat_id, user_id)
         else:
-            # پاسخ پیش‌فرض
-            await self.api.send_message(chat_id, "متوجه نشدم. لطفا از منو استفاده کنید.")
+            # بررسی تیکتینگ (اگر پیام در جواب تیکت باشد یا موضوع تیکت)
+            await self.handle_support_text(chat_id, user_id, text)
 
     async def handle_button_click(self, chat_id: str, user_id: str, btn_id: str, aux_data: Dict):
         """مدیریت کلیک روی دکمه‌های Inline"""
-        
+
         # ساختار ID دکمه‌ها: `action:data` مثلا `cat:5`
         parts = btn_id.split(":")
         action = parts[0]
@@ -128,53 +129,59 @@ class RubikaWorker:
             await self.add_to_cart(chat_id, user_id, int(data))
         elif action == "checkout":
             await self.process_checkout(chat_id, user_id)
+        elif action == "t_list":
+            await self.send_ticket_list(chat_id, user_id)
+        elif action == "t_show":
+            await self.send_ticket_details(chat_id, user_id, int(data))
+        elif action == "t_new":
+            await self.api.send_message(chat_id, "💡 لطفا موضوع و متن تیکت خود را در یک پیام بفرستید:")
 
     # ================= UI Methods =================
 
     async def send_main_menu(self, chat_id: str):
         """ارسال منوی اصلی با Reply Keyboard"""
         text = "👋 به فروشگاه خوش آمدید!\nلطفا یکی از گزینه‌های زیر را انتخاب کنید."
-        
+
         # ساختار Reply Keyboard طبق مستندات (لیست سطرها)
         keyboard = [
             [{"id": "menu:shop", "text": "🛍 محصولات"}],
             [{"id": "menu:cart", "text": "🛒 سبد خرید"}, {"id": "menu:support", "text": "📞 پشتیبانی"}]
         ]
-        
+
         await self.api.send_message(chat_id, text, reply_keyboard=keyboard)
 
     async def send_categories(self, chat_id: str):
         """نمایش لیست دسته‌بندی‌ها"""
         with SessionLocal() as db:
             cats = crud.get_root_categories(db)
-        
+
         if not cats:
             return await self.api.send_message(chat_id, "هیچ دسته‌بندی وجود ندارد.")
-        
+
         text = "📂 لطفا دسته‌بندی مورد نظر را انتخاب کنید:"
         inline_rows = []
         for c in cats:
             # ID دکمه باید یکتا باشد
             inline_rows.append([{"id": f"cat:{c.id}", "text": c.name, "type": "Simple"}])
-        
+
         await self.api.send_message(chat_id, text, inline_keyboard=inline_rows)
 
     async def send_products(self, chat_id: str, cat_id: int):
         """نمایش محصولات یک دسته"""
         with SessionLocal() as db:
             prods = crud.get_active_products_by_category(db, cat_id)
-        
+
         if not prods:
             return await self.api.send_message(chat_id, "❌ محصولی یافت نشد.")
-        
+
         text = f"تعداد {len(prods)} محصول یافت شد:"
         inline_rows = []
         for p in prods[:10]:
             inline_rows.append([{"id": f"prod:{p.id}", "text": f"{p.name} - {int(p.price):,} تومان"}])
-        
+
         # دکمه بازگشت
         inline_rows.append([{"id": "nav:back_cat", "text": "↩ بازگشت به دسته‌ها"}])
-        
+
         await self.api.send_message(chat_id, text, inline_keyboard=inline_rows)
 
     async def send_product_detail(self, chat_id: str, prod_id: int):
@@ -182,19 +189,19 @@ class RubikaWorker:
         with SessionLocal() as db:
             p = crud.get_product(db, prod_id)
             if not p: return
-        
+
         txt = (
             f"🛍 <b>{p.name}</b>\n\n"
             f"💰 قیمت: {int(p.price):,} تومان\n"
             f"📦 موجودی: {p.stock}\n\n"
             f"{p.description or ''}"
         )
-        
+
         inline_rows = [
             [{"id": f"add:{p.id}", "text": "➕ افزودن به سبد", "type": "Simple"}],
             [{"id": "nav:back_cat", "text": "↩ بازگشت"}]
         ]
-        
+
         await self.api.send_message(chat_id, txt, inline_keyboard=inline_rows)
 
     async def add_to_cart(self, chat_id: str, user_id: str, prod_id: int):
@@ -209,49 +216,141 @@ class RubikaWorker:
         """نمایش سبد خرید"""
         with SessionLocal() as db:
             items = crud.get_cart_items(db, user_id)
-        
+
         if not items:
             return await self.api.send_message(chat_id, "🛒 سبد خرید شما خالی است.")
-        
+
         msg = "🛒 سبد خرید شما:\n\n"
         total = 0
         for item in items:
             p = item.product
             total += p.price * item.quantity
             msg += f"• {p.name} x {item.quantity}\n"
-        
+
         msg += f"\n💰 جمع کل: {int(total):,} تومان"
-        
+
         inline_rows = [[{"id": "checkout", "text": "✅ نهایی کردن سفارش"}]]
         await self.api.send_message(chat_id, msg, inline_keyboard=inline_rows)
 
     async def process_checkout(self, chat_id: str, user_id: str):
         """ثبت سفارش نهایی"""
-        # در روبیکا برای سادگی، سفارش ثبت می‌شود و لینک پرداخت ارسال می‌شود
-        # پیچیده‌تر کردن آن با استفاده از ButtonAskMyPhoneNumber امکان‌پذیر است
-        
         try:
             with SessionLocal() as db:
-                # ایجاد سفارش با وضعیت pending_payment
-                # در اینجا یک آدرس فیک یا تلفن فیک می‌گذاریم چون فرمی نداریم
+                # چک کردن وضعیت ساعات کاری
+                if not crud.is_shop_currently_open(db):
+                    return await self.api.send_message(chat_id, "⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر (خارج از ساعات کاری) سفارش جدید نمی‌پذیرد.")
+
+                items = crud.get_cart_items(db, user_id)
+                if not items:
+                    return await self.api.send_message(chat_id, "🛒 سبد خرید شما خالی است.")
+
+                items_total = sum(float(item.product.price) * item.quantity for item in items)
+                ship_cost = int(crud.get_setting(db, "shipping_cost", "0"))
+                free_limit = int(crud.get_setting(db, "free_shipping_limit", "0"))
+                final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
+                final_total = items_total + final_ship
+
+                zp_enabled = crud.get_setting(db, "zarinpal_enabled", "false") == "true"
+                merchant_id = crud.get_setting(db, "zarinpal_merchant", "")
+
                 order = crud.create_order_from_cart(db, user_id, {
-                    "address": "نیاز به هماهنگی",
-                    "phone": "0000",
+                    "address": "نیاز به هماهنگی (روبیکا)",
+                    "phone": "روبیکا",
                     "postal_code": ""
                 })
-            
-            link = "https://your-payment-gateway.com/pay" # لینک درگاه پرداخت شما
-            msg = (
-                f"🎉 سفارش شما با موفقیت ثبت شد.\n"
-                f"شماره پیگیری: #{order.id}\n\n"
-                f"برای پرداخت روی لینک زیر کلیک کنید:\n{link}"
-            )
-            await self.api.send_message(chat_id, msg)
-            
+
+                if zp_enabled and merchant_id:
+                    from bot.zarinpal import ZarinPal
+                    zp = ZarinPal(merchant_id)
+                    description = f"خرید روبیکا - سفارش #{order.id}"
+                    callback_url = "https://rubika.ir"
+                    url, authority = await zp.request_payment(final_total, description, callback_url)
+
+                    if url:
+                        msg = (
+                            f"✅ سفارش #{order.id} ثبت شد.\n"
+                            f"💰 مبلغ کل: {int(final_total):,} تومان\n\n"
+                            f"برای پرداخت آنلاین روی دکمه زیر کلیک کنید:"
+                        )
+                        inline_kb = [[{"id": "pay", "text": "💳 پرداخت آنلاین", "url": url}]]
+                        return await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+                # پرداخت دستی (کارت به کارت)
+                raw_cards = crud.get_setting(db, "bank_cards", "[]")
+                card_info = "لطفا برای دریافت اطلاعات کارت به پشتیبانی پیام دهید."
+                try:
+                    cards = json.loads(raw_cards)
+                    if cards:
+                        card_info = f"💳 شماره کارت: {cards[0]['number']}\n👤 بنام: {cards[0]['owner']}"
+                except: pass
+
+                msg = (
+                    f"✅ سفارش #{order.id} ثبت شد.\n"
+                    f"💰 مبلغ کل: {int(final_total):,} تومان\n\n"
+                    f"{card_info}\n\n"
+                    f"لطفا پس از واریز، تصویر فیش را به پشتیبانی ارسال کنید."
+                )
+                await self.api.send_message(chat_id, msg)
+
         except Exception as e:
             logger.error(f"Checkout Error: {e}")
             await self.api.send_message(chat_id, "❌ مشکلی در ثبت سفارش پیش آمد.")
 
-    async def send_support(self, chat_id: str):
-        msg = "📞 برای ارتباط با پشتیبانی به آیدی زیر پیام دهید:\n@YourSupportID"
+    async def send_support_menu(self, chat_id: str, user_id: str):
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+
+        msg = "📞 **مرکز پشتیبانی و تیکتینگ**\n\nدر این بخش می‌توانید درخواست‌های خود را ثبت و پیگیری کنید."
+        inline_kb = [[{"id": "t_new", "text": "➕ ثبت تیکت جدید"}]]
+        if tickets:
+            inline_kb.append([{"id": "t_list", "text": "📂 مشاهده تیکت‌های من"}])
+
+        await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+    async def send_ticket_list(self, chat_id: str, user_id: str):
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+
+        if not tickets:
+            return await self.api.send_message(chat_id, "تیکتی یافت نشد.")
+
+        msg = "📂 **لیست تیکت‌های شما:**"
+        inline_kb = []
+        for t in tickets[:10]:
+            status = "🟢" if t.status == "pending" else ("🟡" if t.status == "open" else "⚪️")
+            inline_kb.append([{"id": f"t_show:{t.id}", "text": f"{status} #{t.id} - {t.subject}"}])
+
+        await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+    async def send_ticket_details(self, chat_id: str, user_id: str, ticket_id: int):
+        with SessionLocal() as db:
+            t = crud.get_ticket_with_messages(db, ticket_id)
+
+        if not t: return
+
+        msg = f"🎫 **تیکت #{t.id}**\n📌 موضوع: {t.subject}\n📊 وضعیت: {t.status}\n\n"
+        for m in t.messages[-5:]:
+            sender = "👤 شما" if not m.is_admin else "👨‍💻 پشتیبان"
+            msg += f"{sender}:\n{m.text}\n\n"
+
+        msg += "✍️ برای ارسال پاسخ، متن خود را بفرستید (در صورتی که تیکت باز است)."
         await self.api.send_message(chat_id, msg)
+
+    async def handle_support_text(self, chat_id: str, user_id: str, text: str):
+        # منطق ساده برای ثبت تیکت جدید یا پاسخ
+        # در دنیای واقعی باید وضعیت کاربر را چک کنیم. اینجا اگر تیکت بازی داشته باشد به آن پاسخ می‌دهد
+        # در غیر این صورت تیکت جدید می‌سازد
+        with SessionLocal() as db:
+            tickets = crud.get_user_tickets(db, user_id)
+            open_tickets = [t for t in tickets if t.status != 'closed']
+
+            if open_tickets:
+                # پاسخ به آخرین تیکت باز
+                t = open_tickets[0]
+                crud.add_ticket_message(db, t.id, user_id, text)
+                await self.api.send_message(chat_id, f"✅ پاسخ شما به تیکت #{t.id} ثبت شد.")
+            else:
+                # ثبت تیکت جدید
+                subject = text[:30] + "..." if len(text) > 30 else text
+                t = crud.create_ticket(db, user_id, subject, text)
+                await self.api.send_message(chat_id, f"✅ تیکت جدید با موفقیت ثبت شد.\n🆔 شماره تیکت: #{t.id}")

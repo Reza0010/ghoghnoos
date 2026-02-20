@@ -10,6 +10,20 @@ from config import ADMIN_USER_IDS
 
 logger = logging.getLogger("CRUD")
 
+def get_admin_ids(db: Session) -> List[int]:
+    """ترکیب ادمین‌های فایل کانفیگ و دیتابیس"""
+    ids = list(ADMIN_USER_IDS)
+    db_ids_str = get_setting(db, "admin_user_ids", "")
+    if db_ids_str:
+        try:
+            extra_ids = [int(x.strip()) for x in db_ids_str.split(',') if x.strip().isdigit()]
+            for eid in extra_ids:
+                if eid not in ids:
+                    ids.append(eid)
+        except:
+            pass
+    return ids
+
 # ======================================================================
 # 1. مدیریت کاربران (User Management)
 # ======================================================================
@@ -502,6 +516,40 @@ def set_setting(db: Session, key: str, value: str):
         db.add(models.Setting(key=key, value=str(value)))
     db.commit()
 
+def is_shop_currently_open(db: Session) -> bool:
+    """بررسی باز یا بسته بودن فروشگاه با لحاظ کردن ساعات کاری"""
+    manual_open = get_setting(db, "tg_is_open", "true") == "true"
+    if not manual_open:
+        return False
+
+    op_hours_enabled = get_setting(db, "op_hours_enabled", "false") == "true"
+    if not op_hours_enabled:
+        return True
+
+    try:
+        now = datetime.now().time()
+        start_str = get_setting(db, "op_hours_start", "08:00")
+        end_str = get_setting(db, "op_hours_end", "22:00")
+
+        start_time = datetime.strptime(start_str, "%H:%M").time()
+        end_time = datetime.strptime(end_str, "%H:%M").time()
+
+        if start_time < end_time:
+            return start_time <= now <= end_time
+        else: # بازه از شب تا صبح روز بعد
+            return now >= start_time or now <= end_time
+    except:
+        return True
+
+def get_admins_by_role(db: Session, role: str) -> List[int]:
+    """دریافت لیست ادمین‌ها بر اساس نقش (sales, support, system)"""
+    try:
+        roles_json = get_setting(db, "admin_notification_roles", "{}")
+        roles = json.loads(roles_json)
+        return [int(uid) for uid in roles.get(role, [])]
+    except:
+        return get_admin_ids(db)
+
 def log_setting_change(db: Session, admin_id, keys, values):
     logger.info(f"Admin {admin_id} changed settings: {keys}")
 
@@ -523,6 +571,35 @@ def get_orders_count_by_platform_and_status(db: Session, platform: str, status: 
             models.Order.status == status,
             models.User.platform == platform
         ).scalar()
+
+def get_top_selling_products(db: Session, limit: int = 5):
+    """لیست محصولات پرفروش به همراه تعداد و درآمد کل"""
+    return db.query(
+        models.Product.name,
+        func.sum(models.OrderItem.quantity).label('total_qty'),
+        func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase).label('total_revenue')
+    ).join(models.OrderItem).group_by(models.Product.id)\
+    .order_by(desc('total_qty')).limit(limit).all()
+
+def get_sales_growth(db: Session):
+    """محاسبه درصد رشد فروش امروز نسبت به دیروز"""
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+
+    def get_day_revenue(day):
+        return db.query(func.coalesce(func.sum(models.Order.total_amount), 0))\
+            .filter(func.date(models.Order.created_at) == day)\
+            .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+            .scalar()
+
+    rev_today = get_day_revenue(today)
+    rev_yesterday = get_day_revenue(yesterday)
+
+    if rev_yesterday == 0:
+        return 100 if rev_today > 0 else 0
+
+    growth = ((rev_today - rev_yesterday) / rev_yesterday) * 100
+    return round(growth, 1)
 
 # ======================================================================
 # 8. آدرس‌ها و علاقه‌مندی‌ها
@@ -565,3 +642,53 @@ def add_product_notification(db: Session, user_id, product_id):
     if not exists:
         db.add(models.ProductNotification(user_id=str(user_id), product_id=product_id))
         db.commit()
+
+# ======================================================================
+# 9. سیستم تیکتینگ (Ticketing System)
+# ======================================================================
+def create_ticket(db: Session, user_id: str, subject: str, initial_message: str) -> models.Ticket:
+    ticket = models.Ticket(user_id=str(user_id), subject=subject)
+    db.add(ticket)
+    db.flush()
+
+    msg = models.TicketMessage(ticket_id=ticket.id, sender_id=str(user_id), text=initial_message, is_admin=False)
+    db.add(msg)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+def add_ticket_message(db: Session, ticket_id: int, sender_id: str, text: str, is_admin: bool = False):
+    msg = models.TicketMessage(ticket_id=ticket_id, sender_id=str(sender_id), text=text, is_admin=is_admin)
+    db.add(msg)
+    # آپدیت زمان آخرین تغییر تیکت
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.updated_at = datetime.now()
+        if is_admin:
+            ticket.status = "pending" # در انتظار پاسخ کاربر
+        else:
+            ticket.status = "open" # باز (نیاز به پاسخ ادمین)
+    db.commit()
+    return msg
+
+def get_user_tickets(db: Session, user_id: str) -> List[models.Ticket]:
+    return db.query(models.Ticket).filter_by(user_id=str(user_id)).order_by(desc(models.Ticket.updated_at)).all()
+
+def get_all_tickets(db: Session, status: str = None) -> List[models.Ticket]:
+    q = db.query(models.Ticket).options(joinedload(models.Ticket.user))
+    if status and status != "all":
+        q = q.filter(models.Ticket.status == status)
+    return q.order_by(desc(models.Ticket.updated_at)).all()
+
+def get_ticket_with_messages(db: Session, ticket_id: int) -> Optional[models.Ticket]:
+    return db.query(models.Ticket).options(
+        selectinload(models.Ticket.messages),
+        joinedload(models.Ticket.user)
+    ).filter_by(id=ticket_id).first()
+
+def close_ticket(db: Session, ticket_id: int):
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.status = "closed"
+        db.commit()
+    return ticket

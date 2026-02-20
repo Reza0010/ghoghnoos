@@ -23,6 +23,7 @@ try:
     from PyQt6.QtCore import Qt, QTimer
     import qasync
     from admin_panel.main_window import MainWindow
+    from admin_panel.login_dialog import LoginDialog
     from telegram import Update
     from telegram.ext import Application
 except ImportError as e:
@@ -69,16 +70,33 @@ class ApplicationManager:
 
     async def launch(self):
         """راه‌اندازی سریع پنل"""
-        # ۱. دیتابیس (بدون نیاز به شبکه)
+        # ۱. دیتابیس
         try:
             await self.loop.run_in_executor(None, init_db)
         except Exception as e:
             logger.error(f"DB Error: {e}")
-        # ۲. ایجاد پنجره (بلافاصله نمایش داده شود)
+
+        # ۲. بررسی رمز عبور (Login)
+        if not await self.show_login():
+            sys.exit(0)
+
+        # ۳. ایجاد پنجره
         self.window = MainWindow(bot_application=None, rubika_client=None)
         self.window.show()
-        # ۳. استارت ربات‌های پس‌زمینه (در ترد جداگانه)
+        # ۴. استارت ربات‌های پس‌زمینه
         self.start_background_bots()
+
+    async def show_login(self) -> bool:
+        """نمایش دیالوگ ورود و تایید رمز"""
+        def verify(password):
+            from db.database import SessionLocal
+            from db import crud
+            with SessionLocal() as db:
+                stored = crud.get_setting(db, "panel_password", "admin")
+                return password == stored
+
+        login = LoginDialog(verify)
+        return login.exec() == LoginDialog.DialogCode.Accepted
         # ۴. تلاش برای اتصال کلاینت‌های پنل (بدون بلاک کردن UI)
         # استفاده از تایمر برای اینکه اگر اینترنت قطع بود، کل برنامه فریز نشود
         QTimer.singleShot(500, lambda: asyncio.create_task(self.connect_light_clients()))

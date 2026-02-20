@@ -24,6 +24,7 @@ from .products_widget import ProductsWidget
 from .orders_widget import OrdersWidget
 from .settings_widget import SettingsWidget
 from .users_widget import UsersWidget
+from .tickets_widget import TicketsWidget
 
 logger = logging.getLogger("MainWindow")
 
@@ -33,8 +34,9 @@ class MainWindow(QMainWindow):
         1: ("محصولات", "fa5s.box-open"),
         2: ("دسته‌بندی‌ها", "fa5s.layer-group"),
         3: ("سفارشات", "fa5s.clipboard-list"),
-        4: ("کاربران", "fa5s.users"),
-        5: ("تنظیمات", "fa5s.cog"),
+        4: ("تیکت‌ها", "fa5s.ticket-alt"),
+        5: ("کاربران", "fa5s.users"),
+        6: ("تنظیمات", "fa5s.cog"),
     }
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow):
             lambda: ProductsWidget(bot_app=self.bot_application),
             lambda: CategoriesWidget(),
             lambda: OrdersWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
+            lambda: TicketsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
             lambda: UsersWidget(),
             lambda: SettingsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client)
         ]
@@ -237,6 +240,16 @@ class MainWindow(QMainWindow):
         # بارگذاری صفحه اول
         self.switch_page(0)
         self.nav_buttons[0].setChecked(True)
+
+        # بررسی رمز عبور پیش‌فرض
+        QTimer.singleShot(2000, self._check_default_password)
+
+    def _check_default_password(self):
+        from db.database import SessionLocal
+        from db import crud
+        with SessionLocal() as db:
+            if crud.get_setting(db, "panel_password", "admin") == "admin":
+                QMessageBox.warning(self, "هشدار امنیتی", "شما هنوز از رمز عبور پیش‌فرض (admin) استفاده می‌کنید.\nلطفاً برای امنیت بیشتر در بخش تنظیمات آن را تغییر دهید.")
 
     def switch_page(self, page_id):
         """مدیریت جابجایی بین صفحات با Lazy Loading"""

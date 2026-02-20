@@ -73,6 +73,11 @@ class RubikaAPI:
                     "type": btn.get("type", "Simple"),
                     "button_text": btn.get("text", "Button")
                 }
+                # پشتیبانی از لینک در دکمه‌های شیشه‌ای روبیکا
+                if btn.get("url"):
+                    btn_obj["url"] = btn["url"]
+                    btn_obj["type"] = "OpenUrl"
+
                 # اگر دکمه نوع دیگری مثل Selection است
                 if btn.get("selection"):
                      btn_obj["button_selection"] = btn["selection"]
