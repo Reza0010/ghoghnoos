@@ -77,7 +77,7 @@ class ApplicationManager:
         self.rb_thread = None
         self._is_shutting_down = False
 
-    async def launch(self):
+    async def launch(self, app):
         """راه‌اندازی سریع پنل"""
         # ۱. دیتابیس
         try:
@@ -93,6 +93,12 @@ class ApplicationManager:
         # ۳. ایجاد پنجره
         self.window = MainWindow(bot_application=None, rubika_client=None)
         self.window.show()
+
+        # بازگرداندن رفتار استاندارد برای خروج
+        app.setQuitOnLastWindowClosed(True)
+
+        # ۴. اتصال سیگنال بستن نهایی بعد از نمایش پنجره اصلی
+        app.lastWindowClosed.connect(lambda: asyncio.create_task(self.shutdown()))
         # ۴. استارت ربات‌های پس‌زمینه
         self.start_background_bots()
 
@@ -175,11 +181,17 @@ class ApplicationManager:
 def main():
     app = QApplication(sys.argv)
     app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+
+    # جلوگیری از بسته شدن خودکار برنامه وقتی دیالوگ لاگین بسته می‌شود
+    app.setQuitOnLastWindowClosed(False)
+
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     manager = ApplicationManager(loop)
-    app.lastWindowClosed.connect(lambda: asyncio.create_task(manager.shutdown()))
-    loop.create_task(manager.launch())
+
+    # انتقال مدیریت سیگنال به داخل متد launch
+    loop.create_task(manager.launch(app))
+
     try:
         loop.run_forever()
     except KeyboardInterrupt:
