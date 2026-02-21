@@ -27,8 +27,8 @@ async def run_db(
 ) -> T:
     """
     اجرای توابع دیتابیس (Sync) در ترد جداگانه (Async) برای جلوگیری از هنگ کردن ربات.
-    
-    این تابع یک سشن دیتابیس ایجاد کرده، آن را به عنوان اولین ورودی به تابع 
+
+    این تابع یک سشن دیتابیس ایجاد کرده، آن را به عنوان اولین ورودی به تابع
     مورد نظر (func) پاس می‌دهد و پس از پایان کار، سشن را می‌بندد.
 
     :param func: تابعی از لایه CRUD که ورودی اول آن 'db' است.
@@ -37,7 +37,7 @@ async def run_db(
     :param kwargs: سایر ورودی‌های نام‌دار تابع.
     :return: نتیجه خروجی تابع اجرا شده.
     """
-    
+
     def sync_wrapper():
         # ایجاد سشن جدید مخصوص این ترد
         db = SessionLocal()
@@ -63,7 +63,7 @@ async def run_db(
             return await asyncio.wait_for(to_thread(sync_wrapper), timeout=timeout)
         else:
             return await to_thread(sync_wrapper)
-            
+
     except asyncio.TimeoutError:
         logger.error(f"⏰ Database Timeout in '{func.__name__}' after {timeout}s")
         raise Exception("عملیات پایگاه داده بیش از حد طول کشید.")

@@ -2,7 +2,7 @@ import sys
 import os
 import asyncio
 import logging
-import threading
+import multiprocessing
 import warnings
 from pathlib import Path
 # --- تنظیمات محیطی ---
@@ -96,8 +96,8 @@ class ApplicationManager:
     def __init__(self, loop):
         self.loop = loop
         self.window = None
-        self.tg_thread = None
-        self.rb_thread = None
+        self.tg_process = None
+        self.rb_process = None
         self._is_shutting_down = False
 
     async def _load_db_config(self):
@@ -182,39 +182,40 @@ class ApplicationManager:
         return login.exec() == LoginDialog.DialogCode.Accepted
 
     def start_background_bots(self):
-        """اجرای ربات‌ها در ترد کاملاً مجزا"""
+        """اجرای ربات‌ها در پروسه‌های مجزا برای پایداری بیشتر (Process Isolation)"""
+        # نکته: در ویندوز حتما باید متد spawn استفاده شود که پیش‌فرض است.
+
         if TELEGRAM_BOT_TOKEN:
-            if self.tg_thread and self.tg_thread.is_alive():
-                logger.info("TG thread already running")
-            else:
-                self.tg_thread = threading.Thread(target=run_telegram_bot, daemon=True, name="TG_Thread")
-                self.tg_thread.start()
+            if self.tg_process and self.tg_process.is_alive():
+                logger.info("TG process already running, terminating...")
+                self.tg_process.terminate()
+
+            self.tg_process = multiprocessing.Process(target=run_telegram_bot, name="TG_Process", daemon=True)
+            self.tg_process.start()
+            logger.info(f"✅ Telegram Bot Process Started (PID: {self.tg_process.pid})")
 
         if RUBIKA_BOT_TOKEN:
-            if self.rb_thread and self.rb_thread.is_alive():
-                logger.info("Rubika thread already running")
-            else:
-                self.rb_thread = threading.Thread(target=run_rubika_bot, daemon=True, name="RB_Thread")
-                self.rb_thread.start()
+            if self.rb_process and self.rb_process.is_alive():
+                logger.info("Rubika process already running, terminating...")
+                self.rb_process.terminate()
+
+            self.rb_process = multiprocessing.Process(target=run_rubika_bot, name="RB_Process", daemon=True)
+            self.rb_process.start()
+            logger.info(f"✅ Rubika Bot Process Started (PID: {self.rb_process.pid})")
 
     async def restart_services(self):
-        """بارگذاری مجدد تنظیمات و راه‌اندازی مجدد سرویس‌ها"""
-        logger.info("🔄 Restarting services with new configuration...")
+        """بارگذاری مجدد تنظیمات و راه‌اندازی مجدد سرویس‌ها (Hot Reload)"""
+        logger.info("🔄 Restarting services with process isolation...")
         await self._load_db_config()
 
-        # در اینجا ساده‌ترین راه ریستارت کامل تردهای Bot است.
-        # چون از ترد استفاده می‌کنیم، بستن تردها کمی دشوار است (daemon هستند).
-        # راه حل حرفه‌ای‌تر استفاده از پروسس یا کنترلرهای سیگنال است.
-        # فعلاً کلاینت‌های پنل را بروزرسانی می‌کنیم.
+        # ریستارت کلاینت‌های سبک داخل پنل
         await self.connect_light_clients()
 
-        # برای تردهای پس‌زمینه، چون در ترد جدا هستند، ساده‌ترین راه
-        # اطلاع‌رسانی به کاربر است که برنامه را یکبار باز و بسته کند
-        # یا تلاش برای استارت تردهای جدید (اگر قبلی‌ها متوقف شده باشند)
+        # ریستارت پروسه‌های پس‌زمینه (بستن قبلی و باز کردن جدید)
         self.start_background_bots()
 
         if self.window:
-            self.window.show_toast("سرویس‌های پنل بروزرسانی شدند.")
+            self.window.show_toast("سرویس‌ها با تنظیمات جدید ریستارت شدند.")
 
     async def connect_light_clients(self):
         """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
@@ -261,7 +262,13 @@ class ApplicationManager:
     async def shutdown(self):
         if self._is_shutting_down: return
         self._is_shutting_down = True
-        logger.info("Shutting down...")
+        logger.info("Shutting down Application...")
+
+        # بستن پروسه‌های فرزند
+        if self.tg_process and self.tg_process.is_alive():
+            self.tg_process.terminate()
+        if self.rb_process and self.rb_process.is_alive():
+            self.rb_process.terminate()
 
         if self.window:
             self.window._is_shutting_down = True
@@ -287,6 +294,7 @@ class ApplicationManager:
         self.loop.stop()
 
 def main():
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 

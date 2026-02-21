@@ -340,8 +340,11 @@ class MainWindow(QMainWindow):
         self.rb_indicator.setToolTip("آنلاین" if self.rubika_client else "آفلاین")
 
     def _handle_restart_click(self):
-        self.show_toast("درخواست ریستارت ارسال شد...")
-        QTimer.singleShot(1000, lambda: self.show_toast("سرویس‌ها در حال راه‌اندازی مجدد..."))
+        if hasattr(self, 'app_manager'):
+            self.show_toast("در حال بازآوری سرویس‌ها...")
+            asyncio.create_task(self.app_manager.restart_services())
+        else:
+            self.show_toast("خطا: مدیر برنامه در دسترس نیست", is_error=True)
 
     def load_stylesheet(self):
         path = self.base_path / "themes" / "dark_theme.qss"

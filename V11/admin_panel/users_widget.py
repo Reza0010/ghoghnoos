@@ -71,18 +71,18 @@ class FlowLayout(QLayout):
         lineHeight = 0
         spaceX = self.spacing()
         spaceY = self.spacing()
-        
+
         for item in self.itemList:
             wid = item.widget()
             if wid.isHidden(): continue
-            
+
             nextX = x + item.sizeHint().width() + spaceX
             if nextX - spaceX > rect.right() and lineHeight > 0:
                 x = rect.x()
                 y = y + lineHeight + spaceY
                 nextX = x + item.sizeHint().width() + spaceX
                 lineHeight = 0
-            
+
             if not testOnly: item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
             x = nextX
             lineHeight = max(lineHeight, item.sizeHint().height())
@@ -104,35 +104,35 @@ class UserDetailsDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # هدر
         header = QFrame()
         header.setStyleSheet(f"background: {PANEL_BG}; border-bottom: 1px solid {BORDER_COLOR};")
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(20, 20, 20, 20)
-        
+
         # آواتار
         avatar = QLabel()
         avatar.setFixedSize(60, 60)
         avatar.setStyleSheet(f"background: {ACCENT_COLOR}30; border-radius: 30px;")
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setPixmap(qta.icon("fa5s.user", color=ACCENT_COLOR).pixmap(30, 30))
-        
+
         info = QVBoxLayout()
         name = QLabel(self.user.full_name or "کاربر ناشناس")
         name.setStyleSheet("font-size: 18px; font-weight: bold;")
         uid = QLabel(f"ID: {self.user.user_id}")
         uid.setStyleSheet(f"color: {TEXT_SUB};")
         info.addWidget(name); info.addWidget(uid)
-        
+
         h_layout.addWidget(avatar); h_layout.addLayout(info); h_layout.addStretch()
         layout.addWidget(header)
-        
+
         # محتوا
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(20, 20, 20, 20)
-        
+
         # آمار
         stats_row = QHBoxLayout()
         spent = int(getattr(self.user, 'total_spent', 0) or 0)
@@ -140,21 +140,21 @@ class UserDetailsDialog(QDialog):
         stats_row.addWidget(self._stat_box(f"{spent:,}", "کل خرید (تومان)"))
         stats_row.addWidget(self._stat_box(str(orders), "تعداد سفارش"))
         content_layout.addLayout(stats_row)
-        
+
         # آخرین بازدید
         last_seen = getattr(self.user, 'last_seen', None)
         ls_text = last_seen.strftime("%Y/%m/%d %H:%M") if last_seen else "نامشخص"
         lbl_ls = QLabel(f"🕒 آخرین بازدید: {ls_text}")
         lbl_ls.setStyleSheet(f"color: {TEXT_SUB}; margin: 10px 0;")
         content_layout.addWidget(lbl_ls)
-        
+
         # یادداشت
         content_layout.addWidget(QLabel("یادداشت خصوصی:"))
         self.txt_note = QTextEdit()
         self.txt_note.setPlainText(getattr(self.user, 'private_note', "") or "")
         self.txt_note.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 8px;")
         content_layout.addWidget(self.txt_note)
-        
+
         # دکمه‌ها
         btn_box = QHBoxLayout()
         btn_save = QPushButton("ذخیره یادداشت")
@@ -165,7 +165,7 @@ class UserDetailsDialog(QDialog):
         btn_close.clicked.connect(self.close)
         btn_box.addStretch(); btn_box.addWidget(btn_save); btn_box.addWidget(btn_close)
         content_layout.addLayout(btn_box)
-        
+
         layout.addWidget(content)
 
     def _stat_box(self, val, txt):
@@ -193,18 +193,18 @@ class UserDetailsDialog(QDialog):
 # ==============================================================================
 class UserCard(QFrame):
     selectionChanged = pyqtSignal(str, bool)
-    
+
     def __init__(self, user_data, parent_widget):
         super().__init__()
         self.user = user_data
         self.parent_widget = parent_widget
         self.user_id = getattr(user_data, 'user_id', None)
         self.platform = getattr(user_data, 'platform', 'telegram')
-        
+
         self.setFixedSize(300, 240)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        
+
         # محاسبه سطح
         total_spent = getattr(user_data, 'total_spent', 0) or 0
         if total_spent > 10_000_000: self.badge = {"col": "#f1c40f", "icon": "fa5s.crown", "txt": "VIP"}
@@ -238,24 +238,24 @@ class UserCard(QFrame):
         self.chk_select.setFixedSize(22, 22)
         self.chk_select.setStyleSheet(f"QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px; border: 2px solid {ACCENT_COLOR}; }} QCheckBox::indicator:checked {{ background: {SUCCESS_COLOR}; }}")
         self.chk_select.stateChanged.connect(self._on_select)
-        
+
         ico = QLabel()
         ico.setFixedSize(40, 40)
         ico.setStyleSheet(f"background: {self.badge['col']}20; border-radius: 20px;")
         ico.setPixmap(qta.icon(self.badge['icon'], color=self.badge['col']).pixmap(20, 20))
-        
+
         v_info = QVBoxLayout()
         name = getattr(self.user, 'full_name', "Unknown") or "User"
         if len(name) > 18: name = name[:16] + "..."
         lbl_name = QLabel(name); lbl_name.setStyleSheet("font-weight: bold; font-size: 14px;")
         lbl_id = QLabel(f"ID: ...{str(self.user_id)[-8:]}"); lbl_id.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
         v_info.addWidget(lbl_name); v_info.addWidget(lbl_id)
-        
+
         p_icon = "fa5b.telegram-plane" if self.platform == 'telegram' else "mdi6.infinity"
         p_col = INFO_COLOR if self.platform == 'telegram' else "#8e44ad"
         lbl_plat = QLabel()
         lbl_plat.setPixmap(qta.icon(p_icon, color=p_col).pixmap(22, 22))
-        
+
         h_top.addWidget(self.chk_select)
         h_top.addWidget(ico)
         h_top.addLayout(v_info)
@@ -287,17 +287,17 @@ class UserCard(QFrame):
         # --- Actions ---
         h_btns = QHBoxLayout()
         h_btns.setSpacing(8)
-        
+
         btn_note = self._action_btn("fa5s.sticky-note", WARNING_COLOR if getattr(self.user, 'private_note') else PANEL_BG, self.open_note)
         btn_chat = self._action_btn("fa5s.comment", INFO_COLOR, self.open_chat)
-        
+
         is_banned = getattr(self.user, 'is_banned', False)
         btn_ban = self._action_btn("fa5s.ban" if not is_banned else "fa5s.check", DANGER_COLOR if not is_banned else SUCCESS_COLOR, self.toggle_ban)
-        
+
         h_btns.addStretch()
         h_btns.addWidget(btn_note); h_btns.addWidget(btn_chat); h_btns.addWidget(btn_ban)
         layout.addLayout(h_btns)
-        
+
         # Context Menu
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
@@ -330,22 +330,22 @@ class UserCard(QFrame):
     def show_context_menu(self, pos):
         menu = QMenu(self)
         menu.setStyleSheet(f"QMenu {{ background: {PANEL_BG}; color: white; border: 1px solid {BORDER_COLOR}; }} QMenu::item:selected {{ background: {ACCENT_COLOR}; }}")
-        
+
         act_detail = QAction("جزئیات کامل", self)
         act_detail.triggered.connect(self.show_details)
         menu.addAction(act_detail)
-        
+
         act_copy = QAction("کپی شناسه", self)
         act_copy.triggered.connect(lambda: QApplication.clipboard().setText(str(self.user_id)))
         menu.addAction(act_copy)
-        
+
         menu.addSeparator()
-        
+
         is_banned = getattr(self.user, 'is_banned', False)
         act_ban = QAction("رفع مسدودی" if is_banned else "مسدود کردن", self)
         act_ban.triggered.connect(self.toggle_ban)
         menu.addAction(act_ban)
-        
+
         menu.exec(self.mapToGlobal(pos))
 
     def _on_select(self, state):
@@ -390,6 +390,9 @@ class UsersWidget(QWidget):
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self._data_loaded = False
         self.selected_ids: Set[str] = set()
+        self.current_page = 1
+        self.items_per_page = 20
+        self.total_pages = 1
         self.setup_ui()
 
     def setup_ui(self):
@@ -405,32 +408,32 @@ class UsersWidget(QWidget):
         s = QLabel("CRM و مدیریت کاربران ربات")
         s.setStyleSheet(f"color: {TEXT_SUB}; font-size: 12px;")
         v_ti.addWidget(t); v_ti.addWidget(s)
-        
+
         # Quick Filters
         h_quick = QHBoxLayout()
         btn_new = QPushButton("جدید امروز")
         btn_new.setStyleSheet(f"background: transparent; border: 1px solid {BORDER_COLOR}; color: {TEXT_SUB}; border-radius: 4px; padding: 4px;")
         btn_new.clicked.connect(lambda: self._quick_filter("new"))
-        
+
         self.cmb_platform = QComboBox(); self.cmb_platform.addItems(["همه پلتفرم‌ها", "تلگرام", "روبیکا"])
         self.cmb_status = QComboBox(); self.cmb_status.addItems(["همه وضعیت‌ها", "فعال", "مسدود"])
         self.cmb_platform.currentIndexChanged.connect(self._start_search)
         self.cmb_status.currentIndexChanged.connect(self._start_search)
-        
+
         self.inp_search = QLineEdit(); self.inp_search.setPlaceholderText("🔍 جستجو نام، آیدی یا مبلغ (>500000)")
         self.inp_search.setFixedWidth(300)
         self.inp_search.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 10px; color: white;")
         self.search_timer = QTimer(); self.search_timer.setSingleShot(True); self.search_timer.timeout.connect(self.refresh_data)
         self.inp_search.textChanged.connect(lambda: self.search_timer.start(400))
-        
+
         btn_ref = QPushButton(); btn_ref.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         btn_ref.setFixedSize(40, 40); btn_ref.setStyleSheet(f"background: {SUCCESS_COLOR}; border-radius: 8px;")
         btn_ref.clicked.connect(self.refresh_data)
-        
+
         btn_exp = QPushButton(" خروجی اکسل"); btn_exp.setIcon(qta.icon('fa5s.file-csv', color='white'))
         btn_exp.setStyleSheet(f"background: {INFO_COLOR}; color: white; border-radius: 8px; padding: 8px;")
         btn_exp.clicked.connect(self.export_csv)
-        
+
         h_top.addLayout(v_ti)
         h_quick.addWidget(btn_new)
         h_top.addLayout(h_quick)
@@ -446,6 +449,38 @@ class UsersWidget(QWidget):
         self.flow_layout = FlowLayout(self.container, spacing=15)
         scroll.setWidget(self.container)
         layout.addWidget(scroll)
+
+        # --- Pagination Bar ---
+        self.pagination_bar = QFrame()
+        self.pagination_bar.setStyleSheet(f"background: {PANEL_BG}; border-radius: 8px; border: 1px solid {BORDER_COLOR};")
+        h_pag = QHBoxLayout(self.pagination_bar)
+
+        self.btn_prev = QPushButton("قبلی")
+        self.btn_prev.setIcon(qta.icon('fa5s.chevron-right', color='white'))
+        self.btn_prev.clicked.connect(self.prev_page)
+
+        self.lbl_page_info = QLabel("صفحه ۱ از ۱")
+        self.lbl_page_info.setStyleSheet("color: white; font-weight: bold;")
+
+        self.btn_next = QPushButton("بعدی")
+        self.btn_next.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.btn_next.setIcon(qta.icon('fa5s.chevron-left', color='white'))
+        self.btn_next.clicked.connect(self.next_page)
+
+        self.cmb_page_size = QComboBox()
+        self.cmb_page_size.addItems(["20 مورد", "50 مورد", "100 مورد"])
+        self.cmb_page_size.currentIndexChanged.connect(self.change_page_size)
+
+        h_pag.addWidget(self.btn_prev)
+        h_pag.addStretch()
+        h_pag.addWidget(self.lbl_page_info)
+        h_pag.addStretch()
+        h_pag.addWidget(self.btn_next)
+        h_pag.addSpacing(20)
+        h_pag.addWidget(QLabel("تعداد در صفحه:"))
+        h_pag.addWidget(self.cmb_page_size)
+
+        layout.addWidget(self.pagination_bar)
 
         # --- Bulk Toolbar ---
         self.bulk_toolbar = QFrame()
@@ -470,7 +505,24 @@ class UsersWidget(QWidget):
             QTimer.singleShot(200, self.refresh_data)
             self._data_loaded = True
 
-    def _start_search(self): self.search_timer.start(300)
+    def _start_search(self):
+        self.current_page = 1
+        self.search_timer.start(300)
+
+    def prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            asyncio.create_task(self.refresh_data())
+
+    def next_page(self):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            asyncio.create_task(self.refresh_data())
+
+    def change_page_size(self):
+        self.items_per_page = int(self.cmb_page_size.currentText().split()[0])
+        self.current_page = 1
+        asyncio.create_task(self.refresh_data())
 
     @asyncSlot()
     async def refresh_data(self, *args, **kwargs):
@@ -479,19 +531,29 @@ class UsersWidget(QWidget):
                 return
         except (RuntimeError, AttributeError): return
 
+        # پاکسازی ویجت‌های قبلی برای آزاد کردن حافظه
         while self.flow_layout.count():
             item = self.flow_layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
+            if item and item.widget():
+                item.widget().deleteLater()
+
         self.selected_ids.clear(); self.update_bulk_ui()
-        
+
         q = self.inp_search.text().lower().strip()
         p_f = self.cmb_platform.currentText()
         s_f = self.cmb_status.currentText()
-        
+
         loop = asyncio.get_running_loop()
         try:
-            users = await loop.run_in_executor(None, lambda: self._fetch_users(q, p_f, s_f))
-            
+            data = await loop.run_in_executor(None, lambda: self._fetch_paginated_users(q, p_f, s_f))
+            users = data["users"]
+            total_count = data["total"]
+
+            self.total_pages = max(1, (total_count + self.items_per_page - 1) // self.items_per_page)
+            self.lbl_page_info.setText(f"صفحه {self.current_page} از {self.total_pages} (کل: {total_count})")
+            self.btn_prev.setEnabled(self.current_page > 1)
+            self.btn_next.setEnabled(self.current_page < self.total_pages)
+
             if not users:
                 l = QLabel("هیچ کاربری یافت نشد."); l.setStyleSheet(f"color: {TEXT_SUB}; margin: 50px;"); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.flow_layout.addWidget(l)
@@ -502,45 +564,26 @@ class UsersWidget(QWidget):
                     self.flow_layout.addWidget(card)
         except Exception as e: logger.error(e)
 
-    def _fetch_users(self, q, p_f, s_f):
+    def _fetch_paginated_users(self, q, p_f, s_f):
         with SessionLocal() as db:
-            all_users = crud.get_all_users(db)
+            # ابتدا فیلترهای پایه برای شمارش
+            total = crud.get_users_count(db, query=q, platform=p_f, status=s_f)
+
+            offset = (self.current_page - 1) * self.items_per_page
+
+            all_users = crud.get_all_users(db, limit=self.items_per_page, offset=offset)
+
             res = []
             for u in all_users:
-                # Filters
-                if p_f != "همه پلتفرم‌ها" and u.platform != p_f.lower(): continue
-                if s_f == "فعال" and u.is_banned: continue
-                if s_f == "مسدود" and not u.is_banned: continue
-                
-                # Search
-                match = True
-                if q:
-                    if ">" in q:
-                        try:
-                            amt = int(q.replace(">", ""))
-                            spent = sum(o.total_amount for o in u.orders if o.status in ['paid', 'shipped', 'approved'])
-                            if spent <= amt: match = False
-                        except: pass
-                    elif "<" in q:
-                         try:
-                            amt = int(q.replace("<", ""))
-                            spent = sum(o.total_amount for o in u.orders if o.status in ['paid', 'shipped', 'approved'])
-                            if spent >= amt: match = False
-                         except: pass
-                    else:
-                        if q not in (u.full_name or "").lower() and q not in str(u.user_id): match = False
-                
-                if match:
-                    spent = sum(o.total_amount for o in u.orders if o.status in ['paid', 'shipped', 'approved'])
-                    obj = type('U', (), {
-                        "user_id": u.user_id, "full_name": u.full_name, "platform": u.platform,
-                        "is_banned": u.is_banned, "private_note": u.private_note,
-                        "order_count": len(u.orders), "total_spent": spent, "last_seen": u.last_seen
-                    })
-                    res.append(obj)
-            
-            res.sort(key=lambda x: x.total_spent, reverse=True)
-            return res
+                spent = sum(o.total_amount for o in u.orders if o.status in ['paid', 'shipped', 'approved'])
+                obj = type('U', (), {
+                    "user_id": u.user_id, "full_name": u.full_name, "platform": u.platform,
+                    "is_banned": u.is_banned, "private_note": u.private_note,
+                    "order_count": len(u.orders), "total_spent": spent, "last_seen": u.last_seen
+                })
+                res.append(obj)
+
+            return {"users": res, "total": total}
 
     def _on_card_select(self, uid, selected):
         if selected: self.selected_ids.add(uid)

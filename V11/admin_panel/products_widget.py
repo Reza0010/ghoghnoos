@@ -477,6 +477,9 @@ class ProductsWidget(QWidget):
         self.selected_ids = set()
         self.bot_username = "MyBot"
         self.rubika_username = "MyShopBot"
+        self.current_page = 1
+        self.items_per_page = 12
+        self.total_pages = 1
         self.setup_ui()
         self._data_loaded = False
 
@@ -551,6 +554,25 @@ class ProductsWidget(QWidget):
         self.empty_state.setWordWrap(True)
         layout.addWidget(self.empty_state)
         self.empty_state.hide()
+
+        # صفحه‌بندی
+        self.pag_bar = QFrame()
+        self.pag_bar.setStyleSheet(f"background: {PANEL_BG}; border-radius: 8px; border: 1px solid {BORDER_COLOR};")
+        h_pag = QHBoxLayout(self.pag_bar)
+        self.btn_prev = QPushButton("قبلی")
+        self.btn_prev.setIcon(qta.icon('fa5s.chevron-right', color='white'))
+        self.btn_prev.clicked.connect(self.prev_page)
+
+        self.lbl_page = QLabel("صفحه ۱ از ۱")
+        self.lbl_page.setStyleSheet("color: white; font-weight: bold;")
+
+        self.btn_next = QPushButton("بعدی")
+        self.btn_next.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.btn_next.setIcon(qta.icon('fa5s.chevron-left', color='white'))
+        self.btn_next.clicked.connect(self.next_page)
+
+        h_pag.addWidget(self.btn_prev); h_pag.addStretch(); h_pag.addWidget(self.lbl_page); h_pag.addStretch(); h_pag.addWidget(self.btn_next)
+        layout.addWidget(self.pag_bar)
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -563,8 +585,19 @@ class ProductsWidget(QWidget):
         dialog.product_saved.connect(self.refresh_data_slot)
         dialog.exec()
 
+    def prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            asyncio.create_task(self.refresh_data())
+
+    def next_page(self):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            asyncio.create_task(self.refresh_data())
+
     @asyncSlot()
     async def refresh_data_slot(self, *args, **kwargs):
+        self.current_page = 1
         try:
             await self.refresh_data()
         except Exception:
@@ -575,7 +608,8 @@ class ProductsWidget(QWidget):
             if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
                 return
             for i in reversed(range(self.grid_layout.count())):
-                if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+                w = self.grid_layout.itemAt(i).widget()
+                if w: w.deleteLater()
         except RuntimeError:
             return
         self.selected_ids.clear(); self.update_bulk_toolbar()
@@ -585,20 +619,37 @@ class ProductsWidget(QWidget):
             def fetch():
                 with next(get_db()) as db:
                     cats = crud.get_all_categories(db)
-                    prods = crud.advanced_search_products(db, query=self.inp_search.text(), category_id=self.cmb_cat_filter.currentData())
                     
-                    # اعمال مرتب‌سازی
-                    sort_idx = self.cmb_sort.currentIndex()
-                    if sort_idx == 1: prods.sort(key=lambda x: x.price, reverse=True) # گرانترین
-                    elif sort_idx == 2: prods.sort(key=lambda x: x.price) # ارزانترین
-                    elif sort_idx == 3: prods.sort(key=lambda x: x.stock, reverse=True) # بیشترین موجودی
-                    elif sort_idx == 4: prods.sort(key=lambda x: x.stock) # کمترین موجودی
-                    # 0 = جدیدترین (پیش‌فرض)
+                    # مرتب‌سازی برای SQL
+                    sort_map = {0: "newest", 1: "price_desc", 2: "price_asc", 3: "stock_desc", 4: "stock_asc"}
+                    sort_by = sort_map.get(self.cmb_sort.currentIndex(), "newest")
+
+                    # دریافت تعداد کل برای صفحه‌بندی
+                    total = crud.get_product_search_count(
+                        db,
+                        query=self.inp_search.text(),
+                        category_id=self.cmb_cat_filter.currentData()
+                    )
                     
-                    return cats, prods
+                    offset = (self.current_page - 1) * self.items_per_page
+                    prods = crud.advanced_search_products(
+                        db,
+                        query=self.inp_search.text(),
+                        category_id=self.cmb_cat_filter.currentData(),
+                        sort_by=sort_by,
+                        limit=self.items_per_page,
+                        offset=offset
+                    )
                     
-            cats, prods = await loop.run_in_executor(None, fetch)
+                    return cats, prods, total
+
+            cats, prods, total = await loop.run_in_executor(None, fetch)
             
+            self.total_pages = max(1, (total + self.items_per_page - 1) // self.items_per_page)
+            self.lbl_page.setText(f"صفحه {self.current_page} از {self.total_pages} (کل: {total})")
+            self.btn_prev.setEnabled(self.current_page > 1)
+            self.btn_next.setEnabled(self.current_page < self.total_pages)
+
             current_cat = self.cmb_cat_filter.currentData()
             self.cmb_cat_filter.clear(); self.cmb_cat_filter.addItem("همه دسته‌ها", None)
             for c in cats: self.cmb_cat_filter.addItem(c.name, c.id)

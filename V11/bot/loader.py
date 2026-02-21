@@ -1,9 +1,9 @@
 import logging
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    MessageHandler, 
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
     InlineQueryHandler,
     filters
 )
@@ -56,13 +56,13 @@ def setup_application_handlers(app: Application, admin_handler=None):
 
     # لیست محصولات و مدیریت صفحه‌بندی
     app.add_handler(CallbackQueryHandler(
-        products_handler.list_products, 
+        products_handler.list_products,
         pattern=r"^(prod:list:|noop)$"
     ))
 
     # نمایش جزئیات کامل یک محصول
     app.add_handler(CallbackQueryHandler(
-        products_handler.show_product_details, 
+        products_handler.show_product_details,
         pattern=r"^prod:show:\d+$"
     ))
 
@@ -108,7 +108,7 @@ def setup_application_handlers(app: Application, admin_handler=None):
     if admin_handler:
         # مدیریت تایید/رد/ارسال سفارش از داخل تلگرام توسط ادمین
         app.add_handler(CallbackQueryHandler(admin_handler, pattern=r"^adm_(approve|reject|ship):"))
-    
+
     # هندلر فال‌بک برای کال‌بک‌های تعریف نشده (بسیار مهم برای UX)
     app.add_handler(CallbackQueryHandler(_unknown_callback, pattern=r".*"))
 

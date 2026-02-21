@@ -219,10 +219,10 @@ class Ticket(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(String(50), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     subject = Column(String(255), nullable=False)
-    status = Column(String(20), default="open")  # open, pending, closed
+    status = Column(String(20), default="open", index=True)  # open, pending, closed
     priority = Column(String(20), default="normal")  # low, normal, high
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
 
     user = relationship("User")
     messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketMessage.created_at")

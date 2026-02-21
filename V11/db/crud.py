@@ -84,15 +84,34 @@ def get_or_create_user(
         # تلاش مجدد برای خواندن (اگر در ترد دیگری ساخته شده باشد)
         return db.query(models.User).filter(models.User.user_id == user_id_str).first()
 
-def get_all_users(db: Session, limit: int = 10000) -> List[models.User]:
+def get_all_users(db: Session, limit: int = 50, offset: int = 0) -> List[models.User]:
     """دریافت لیست کاربران با لود کردن سفارشات (برای محاسبه CRM)"""
     return (
         db.query(models.User)
         .options(selectinload(models.User.orders)) # بهینه سازی کوئری
         .order_by(desc(models.User.last_seen))
         .limit(limit)
+        .offset(offset)
         .all()
     )
+
+def get_users_count(db: Session, query: str = "", platform: str = "all", status: str = "all") -> int:
+    """تعداد کل کاربران با فیلترها (برای صفحه‌بندی)"""
+    q = db.query(func.count(models.User.user_id))
+
+    if platform != "all" and platform != "همه پلتفرم‌ها":
+        q = q.filter(models.User.platform == platform.lower())
+
+    if status == "فعال":
+        q = q.filter(models.User.is_banned == False)
+    elif status == "مسدود":
+        q = q.filter(models.User.is_banned == True)
+
+    if query:
+        search = f"%{query}%"
+        q = q.filter(or_(models.User.full_name.ilike(search), models.User.user_id.ilike(search)))
+
+    return q.scalar()
 
 def update_user_info(db: Session, user_id: Union[int, str], **kwargs) -> bool:
     try:
@@ -235,18 +254,46 @@ def advanced_search_products(
         q = q.order_by(desc(models.Product.price))
     elif sort_by == "top_seller":
         q = q.order_by(desc(models.Product.is_top_seller), desc(models.Product.created_at))
+    elif sort_by == "stock_asc":
+        q = q.order_by(asc(models.Product.stock))
+    elif sort_by == "stock_desc":
+        q = q.order_by(desc(models.Product.stock))
     else: # newest
         q = q.order_by(desc(models.Product.created_at))
 
     return q.limit(limit).offset(offset).all()
 
-def get_product_search_count(db: Session, query: str = "", **kwargs) -> int:
+def get_product_search_count(
+    db: Session,
+    query: str = "",
+    category_id: int = None,
+    min_price: int = 0,
+    max_price: int = 0,
+    in_stock_only: bool = False,
+    **kwargs
+) -> int:
     """تعداد نتایج جستجو (برای صفحه‌بندی)"""
     q = db.query(func.count(models.Product.id))
+
     if query:
         search = f"%{query}%"
-        q = q.filter(or_(models.Product.name.ilike(search), models.Product.brand.ilike(search)))
-    # سایر فیلترها مشابه advanced_search_products اعمال شود...
+        q = q.filter(
+            or_(
+                models.Product.name.ilike(search),
+                models.Product.brand.ilike(search),
+                models.Product.tags.ilike(search)
+            )
+        )
+
+    if category_id:
+        q = q.filter(models.Product.category_id == category_id)
+    if min_price > 0:
+        q = q.filter(models.Product.price >= min_price)
+    if max_price > 0:
+        q = q.filter(models.Product.price <= max_price)
+    if in_stock_only:
+        q = q.filter(models.Product.stock > 0)
+
     return q.scalar()
 
 def create_product_with_variants(
