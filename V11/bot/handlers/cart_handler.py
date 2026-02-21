@@ -51,13 +51,21 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # محاسبه مجموع
-    items_total = sum(float(item.product.price) * item.quantity for item in items)
+    def _calc_total(items):
+        total = 0
+        for item in items:
+            price = item.product.discount_price if crud.is_product_discount_active(item.product) else item.product.price
+            total += float(price) * item.quantity
+        return total
+
+    items_total = _calc_total(items)
     
     # ساخت متن لیست خرید
     cart_text = f"{responses.CART_TITLE}{responses.get_divider()}"
     for item in items:
         attr = f" ({item.selected_attributes})" if item.selected_attributes else ""
-        row_price = float(item.product.price) * item.quantity
+        price = item.product.discount_price if crud.is_product_discount_active(item.product) else item.product.price
+        row_price = float(price) * item.quantity
         cart_text += responses.CART_ITEM_ROW.format(
             name=f"{item.product.name}{attr}",
             quantity=item.quantity,
@@ -242,7 +250,14 @@ async def show_invoice_step(message, context) -> int:
         await message.reply_text("سبد خرید شما خالی شده است.", reply_markup=keyboards.get_main_menu_keyboard())
         return ConversationHandler.END
 
-    items_total = sum(float(item.product.price) * item.quantity for item in items)
+    def _calc_total(items):
+        total = 0
+        for item in items:
+            price = item.product.discount_price if crud.is_product_discount_active(item.product) else item.product.price
+            total += float(price) * item.quantity
+        return total
+
+    items_total = _calc_total(items)
     ship_cost = float(await run_db(crud.get_setting, "shipping_cost", "0"))
     free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
 
@@ -324,7 +339,14 @@ async def show_card_info_step(message, context) -> int:
     user_id = context._user_id
     items = await run_db(crud.get_cart_items, user_id)
 
-    items_total = sum(float(item.product.price) * item.quantity for item in items)
+    def _calc_total(items):
+        total = 0
+        for item in items:
+            price = item.product.discount_price if crud.is_product_discount_active(item.product) else item.product.price
+            total += float(price) * item.quantity
+        return total
+
+    items_total = _calc_total(items)
     ship_cost = float(await run_db(crud.get_setting, "shipping_cost", "0"))
     free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
     

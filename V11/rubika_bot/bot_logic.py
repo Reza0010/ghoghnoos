@@ -207,9 +207,10 @@ class RubikaWorker:
             if not p: return
 
         # آماده سازی متن
-        final_price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
+        is_disc = crud.is_product_discount_active(p)
+        final_price = p.discount_price if is_disc else p.price
         price_text = f"{int(final_price):,} تومان"
-        if p.discount_price and p.discount_price > 0:
+        if is_disc:
             price_text = f"<s>{int(p.price):,}</s> ➡️ {price_text} 🔥"
 
         txt = (
@@ -301,7 +302,7 @@ class RubikaWorker:
         total = 0
         for item in items:
             p = item.product
-            price = p.discount_price if (p.discount_price and p.discount_price > 0) else p.price
+            price = p.discount_price if crud.is_product_discount_active(p) else p.price
             line_total = price * item.quantity
             total += line_total
             msg += f"🔹 {p.name}\n   تعداد: {item.quantity} | قیمت: {int(line_total):,} ت\n"

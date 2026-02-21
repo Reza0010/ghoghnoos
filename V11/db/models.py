@@ -68,6 +68,8 @@ class Product(Base):
     
     price = Column(Numeric(12, 0), nullable=False)
     discount_price = Column(Numeric(12, 0), nullable=True)
+    discount_start_date = Column(DateTime(timezone=True), nullable=True)
+    discount_end_date = Column(DateTime(timezone=True), nullable=True)
     stock = Column(Integer, default=0, nullable=False)
     
     is_active = Column(Boolean, default=True, nullable=False)

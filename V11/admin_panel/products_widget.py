@@ -212,11 +212,18 @@ class ProductEditorDialog(QDialog):
         tab_price = QWidget(); l_price = QVBoxLayout(tab_price); l_price.setContentsMargins(20, 20, 20, 20); l_price.setSpacing(15)
         self.inp_price = FormattedPriceInput(placeholder="قیمت اصلی")
         self.inp_discount = FormattedPriceInput(placeholder="قیمت تخفیف (اختیاری)")
+
+        h_dates = QHBoxLayout()
+        self.inp_disc_start = QLineEdit(); self.inp_disc_start.setPlaceholderText("شروع (YYYY-MM-DD)")
+        self.inp_disc_end = QLineEdit(); self.inp_disc_end.setPlaceholderText("پایان (YYYY-MM-DD)")
+        h_dates.addWidget(self.inp_disc_start); h_dates.addWidget(self.inp_disc_end)
+
         self.inp_stock = QSpinBox(); self.inp_stock.setRange(0, 100000)
         self.inp_stock.setStyleSheet(f"background: {BG_COLOR}; color: {TEXT_MAIN}; border: 1px solid {BORDER_COLOR}; padding: 10px; border-radius: 8px;")
         self.chk_top = QCheckBox("پرفروش"); self.chk_top.setStyleSheet(f"color: {TEXT_MAIN}; font-weight: bold;")
         l_price.addWidget(QLabel("قیمت:")); l_price.addWidget(self.inp_price)
         l_price.addWidget(QLabel("تخفیف:")); l_price.addWidget(self.inp_discount)
+        l_price.addWidget(QLabel("زمان‌بندی تخفیف:")); l_price.addLayout(h_dates)
         l_price.addWidget(QLabel("موجودی:")); l_price.addWidget(self.inp_stock)
         l_price.addWidget(self.chk_top); l_price.addStretch()
 
@@ -270,6 +277,8 @@ class ProductEditorDialog(QDialog):
         p = data["obj"]
         self.inp_name.setText(p.name); self.inp_price.setValue(float(p.price))
         self.inp_discount.setValue(float(p.discount_price or 0)); self.inp_stock.setValue(p.stock)
+        self.inp_disc_start.setText(p.discount_start_date.strftime("%Y-%m-%d") if p.discount_start_date else "")
+        self.inp_disc_end.setText(p.discount_end_date.strftime("%Y-%m-%d") if p.discount_end_date else "")
         self.inp_brand.setText(p.brand or ""); self.inp_desc.setPlainText(p.description or "")
         self.inp_tags.set_tags(p.tags or ""); self.inp_rel.setText(p.related_product_ids or "")
         self.chk_top.setChecked(p.is_top_seller)
@@ -284,6 +293,8 @@ class ProductEditorDialog(QDialog):
         data = {
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
             "price": self.inp_price.value(), "discount_price": self.inp_discount.value(),
+            "discount_start_date": datetime.strptime(self.inp_disc_start.text(), "%Y-%m-%d") if self.inp_disc_start.text() else None,
+            "discount_end_date": datetime.strptime(self.inp_disc_end.text(), "%Y-%m-%d") if self.inp_disc_end.text() else None,
             "stock": self.inp_stock.value(), "brand": self.inp_brand.text(),
             "description": self.inp_desc.toPlainText(), "tags": ",".join(self.inp_tags.get_tags_list()),
             "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked()
@@ -383,12 +394,15 @@ class ProductCard(QFrame):
         
         row_price = QHBoxLayout()
         if product.discount_price and product.discount_price > 0:
-             lbl_price = QLabel(f"{int(product.discount_price):,} ت"); lbl_price.setStyleSheet(f"color: {WARNING_COLOR}; font-weight: bold; font-size: 14px;")
+             self.lbl_price = QLabel(f"{int(product.discount_price):,} ت"); self.lbl_price.setStyleSheet(f"color: {WARNING_COLOR}; font-weight: bold; font-size: 14px;")
              lbl_old = QLabel(f"{int(product.price):,}"); lbl_old.setStyleSheet(f"color: {TEXT_SUB}; font-size: 10px; text-decoration: line-through;")
-             row_price.addWidget(lbl_price); row_price.addWidget(lbl_old)
+             row_price.addWidget(self.lbl_price); row_price.addWidget(lbl_old)
         else:
-             lbl_price = QLabel(f"{int(product.price):,} تومان"); lbl_price.setStyleSheet(f"color: {SUCCESS_COLOR}; font-weight: bold; font-size: 14px;")
-             row_price.addWidget(lbl_price)
+             self.lbl_price = QLabel(f"{int(product.price):,} تومان"); self.lbl_price.setStyleSheet(f"color: {SUCCESS_COLOR}; font-weight: bold; font-size: 14px;")
+             row_price.addWidget(self.lbl_price)
+
+        self.lbl_price.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lbl_price.mouseDoubleClickEvent = lambda e: self._quick_edit_price()
 
         # موجودی با قابلیت دابل کلیک
         stock_color = DANGER_COLOR if product.stock < 5 else TEXT_SUB
@@ -446,12 +460,18 @@ class ProductCard(QFrame):
         lbl.move(x, 10)
 
     def _quick_edit_stock(self):
-        val, ok = QInputDialog.getInt(self, "ویرایش سریع موجودی", f"موجی جدید برای {self.product.name}:", value=self.product.stock, min=0)
+        val, ok = QInputDialog.getInt(self, "ویرایش سریع موجودی", f"موجودی جدید برای {self.product.name}:", value=self.product.stock, min=0)
         if ok:
             self.quickUpdateRequested.emit(self.product.id, "stock", val)
-            # آپدیت ظاهری موقت تا رفرش بعدی
             self.lbl_stock.setText(f"📦 موجودی: {val}")
-            self.product.stock = val # آپدیت مدل داخلی
+            self.product.stock = val
+
+    def _quick_edit_price(self):
+        val, ok = QInputDialog.getInt(self, "ویرایش سریع قیمت", f"قیمت جدید برای {self.product.name}:", value=int(self.product.price), min=0)
+        if ok:
+            self.quickUpdateRequested.emit(self.product.id, "price", val)
+            self.lbl_price.setText(f"{val:,} تومان")
+            self.product.price = val
 
     def on_checked(self, state):
         self.selectionChanged.emit(self.product.id, state == 2)
@@ -499,7 +519,12 @@ class ProductsWidget(QWidget):
         btn_bulk_del = QPushButton("حذف گروهی"); btn_bulk_del.setIcon(qta.icon('fa5s.trash', color=DANGER_COLOR))
         btn_bulk_del.setStyleSheet(f"background: transparent; border: 1px solid {DANGER_COLOR}; color: {DANGER_COLOR}; border-radius: 6px; padding: 5px;")
         btn_bulk_del.clicked.connect(self.delete_bulk_slot)
-        h_bulk.addWidget(self.lbl_sel_count); h_bulk.addWidget(btn_bulk_del); h_bulk.addStretch()
+
+        btn_bulk_cat = QPushButton("تغییر دسته"); btn_bulk_cat.setIcon(qta.icon('fa5s.layer-group', color=INFO_COLOR))
+        btn_bulk_cat.setStyleSheet(f"background: transparent; border: 1px solid {INFO_COLOR}; color: {INFO_COLOR}; border-radius: 6px; padding: 5px;")
+        btn_bulk_cat.clicked.connect(self.change_bulk_category)
+
+        h_bulk.addWidget(self.lbl_sel_count); h_bulk.addWidget(btn_bulk_del); h_bulk.addWidget(btn_bulk_cat); h_bulk.addStretch()
         
         top_row.addWidget(lbl_title); top_row.addWidget(self.bulk_toolbar); top_row.addStretch()
         
@@ -733,6 +758,37 @@ class ProductsWidget(QWidget):
             await self.refresh_data()
         except Exception as e:
             logger.error(e)
+
+    @asyncSlot()
+    async def change_bulk_category(self, *args, **kwargs):
+        if not self.selected_ids: return
+
+        # دریافت لیست دسته‌ها
+        with next(get_db()) as db:
+            cats = crud.get_all_categories(db)
+            cat_names = [c.name for c in cats]
+            cat_ids = [c.id for c in cats]
+
+        if not cat_names: return
+
+        item, ok = QInputDialog.getItem(self, "تغییر دسته‌بندی گروهی", "دسته جدید را انتخاب کنید:", cat_names, 0, False)
+        if ok and item:
+            new_cat_id = cat_ids[cat_names.index(item)]
+            ids = list(self.selected_ids)
+
+            loop = asyncio.get_running_loop()
+            try:
+                def db_op():
+                    with next(get_db()) as db:
+                        for pid in ids:
+                            p = db.query(models.Product).get(pid)
+                            if p: p.category_id = new_cat_id
+                        db.commit()
+                await loop.run_in_executor(None, db_op)
+                self.window().show_toast(f"دسته {len(ids)} محصول تغییر یافت.")
+                await self.refresh_data()
+            except Exception as e:
+                logger.error(e)
 
     @asyncSlot()
     async def delete_bulk_slot(self, *args, **kwargs):

@@ -204,6 +204,19 @@ def get_product(db: Session, prod_id: int) -> Optional[models.Product]:
         joinedload(models.Product.category)
     ).filter_by(id=prod_id).first()
 
+def is_product_discount_active(product: models.Product) -> bool:
+    """بررسی فعال بودن تخفیف بر اساس زمان‌بندی"""
+    if not product.discount_price or product.discount_price <= 0:
+        return False
+
+    now = datetime.now()
+    if product.discount_start_date and now < product.discount_start_date:
+        return False
+    if product.discount_end_date and now > product.discount_end_date:
+        return False
+
+    return True
+
 def get_active_products_by_category(db: Session, category_id: int) -> List[models.Product]:
     return db.query(models.Product).filter(
         models.Product.category_id == category_id,

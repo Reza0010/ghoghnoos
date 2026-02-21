@@ -183,9 +183,10 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
     cart_qty = this_item.quantity if this_item else 0
 
     # آماده‌سازی متن قیمت (تخفیف هوشمند)
-    final_price = prod.discount_price if (prod.discount_price and prod.discount_price > 0) else prod.price
+    is_disc = crud.is_product_discount_active(prod)
+    final_price = prod.discount_price if is_disc else prod.price
     price_text = responses.format_price(final_price)
-    if prod.discount_price and prod.discount_price > 0:
+    if is_disc:
         price_text = f"<s>{responses.format_price(prod.price)}</s> ➡️ {price_text} 🔥"
 
     # ساخت متن نهایی
