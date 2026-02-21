@@ -752,3 +752,37 @@ def close_ticket(db: Session, ticket_id: int):
         ticket.status = "closed"
         db.commit()
     return ticket
+
+# ======================================================================
+# 10. مدیریت پروکسی (Proxy Management)
+# ======================================================================
+def get_all_proxies(db: Session) -> List[models.Proxy]:
+    return db.query(models.Proxy).order_by(desc(models.Proxy.created_at)).all()
+
+def add_proxy(db: Session, data: dict) -> models.Proxy:
+    proxy = models.Proxy(**data)
+    db.add(proxy)
+    db.commit()
+    db.refresh(proxy)
+    return proxy
+
+def delete_proxy(db: Session, proxy_id: int):
+    db.query(models.Proxy).filter_by(id=proxy_id).delete()
+    db.commit()
+
+def set_active_proxy(db: Session, proxy_id: Optional[int]):
+    # غیرفعال کردن همه
+    db.query(models.Proxy).update({models.Proxy.is_active: False})
+    if proxy_id:
+        db.query(models.Proxy).filter_by(id=proxy_id).update({models.Proxy.is_active: True})
+    db.commit()
+
+def get_active_proxy(db: Session) -> Optional[models.Proxy]:
+    return db.query(models.Proxy).filter_by(is_active=True).first()
+
+def update_proxy_latency(db: Session, proxy_id: int, latency: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if proxy:
+        proxy.latency = latency
+        proxy.last_tested = datetime.now()
+        db.commit()

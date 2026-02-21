@@ -101,7 +101,7 @@ class ApplicationManager:
         self._is_shutting_down = False
 
     async def _load_db_config(self):
-        """بارگذاری تنظیمات حساس از دیتابیس"""
+        """بارگذاری تنظیمات حساس و سیستم هوشمند پروکسی از دیتابیس"""
         from db.database import SessionLocal
         from db import crud
         import config
@@ -109,10 +109,19 @@ class ApplicationManager:
         try:
             def fetch():
                 with SessionLocal() as db:
+                    active_proxy = crud.get_active_proxy(db)
+                    proxy_str = None
+                    if active_proxy:
+                        proxy_str = f"{active_proxy.protocol}://"
+                        if active_proxy.username and active_proxy.password:
+                            proxy_str += f"{active_proxy.username}:{active_proxy.password}@"
+                        proxy_str += f"{active_proxy.host}:{active_proxy.port}"
+
                     return {
                         "tg_token": crud.get_setting(db, "telegram_bot_token"),
                         "rb_token": crud.get_setting(db, "rubika_bot_token"),
-                        "proxy_url": crud.get_setting(db, "proxy_url"),
+                        "proxy_url_v2": proxy_str,
+                        "proxy_url_v1": crud.get_setting(db, "proxy_url"),
                         "proxy_enabled": crud.get_setting(db, "proxy_enabled", "false") == "true"
                     }
 
@@ -128,10 +137,17 @@ class ApplicationManager:
                 global RUBIKA_BOT_TOKEN
                 RUBIKA_BOT_TOKEN = db_conf["rb_token"]
 
-            if db_conf["proxy_enabled"] and db_conf["proxy_url"]:
-                config.PROXY_URL = db_conf["proxy_url"]
-                global PROXY_URL
-                PROXY_URL = db_conf["proxy_url"]
+            # اولویت با پروکسی پیشرفته (v2) است، اگر نبود از v1 استفاده می‌شود
+            final_proxy = db_conf["proxy_url_v2"] or (db_conf["proxy_url_v1"] if db_conf["proxy_enabled"] else None)
+
+            global PROXY_URL
+            if final_proxy:
+                config.PROXY_URL = final_proxy
+                PROXY_URL = final_proxy
+                logger.info(f"Connected using dynamic proxy: {final_proxy}")
+            else:
+                config.PROXY_URL = None
+                PROXY_URL = None
 
         except Exception as e:
             logger.error(f"Error loading DB config: {e}")

@@ -240,3 +240,19 @@ class TicketMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     ticket = relationship("Ticket", back_populates="messages")
+
+
+class Proxy(Base):
+    __tablename__ = "proxies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    protocol = Column(String(20), default="http") # http, socks5
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False)
+    username = Column(String(100), nullable=True)
+    password = Column(String(100), nullable=True)
+
+    is_active = Column(Boolean, default=False, index=True)
+    latency = Column(Integer, nullable=True) # ms
+    last_tested = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

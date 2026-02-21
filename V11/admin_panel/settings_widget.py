@@ -192,6 +192,7 @@ class SettingsWidget(QWidget):
 
         nav_items = [
             (" تنظیمات پایه", "fa5s.network-wired"),
+            (" مدیریت پروکسی", "fa5s.shield-alt"),
             (" ربات تلگرام", "fa5b.telegram"),
             (" ربات روبیکا", "fa5s.infinity"),
             (" مالی و ارسال", "fa5s.credit-card"),
@@ -210,6 +211,7 @@ class SettingsWidget(QWidget):
         # --- صفحات محتوا ---
         self.pages_stack = QStackedWidget()
         self.pages_stack.addWidget(self._ui_core_page())
+        self.pages_stack.addWidget(self._ui_proxy_page())
         self.pages_stack.addWidget(self._ui_telegram_page())
         self.pages_stack.addWidget(self._ui_rubika_page())
         self.pages_stack.addWidget(self._ui_payment_page())
@@ -273,6 +275,33 @@ class SettingsWidget(QWidget):
         v_box.addStretch()
         scroll.setWidget(container)
         layout.addWidget(scroll)
+        return page
+
+    def _ui_proxy_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30); layout.setSpacing(20)
+
+        card = SettingCard("مدیریت پروکسی‌های پیشرفته")
+
+        self.proxy_table = QTableWidget(0, 6)
+        self.proxy_table.setHorizontalHeaderLabels(["نام", "پروتکل", "آدرس:پورت", "وضعیت", "تأخیر", "عملیات"])
+        self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.proxy_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        btn_add = QPushButton(" ➕ افزودن پروکسی جدید")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px; font-weight: bold;")
+        btn_add.clicked.connect(self.show_add_proxy_dialog)
+
+        card.add_widget(self.proxy_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+
+        hint = QLabel("💡 نکته: پروکسی فعال برای اتصال ربات تلگرام و بررسی آپدیت‌ها استفاده می‌شود.")
+        hint.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+        layout.addWidget(hint)
+        layout.addStretch()
+
+        QTimer.singleShot(600, self.load_proxies)
         return page
 
     def _ui_telegram_page(self):
@@ -748,6 +777,112 @@ class SettingsWidget(QWidget):
                 html += f"<div style='color:{col}; font-size: 12px;'>{line.strip()}</div>"
             self.log_viewer.setHtml(html)
         except: pass
+
+    def load_proxies(self):
+        try:
+            with next(get_db()) as db:
+                proxies = crud.get_all_proxies(db)
+
+            self.proxy_table.setRowCount(0)
+            for i, p in enumerate(proxies):
+                self.proxy_table.insertRow(i)
+                self.proxy_table.setItem(i, 0, QTableWidgetItem(p.name))
+                self.proxy_table.setItem(i, 1, QTableWidgetItem(p.protocol.upper()))
+                self.proxy_table.setItem(i, 2, QTableWidgetItem(f"{p.host}:{p.port}"))
+
+                # وضعیت (فعال/غیرفعال)
+                status_btn = QPushButton("فعال شود" if not p.is_active else "✅ فعال")
+                status_btn.setEnabled(not p.is_active)
+                status_btn.setStyleSheet(f"background: {SUCCESS_COLOR if p.is_active else PANEL_BG}; color: white; border-radius: 4px;")
+                status_btn.clicked.connect(lambda _, pid=p.id: self.activate_proxy(pid))
+                self.proxy_table.setCellWidget(i, 3, status_btn)
+
+                # تأخیر
+                lat_text = f"{p.latency}ms" if p.latency else "--"
+                self.proxy_table.setItem(i, 4, QTableWidgetItem(lat_text))
+
+                # عملیات
+                actions = QWidget(); h = QHBoxLayout(actions); h.setContentsMargins(0,0,0,0)
+                b_test = QPushButton(); b_test.setIcon(qta.icon('fa5s.vial', color=INFO_COLOR))
+                b_test.setToolTip("تست اتصال"); b_test.clicked.connect(lambda _, pid=p.id: self.test_proxy_connection(pid))
+                b_del = QPushButton(); b_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                b_del.setToolTip("حذف"); b_del.clicked.connect(lambda _, pid=p.id: self.delete_proxy_ui(pid))
+                h.addWidget(b_test); h.addWidget(b_del)
+                self.proxy_table.setCellWidget(i, 5, actions)
+        except: pass
+
+    def show_add_proxy_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("افزودن پروکسی"); dlg.setFixedWidth(400)
+        l = QVBoxLayout(dlg)
+
+        name = QLineEdit(); name.setPlaceholderText("نام (مثلا: هیدیفای اصلی)")
+        proto = QComboBox(); proto.addItems(["http", "socks5"])
+        host = QLineEdit(); host.setPlaceholderText("آدرس (IP یا Domain)")
+        port = QSpinBox(); port.setRange(1, 65535); port.setValue(2080)
+        user = QLineEdit(); user.setPlaceholderText("نام کاربری (اختیاری)")
+        passw = QLineEdit(); passw.setPlaceholderText("رمز عبور (اختیاری)"); passw.setEchoMode(QLineEdit.EchoMode.Password)
+
+        for w in [name, host, user, passw]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px; border-radius: 5px;")
+
+        l.addWidget(QLabel("نام:")); l.addWidget(name)
+        l.addWidget(QLabel("پروتکل:")); l.addWidget(proto)
+        l.addWidget(QLabel("آدرس:")); l.addWidget(host)
+        l.addWidget(QLabel("پورت:")); l.addWidget(port)
+        l.addWidget(QLabel("نام کاربری:")); l.addWidget(user)
+        l.addWidget(QLabel("رمز عبور:")); l.addWidget(passw)
+
+        b = QPushButton("ذخیره"); b.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not host.text() or not name.text(): return
+            data = {
+                "name": name.text(), "protocol": proto.currentText(),
+                "host": host.text(), "port": port.value(),
+                "username": user.text() or None, "password": passw.text() or None
+            }
+            with next(get_db()) as db: crud.add_proxy(db, data)
+            dlg.accept(); self.load_proxies()
+
+        b.clicked.connect(save); dlg.exec()
+
+    def activate_proxy(self, pid):
+        with next(get_db()) as db: crud.set_active_proxy(db, pid)
+        self.load_proxies()
+        self.window().show_toast("پروکسی فعال شد. برای اعمال نهایی، سرویس‌ها را ریستارت کنید.")
+
+    def delete_proxy_ui(self, pid):
+        if QMessageBox.question(self, "حذف", "آیا این پروکسی حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_proxy(db, pid)
+            self.load_proxies()
+
+    @asyncSlot()
+    async def test_proxy_connection(self, pid):
+        self.window().show_toast("در حال تست اتصال...")
+        import time
+        import httpx
+
+        with next(get_db()) as db:
+            p = db.query(models.Proxy).get(pid)
+            if not p: return
+
+        proxy_url = f"{p.protocol}://"
+        if p.username and p.password: proxy_url += f"{p.username}:{p.password}@"
+        proxy_url += f"{p.host}:{p.port}"
+
+        start = time.time()
+        try:
+            async with httpx.AsyncClient(proxies=proxy_url, timeout=10) as client:
+                resp = await client.get("https://api.telegram.org", follow_redirects=True)
+                if resp.status_code == 200:
+                    latency = int((time.time() - start) * 1000)
+                    with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
+                    self.load_proxies()
+                    self.window().show_toast(f"اتصال موفق! تأخیر: {latency}ms")
+                else:
+                    self.window().show_toast(f"خطا در پاسخ: {resp.status_code}", is_error=True)
+        except Exception as e:
+            self.window().show_toast(f"خطا در اتصال: {str(e)}", is_error=True)
 
     @asyncSlot()
     async def refresh_data(self, *args, **kwargs):
