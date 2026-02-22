@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning)
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
-from config import TELEGRAM_BOT_TOKEN, LOG_DIR, RUBIKA_BOT_TOKEN, PROXY_URL
+from config import TELEGRAM_BOT_TOKEN, LOG_DIR, RUBIKA_BOT_TOKEN, PROXY_URL, ADMIN_USER_IDS
 from db.database import init_db
 from bot.loader import setup_application_handlers
 from rubika_bot.bot_logic import RubikaWorker
@@ -33,62 +33,64 @@ logger = logging.getLogger("Launcher")
 # ==============================================================================
 # ترد ایزوله تلگرام
 # ==============================================================================
-def run_telegram_bot():
-    """اجرای ربات تلگرام در ترد مجزا با مدیریت دستی حلقه برای پایداری بیشتر"""
-    if not TELEGRAM_BOT_TOKEN: return
+def run_telegram_bot(token, proxy=None, admin_ids=None):
+    """اجرای ربات تلگرام در پروسه مجزا"""
+    if not token: return
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # تزریق تنظیمات به ماژول کانفیگ در پروسه جدید پیش از هر گونه لود دیگر
+    import config
+    config.TELEGRAM_BOT_TOKEN = token
+    config.PROXY_URL = proxy
+    if admin_ids: config.ADMIN_USER_IDS = admin_ids
 
-    async def main_loop():
-        try:
-            builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
-            if PROXY_URL:
-                builder.proxy_url(PROXY_URL)
-                builder.get_updates_proxy_url(PROXY_URL)
-                logger.info(f"Using Proxy: {PROXY_URL}")
+    # تنظیم مجدد لاگینگ در پروسه جدید
+    from config import setup_logging
+    setup_logging()
 
-            app = builder.build()
-            setup_application_handlers(app)
-
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            logger.info("✅ Telegram Bot Thread Polling Started")
-
-            # حلقه انتظار تا زمانی که ترد زنده است
-            while True:
-                await asyncio.sleep(10)
-        except asyncio.CancelledError:
-            logger.info("TG Bot Thread Cancelled")
-        except Exception as e:
-            logger.error(f"TG Bot Fatal Error: {e}")
-        finally:
-            # پاکسازی منابع
-            if 'app' in locals():
-                try:
-                    await app.updater.stop()
-                    await app.stop()
-                    await app.shutdown()
-                except: pass
+    from telegram.ext import Application
+    from telegram import Update
+    from bot.loader import setup_application_handlers
 
     try:
-        loop.run_until_complete(main_loop())
+        builder = Application.builder().token(token)
+        if proxy:
+            builder.proxy_url(proxy)
+            builder.get_updates_proxy_url(proxy)
+            logger.info(f"Using Proxy for bot: {proxy}")
+
+        app = builder.build()
+        setup_application_handlers(app)
+
+        logger.info("✅ Telegram Bot Process Started")
+        # run_polling متدی بلاک‌کننده است که مدیریت لوپ را به عهده می‌گیرد
+        # stop_signals=None برای ویندوز در حالت پروسه فرزند الزامی است
+        app.run_polling(allowed_updates=Update.ALL_TYPES, stop_signals=None)
+
     except Exception as e:
-        logger.error(f"TG Thread Exception: {e}")
+        logger.error(f"TG Process Fatal Error: {e}")
+
 # ==============================================================================
 # ترد ایزوله روبیکا
 # ==============================================================================
-def run_rubika_bot():
-    if not RUBIKA_BOT_TOKEN: return
+def run_rubika_bot(token, admin_ids=None):
+    """اجرای ربات روبیکا در پروسه مجزا"""
+    if not token: return
+
+    import config
+    config.RUBIKA_BOT_TOKEN = token
+    if admin_ids: config.ADMIN_USER_IDS = admin_ids
+
+    from config import setup_logging
+    setup_logging()
+
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        bot = RubikaWorker(RUBIKA_BOT_TOKEN)
-        logger.info("✅ Rubika Bot Thread Started")
+        bot = RubikaWorker(token)
+        logger.info("✅ Rubika Bot Process Started")
         loop.run_until_complete(bot.start_polling())
     except Exception as e:
-        logger.error(f"Rubika Thread Error: {e}")
+        logger.error(f"Rubika Process Error: {e}")
 # ==============================================================================
 # مدیریت برنامه
 # ==============================================================================
@@ -122,7 +124,8 @@ class ApplicationManager:
                         "rb_token": crud.get_setting(db, "rubika_bot_token"),
                         "proxy_url_v2": proxy_str,
                         "proxy_url_v1": crud.get_setting(db, "proxy_url"),
-                        "proxy_enabled": crud.get_setting(db, "proxy_enabled", "false") == "true"
+                        "proxy_enabled": crud.get_setting(db, "proxy_enabled", "false") == "true",
+                        "admin_ids": crud.get_admin_ids(db)
                     }
 
             db_conf = await self.loop.run_in_executor(None, fetch)
@@ -136,6 +139,11 @@ class ApplicationManager:
                 config.RUBIKA_BOT_TOKEN = db_conf["rb_token"]
                 global RUBIKA_BOT_TOKEN
                 RUBIKA_BOT_TOKEN = db_conf["rb_token"]
+
+            if db_conf["admin_ids"]:
+                config.ADMIN_USER_IDS = db_conf["admin_ids"]
+                global ADMIN_USER_IDS
+                ADMIN_USER_IDS = db_conf["admin_ids"]
 
             # اولویت با پروکسی پیشرفته (v2) است، اگر نبود از v1 استفاده می‌شود
             final_proxy = db_conf["proxy_url_v2"] or (db_conf["proxy_url_v1"] if db_conf["proxy_enabled"] else None)
@@ -201,12 +209,18 @@ class ApplicationManager:
         """اجرای ربات‌ها در پروسه‌های مجزا برای پایداری بیشتر (Process Isolation)"""
         # نکته: در ویندوز حتما باید متد spawn استفاده شود که پیش‌فرض است.
 
+        # استفاده از متغیرهای لوکال که از دیتابیس لود شده‌اند (اطمینان از انتقال به پروسه جدید)
         if TELEGRAM_BOT_TOKEN:
             if self.tg_process and self.tg_process.is_alive():
                 logger.info("TG process already running, terminating...")
                 self.tg_process.terminate()
 
-            self.tg_process = multiprocessing.Process(target=run_telegram_bot, name="TG_Process", daemon=True)
+            self.tg_process = multiprocessing.Process(
+                target=run_telegram_bot,
+                args=(TELEGRAM_BOT_TOKEN, PROXY_URL, ADMIN_USER_IDS),
+                name="TG_Process",
+                daemon=True
+            )
             self.tg_process.start()
             logger.info(f"✅ Telegram Bot Process Started (PID: {self.tg_process.pid})")
 
@@ -215,7 +229,12 @@ class ApplicationManager:
                 logger.info("Rubika process already running, terminating...")
                 self.rb_process.terminate()
 
-            self.rb_process = multiprocessing.Process(target=run_rubika_bot, name="RB_Process", daemon=True)
+            self.rb_process = multiprocessing.Process(
+                target=run_rubika_bot,
+                args=(RUBIKA_BOT_TOKEN, ADMIN_USER_IDS),
+                name="RB_Process",
+                daemon=True
+            )
             self.rb_process.start()
             logger.info(f"✅ Rubika Bot Process Started (PID: {self.rb_process.pid})")
 
