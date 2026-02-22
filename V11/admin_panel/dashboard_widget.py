@@ -189,7 +189,7 @@ class StatCard(QFrame):
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._update_count)
 
-    def set_data(self, value, trend_val=None):
+    def set_data(self, value, trend_val=None, trend_label="نسبت به دیروز"):
         self.target_value = value
         self.current_value = 0
         self.step = max(1, int(value / 30)) 
@@ -198,7 +198,7 @@ class StatCard(QFrame):
         if trend_val is not None:
             color = COLOR_GREEN if trend_val >= 0 else COLOR_RED
             sign = "↑" if trend_val >= 0 else "↓"
-            self.lbl_trend.setText(f"{sign} {abs(trend_val)}% نسبت به دیروز")
+            self.lbl_trend.setText(f"{sign} {abs(trend_val)}% {trend_label}")
             self.lbl_trend.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold;")
 
     def _update_count(self):
@@ -257,35 +257,55 @@ class StockItem(QWidget):
 # Activity Item
 # ==============================================================================
 class ActivityItem(QFrame):
-    def __init__(self, text, time_str, platform, amount=None):
+    def __init__(self, type, text, user_name, time_str, platform, amount=None):
         super().__init__()
-        color = COLOR_BLUE if platform == 'telegram' else COLOR_PURPLE
-        icon = 'fa5b.telegram' if platform == 'telegram' else 'mdi6.infinity'
         
+        # تعیین آیکون بر اساس نوع فعالیت
+        if type == "order":
+             main_icon = 'fa5s.shopping-basket'
+             icon_color = COLOR_GREEN
+        elif type == "user":
+             main_icon = 'fa5s.user-plus'
+             icon_color = COLOR_BLUE
+        else:
+             main_icon = 'fa5s.comment-dots'
+             icon_color = COLOR_PURPLE
+
         self.setStyleSheet(f"background: transparent; border-bottom: 1px solid #2e2e38; padding: 5px;")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 8, 5, 8)
         
         ico = QLabel()
-        ico.setPixmap(qta.icon(icon, color=color).pixmap(24, 24))
+        ico.setPixmap(qta.icon(main_icon, color=icon_color).pixmap(22, 22))
         
         text_layout = QVBoxLayout()
-        txt = QLabel(text)
-        txt.setStyleSheet("color: #fffffe; font-size: 13px;")
+        txt = QLabel(f"<b>{user_name}</b> {text}")
+        txt.setStyleSheet("color: #fffffe; font-size: 12px;")
         
         info_row = QHBoxLayout()
         info_row.addWidget(txt)
         info_row.addStretch()
+
         if amount:
-            amt_lbl = QLabel(f"{int(amount):,} تومان")
-            amt_lbl.setStyleSheet(f"color: {COLOR_GREEN}; font-size: 11px;")
+            amt_lbl = QLabel(f"{int(amount):,} ت")
+            amt_lbl.setStyleSheet(f"color: {COLOR_GREEN}; font-size: 11px; font-weight: bold;")
             info_row.addWidget(amt_lbl)
             
         text_layout.addLayout(info_row)
         
+        # ردیف پلتفرم و زمان
+        meta_row = QHBoxLayout()
+        plat_icon = 'fa5b.telegram' if platform == 'telegram' else 'mdi6.infinity'
+        plat_color = COLOR_BLUE if platform == 'telegram' else COLOR_PURPLE
+
+        meta_lbl = QLabel()
+        meta_lbl.setPixmap(qta.icon(plat_icon, color=plat_color).pixmap(12, 12))
+
         tim = QLabel(time_str)
         tim.setStyleSheet(f"color: {COLOR_GRAY}; font-size: 10px;")
-        text_layout.addWidget(tim)
+
+        meta_row.addWidget(meta_lbl); meta_row.addWidget(tim); meta_row.addStretch()
+        text_layout.addLayout(meta_row)
         
         layout.addWidget(ico)
         layout.addLayout(text_layout)
@@ -502,16 +522,17 @@ class DashboardWidget(QWidget):
 
                     # رشد فروش
                     growth = crud.get_sales_growth(db)
+                    m_growth = crud.get_monthly_growth(db)
 
                     # فعالیت‌ها
-                    recent_orders = db.query(models.Order).order_by(models.Order.created_at.desc()).limit(8).all()
+                    activities = crud.get_recent_activities(db, limit=10)
                     is_open = crud.get_setting(db, "tg_is_open", "true") == "true"
                     
                     return {
                         "rev_tg": rev_tg, "rev_rb": rev_rb, "pending": pending_orders, "users": total_users,
                         "dates": dates, "tg_sales": tg_sales, "rb_sales": rb_sales,
-                        "low_stock": low_stock, "recent_orders": recent_orders, "is_open": is_open,
-                        "top_prods": top_prods, "growth": growth, "aov": aov
+                        "low_stock": low_stock, "activities": activities, "is_open": is_open,
+                        "top_prods": top_prods, "growth": growth, "m_growth": m_growth, "aov": aov
                     }
 
             data = await loop.run_in_executor(None, fetch_all)
@@ -519,7 +540,7 @@ class DashboardWidget(QWidget):
             # آپدیت کارت‌ها (با محافظت در برابر مقادیر None)
             total_r = (data.get('rev_tg') or 0) + (data.get('rev_rb') or 0)
             self.card_total_rev.set_data(int(total_r), trend_val=data.get('growth', 0))
-            self.card_aov.set_data(int(data.get('aov') or 0))
+            self.card_aov.set_data(int(data.get('aov') or 0), trend_val=data.get('m_growth', 0), trend_label="رشد ماهانه")
             self.card_orders.set_data(data.get('pending') or 0)
             self.card_users.set_data(data.get('users') or 0)
             
@@ -527,7 +548,7 @@ class DashboardWidget(QWidget):
             self.update_chart(self.chart_tg, data['dates'], data['tg_sales'], COLOR_BLUE)
             self.update_chart(self.chart_rb, data['dates'], data['rb_sales'], COLOR_PURPLE)
             self.update_pie_chart(data['rev_tg'], data['rev_rb'])
-            
+
             # آپدیت محصولات برتر
             for i in reversed(range(self.top_prods_lay.count())):
                 self.top_prods_lay.itemAt(i).widget().deleteLater()
@@ -540,19 +561,26 @@ class DashboardWidget(QWidget):
 
             # آپدیت فعالیت‌ها
             for i in reversed(range(self.act_vbox.count() - 1)):
-                self.act_vbox.itemAt(i).widget().deleteLater()
+                w = self.act_vbox.itemAt(i).widget()
+                if w: w.deleteLater()
             
-            if not data['recent_orders']:
+            if not data['activities']:
                 empty_lbl = QLabel("فعالیتی ثبت نشده")
                 empty_lbl.setStyleSheet("color: #555; padding: 10px;")
                 empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.act_vbox.insertWidget(0, empty_lbl)
             else:
-                for o in data['recent_orders']:
-                    if not o.user: continue
-                    msg = f"سفارش #{o.id} توسط {o.user.full_name}"
-                    time_str = o.created_at.strftime("%H:%M")
-                    self.act_vbox.insertWidget(0, ActivityItem(msg, time_str, o.user.platform, o.total_amount))
+                for act in reversed(data['activities']):
+                    time_str = act['time'].strftime("%H:%M")
+                    item = ActivityItem(
+                        type=act['type'],
+                        text=act['text'],
+                        user_name=act['user'],
+                        time_str=time_str,
+                        platform=act['platform'],
+                        amount=act['amount']
+                    )
+                    self.act_vbox.insertWidget(0, item)
 
             # آپدیت موجودی
             for i in reversed(range(self.stock_list_lay.count())):

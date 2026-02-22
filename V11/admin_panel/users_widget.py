@@ -89,84 +89,162 @@ class FlowLayout(QLayout):
         return y + lineHeight - rect.y()
 
 # ==============================================================================
-# Dialog: جزئیات کاربر
+# Timeline Component
+# ==============================================================================
+class TimelineItem(QWidget):
+    def __init__(self, title, desc, time_str, type):
+        super().__init__()
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 5, 0, 5)
+
+        v_line = QFrame(); v_line.setFixedWidth(2); v_line.setStyleSheet(f"background: {BORDER_COLOR};")
+        dot = QFrame(); dot.setFixedSize(10, 10); dot.setStyleSheet(f"background: {ACCENT_COLOR}; border-radius: 5px;")
+
+        v_box = QVBoxLayout()
+        t = QLabel(title); t.setStyleSheet("font-weight: bold; font-size: 13px; color: white;")
+        d = QLabel(f"{desc} | {time_str}"); d.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+        v_box.addWidget(t); v_box.addWidget(d)
+
+        layout.addWidget(dot); layout.addLayout(v_box); layout.addStretch()
+
+# ==============================================================================
+# Dialog: جزئیات کاربر (ارتقا یافته)
 # ==============================================================================
 class UserDetailsDialog(QDialog):
-    def __init__(self, user_data, parent=None):
-        super().__init__(parent)
+    def __init__(self, user_data, parent_widget):
+        super().__init__(parent_widget)
         self.user = user_data
-        self.setWindowTitle(f"پروفایل کاربر")
-        self.setFixedSize(500, 600)
+        self.p_widget = parent_widget
+        self.setWindowTitle(f"پروفایل حرفه‌ای: {user_data.full_name}")
+        self.setFixedSize(650, 750)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setStyleSheet(f"QDialog {{ background-color: {BG_COLOR}; color: {TEXT_MAIN}; }}")
         self.setup_ui()
+        QTimer.singleShot(200, self.load_history)
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # هدر
+        # هدر با رنگ پلتفرم
         header = QFrame()
-        header.setStyleSheet(f"background: {PANEL_BG}; border-bottom: 1px solid {BORDER_COLOR};")
+        plat_col = INFO_COLOR if self.user.platform == 'telegram' else "#8e44ad"
+        header.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PANEL_BG}, stop:1 {plat_col}33); border-bottom: 1px solid {BORDER_COLOR};")
         h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(20, 20, 20, 20)
+        h_layout.setContentsMargins(25, 25, 25, 25)
 
-        # آواتار
+        # آواتار دایره‌ای
         avatar = QLabel()
-        avatar.setFixedSize(60, 60)
-        avatar.setStyleSheet(f"background: {ACCENT_COLOR}30; border-radius: 30px;")
+        avatar.setFixedSize(70, 70)
+        avatar.setStyleSheet(f"background: {PANEL_BG}; border: 2px solid {plat_col}; border-radius: 35px;")
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar.setPixmap(qta.icon("fa5s.user", color=ACCENT_COLOR).pixmap(30, 30))
+        avatar.setPixmap(qta.icon("fa5s.user", color=plat_col).pixmap(35, 35))
 
-        info = QVBoxLayout()
+        v_info = QVBoxLayout()
         name = QLabel(self.user.full_name or "کاربر ناشناس")
-        name.setStyleSheet("font-size: 18px; font-weight: bold;")
-        uid = QLabel(f"ID: {self.user.user_id}")
-        uid.setStyleSheet(f"color: {TEXT_SUB};")
-        info.addWidget(name); info.addWidget(uid)
+        name.setStyleSheet("font-size: 20px; font-weight: 900; color: white;")
+        uid = QLabel(f"شناسه اختصاصی: {self.user.user_id} ({self.user.platform})")
+        uid.setStyleSheet(f"color: {TEXT_SUB}; font-size: 12px;")
+        v_info.addWidget(name); v_info.addWidget(uid)
 
-        h_layout.addWidget(avatar); h_layout.addLayout(info); h_layout.addStretch()
+        h_layout.addWidget(avatar); h_layout.addLayout(v_info); h_layout.addStretch()
+
+        # دکمه پیام مستقیم
+        btn_msg = QPushButton(" 💬 پیام مستقیم")
+        btn_msg.setStyleSheet(f"background: {plat_col}; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold;")
+        btn_msg.clicked.connect(self.direct_message)
+        h_layout.addWidget(btn_msg)
+
         layout.addWidget(header)
 
-        # محتوا
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(20, 20, 20, 20)
+        # محتوا (تب‌بندی)
+        tabs = QTabWidget()
+        tabs.setStyleSheet(f"QTabWidget::pane {{ border: none; background: transparent; }} QTabBar::tab {{ background: {PANEL_BG}; color: {TEXT_SUB}; padding: 10px 25px; }} QTabBar::tab:selected {{ background: {ACCENT_COLOR}; color: white; }}")
 
-        # آمار
+        # تب اول: آمار و یادداشت
+        tab1 = QWidget(); l1 = QVBoxLayout(tab1); l1.setContentsMargins(20, 20, 20, 20)
+
         stats_row = QHBoxLayout()
         spent = int(getattr(self.user, 'total_spent', 0) or 0)
         orders = int(getattr(self.user, 'order_count', 0) or 0)
-        stats_row.addWidget(self._stat_box(f"{spent:,}", "کل خرید (تومان)"))
-        stats_row.addWidget(self._stat_box(str(orders), "تعداد سفارش"))
-        content_layout.addLayout(stats_row)
+        stats_row.addWidget(self._stat_box(f"{spent:,} تومان", "مجموع تراکنش‌ها"))
+        stats_row.addWidget(self._stat_box(str(orders), "تعداد سفارشات"))
+        l1.addLayout(stats_row)
 
-        # آخرین بازدید
-        last_seen = getattr(self.user, 'last_seen', None)
-        ls_text = last_seen.strftime("%Y/%m/%d %H:%M") if last_seen else "نامشخص"
-        lbl_ls = QLabel(f"🕒 آخرین بازدید: {ls_text}")
-        lbl_ls.setStyleSheet(f"color: {TEXT_SUB}; margin: 10px 0;")
-        content_layout.addWidget(lbl_ls)
-
-        # یادداشت
-        content_layout.addWidget(QLabel("یادداشت خصوصی:"))
+        l1.addWidget(QLabel("📝 یادداشت‌های مدیریتی (خصوصی):"))
         self.txt_note = QTextEdit()
         self.txt_note.setPlainText(getattr(self.user, 'private_note', "") or "")
-        self.txt_note.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 8px;")
-        content_layout.addWidget(self.txt_note)
+        self.txt_note.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {BORDER_COLOR}; border-radius: 10px; padding: 10px;")
+        l1.addWidget(self.txt_note)
 
-        # دکمه‌ها
-        btn_box = QHBoxLayout()
-        btn_save = QPushButton("ذخیره یادداشت")
-        btn_save.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px; border-radius: 5px;")
+        btn_save = QPushButton("💾 ذخیره تغییرات پروفایل")
+        btn_save.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px; border-radius: 8px; font-weight: bold;")
         btn_save.clicked.connect(self.save_note)
-        btn_close = QPushButton("بستن")
-        btn_close.setStyleSheet(f"background: {BORDER_COLOR}; color: white; padding: 10px; border-radius: 5px;")
-        btn_close.clicked.connect(self.close)
-        btn_box.addStretch(); btn_box.addWidget(btn_save); btn_box.addWidget(btn_close)
-        content_layout.addLayout(btn_box)
+        l1.addWidget(btn_save)
 
-        layout.addWidget(content)
+        # تب دوم: تاریخچه فعالیت‌ها (Timeline)
+        tab2 = QWidget(); l2 = QVBoxLayout(tab2); l2.setContentsMargins(20, 20, 20, 20)
+        scroll_tm = QScrollArea(); scroll_tm.setWidgetResizable(True); scroll_tm.setStyleSheet("border: none; background: transparent;")
+        self.tm_container = QWidget(); self.tm_layout = QVBoxLayout(self.tm_container); self.tm_layout.addStretch()
+        scroll_tm.setWidget(self.tm_container)
+        l2.addWidget(scroll_tm)
+
+        tabs.addTab(tab1, "اطلاعات کلی"); tabs.addTab(tab2, "تایم‌لاین فعالیت‌ها")
+        layout.addWidget(tabs)
+
+    def _stat_box(self, val, txt):
+        f = QFrame(); f.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px; border: 1px solid {BORDER_COLOR};")
+        l = QVBoxLayout(f); l.setContentsMargins(15, 15, 15, 15)
+        v = QLabel(val); v.setAlignment(Qt.AlignmentFlag.AlignCenter); v.setStyleSheet(f"font-weight: 900; font-size: 18px; color: {SUCCESS_COLOR};")
+        t = QLabel(txt); t.setAlignment(Qt.AlignmentFlag.AlignCenter); t.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+        l.addWidget(v); l.addWidget(t)
+        return f
+
+    def load_history(self):
+        asyncio.create_task(self._fetch_history())
+
+    async def _fetch_history(self):
+        loop = asyncio.get_running_loop()
+        def fetch():
+            with SessionLocal() as db:
+                return crud.get_user_activity_history(db, self.user.user_id)
+
+        try:
+            items = await loop.run_in_executor(None, fetch)
+            for i in reversed(range(self.tm_layout.count() - 1)):
+                w = self.tm_layout.itemAt(i).widget()
+                if w: w.deleteLater()
+
+            for item in items:
+                time_str = item['time'].strftime("%Y/%m/%d %H:%M")
+                self.tm_layout.insertWidget(0, TimelineItem(item['title'], item['desc'], time_str, item['type']))
+        except: pass
+
+    def direct_message(self):
+        text, ok = QInputDialog.getMultiLineText(self, "ارسال پیام مستقیم", f"متن پیام برای {self.user.full_name}:")
+        if ok and text.strip():
+            asyncio.create_task(self._send_direct(text.strip()))
+
+    async def _send_direct(self, text):
+        try:
+            if self.user.platform == 'telegram' and self.p_widget.bot_app:
+                await self.p_widget.bot_app.bot.send_message(chat_id=int(self.user.user_id), text=text)
+            elif self.user.platform == 'rubika' and self.p_widget.rubika_client:
+                await self.p_widget.rubika_client.api.send_message(chat_id=self.user.user_id, text=text)
+            self.p_widget.window().show_toast("پیام با موفقیت ارسال شد.")
+        except Exception as e:
+            self.p_widget.window().show_toast(f"خطا در ارسال: {e}", is_error=True)
+
+    def save_note(self):
+        asyncio.create_task(self._save_db_note(self.txt_note.toPlainText()))
+        self.accept()
+
+    async def _save_db_note(self, txt):
+        with SessionLocal() as db:
+            u = db.query(models.User).filter(models.User.user_id == str(self.user.user_id)).first()
+            if u:
+                u.private_note = txt
+                db.commit()
 
     def _stat_box(self, val, txt):
         f = QFrame()
@@ -205,12 +283,13 @@ class UserCard(QFrame):
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # محاسبه سطح
-        total_spent = getattr(user_data, 'total_spent', 0) or 0
-        if total_spent > 10_000_000: self.badge = {"col": "#f1c40f", "icon": "fa5s.crown", "txt": "VIP"}
-        elif total_spent > 3_000_000: self.badge = {"col": "#bdc3c7", "icon": "fa5s.star", "txt": "Pro"}
-        elif getattr(user_data, 'order_count', 0) > 0: self.badge = {"col": SUCCESS_COLOR, "icon": "fa5s.user", "txt": "Active"}
-        else: self.badge = {"col": TEXT_SUB, "icon": "fa5s.user-tag", "txt": "New"}
+        # محاسبه سطح (ارتقا یافته)
+        spent = getattr(user_data, 'total_spent', 0) or 0
+        if spent > 20_000_000: self.badge = {"col": "#f1c40f", "icon": "fa5s.crown", "txt": "Diamond VIP"}
+        elif spent > 10_000_000: self.badge = {"col": "#e67e22", "icon": "fa5s.gem", "txt": "Gold"}
+        elif spent > 5_000_000: self.badge = {"col": "#bdc3c7", "icon": "fa5s.medal", "txt": "Silver"}
+        elif getattr(user_data, 'order_count', 0) > 0: self.badge = {"col": SUCCESS_COLOR, "icon": "fa5s.user-check", "txt": "Active"}
+        else: self.badge = {"col": TEXT_SUB, "icon": "fa5s.user-tag", "txt": "New User"}
 
         self._apply_styles()
         self._setup_ui()
@@ -416,7 +495,7 @@ class UsersWidget(QWidget):
         btn_new.clicked.connect(lambda: self._quick_filter("new"))
 
         self.cmb_platform = QComboBox(); self.cmb_platform.addItems(["همه پلتفرم‌ها", "تلگرام", "روبیکا"])
-        self.cmb_status = QComboBox(); self.cmb_status.addItems(["همه وضعیت‌ها", "فعال", "مسدود"])
+        self.cmb_status = QComboBox(); self.cmb_status.addItems(["همه وضعیت‌ها", "فعال", "مسدود", "VIP", "بسیار فعال"])
         self.cmb_platform.currentIndexChanged.connect(self._start_search)
         self.cmb_status.currentIndexChanged.connect(self._start_search)
 
@@ -566,16 +645,25 @@ class UsersWidget(QWidget):
 
     def _fetch_paginated_users(self, q, p_f, s_f):
         with SessionLocal() as db:
-            # ابتدا فیلترهای پایه برای شمارش
+            # برای فیلترهای پیشرفته (VIP و غیره)، فعلاً منطق در پایتون اعمال می‌شود
+            # در نسخه تجاری نهایی باید به SQL منتقل شود
+
             total = crud.get_users_count(db, query=q, platform=p_f, status=s_f)
 
-            offset = (self.current_page - 1) * self.items_per_page
+            # دریافت دیتای بیشتر برای فیلتر پایتون اگر فیلتر خاص انتخاب شده
+            limit = self.items_per_page if s_f in ["همه وضعیت‌ها", "فعال", "مسدود"] else 1000
+            offset = (self.current_page - 1) * self.items_per_page if limit < 1000 else 0
 
-            all_users = crud.get_all_users(db, limit=self.items_per_page, offset=offset)
+            all_users = crud.get_all_users(db, limit=limit, offset=offset)
 
             res = []
             for u in all_users:
                 spent = sum(o.total_amount for o in u.orders if o.status in ['paid', 'shipped', 'approved'])
+
+                # فیلتر ثانویه پایتون
+                if s_f == "VIP" and spent < 10_000_000: continue
+                if s_f == "بسیار فعال" and len(u.orders) < 5: continue
+
                 obj = type('U', (), {
                     "user_id": u.user_id, "full_name": u.full_name, "platform": u.platform,
                     "is_banned": u.is_banned, "private_note": u.private_note,
@@ -583,7 +671,9 @@ class UsersWidget(QWidget):
                 })
                 res.append(obj)
 
-            return {"users": res, "total": total}
+            # اگر فیلتر پایتون اعمال شد، مجموع را اصلاح کن
+            final_total = len(res) if limit >= 1000 else total
+            return {"users": res[:self.items_per_page], "total": final_total}
 
     def _on_card_select(self, uid, selected):
         if selected: self.selected_ids.add(uid)
@@ -617,7 +707,14 @@ class UsersWidget(QWidget):
     async def _do_export(self, path):
         try:
             loop = asyncio.get_running_loop()
-            users = await loop.run_in_executor(None, lambda: self._fetch_users("", "همه پلتفرم‌ها", "همه وضعیت‌ها"))
+            q = self.inp_search.text().lower().strip()
+            p_f = self.cmb_platform.currentText()
+            s_f = self.cmb_status.currentText()
+
+            # خروجی گرفتن بر اساس فیلترهای فعلی پنل (فیلتر هوشمند)
+            data = await loop.run_in_executor(None, lambda: self._fetch_paginated_users(q, p_f, s_f))
+            users = data["users"]
+
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
                 w = csv.writer(f)
                 w.writerow(["شناسه", "نام", "پلتفرم", "مجموع خرید", "تعداد سفارش", "وضعیت"])

@@ -641,6 +641,50 @@ def get_top_selling_products(db: Session, limit: int = 5):
     ).join(models.OrderItem).group_by(models.Product.id)\
     .order_by(desc('total_qty')).limit(limit).all()
 
+def get_recent_activities(db: Session, limit: int = 15) -> List[Dict]:
+    """دریافت فعالیت‌های متنوع برای فید داشبورد"""
+    activities = []
+
+    # سفارشات اخیر
+    orders = db.query(models.Order).order_by(desc(models.Order.created_at)).limit(limit).all()
+    for o in orders:
+        activities.append({
+            "type": "order",
+            "text": f"سفارش #{o.id} ثبت شد",
+            "user": o.user.full_name if o.user else "ناشناس",
+            "time": o.created_at,
+            "platform": o.user.platform if o.user else "telegram",
+            "amount": float(o.total_amount)
+        })
+
+    # کاربران جدید
+    users = db.query(models.User).order_by(desc(models.User.created_at)).limit(limit).all()
+    for u in users:
+        activities.append({
+            "type": "user",
+            "text": f"کاربر جدید پیوست",
+            "user": u.full_name or "بدون نام",
+            "time": u.created_at,
+            "platform": u.platform,
+            "amount": None
+        })
+
+    # تیکت‌های جدید
+    tickets = db.query(models.Ticket).order_by(desc(models.Ticket.created_at)).limit(limit).all()
+    for t in tickets:
+        activities.append({
+            "type": "ticket",
+            "text": f"تیکت جدید: {t.subject[:20]}...",
+            "user": t.user.full_name if t.user else "ناشناس",
+            "time": t.created_at,
+            "platform": t.user.platform if t.user else "telegram",
+            "amount": None
+        })
+
+    # مرتب‌سازی کل بر اساس زمان
+    activities.sort(key=lambda x: x["time"], reverse=True)
+    return activities[:limit]
+
 def get_sales_growth(db: Session):
     """محاسبه درصد رشد فروش امروز نسبت به دیروز"""
     today = datetime.now().date()
@@ -660,6 +704,26 @@ def get_sales_growth(db: Session):
 
     growth = ((rev_today - rev_yesterday) / rev_yesterday) * 100
     return round(growth, 1)
+
+def get_monthly_growth(db: Session):
+    """محاسبه رشد درآمد ماه جاری نسبت به ماه قبل"""
+    now = datetime.now()
+    this_month_start = now.replace(day=1, hour=0, minute=0, second=0)
+    last_month_end = this_month_start - timedelta(seconds=1)
+    last_month_start = last_month_end.replace(day=1, hour=0, minute=0, second=0)
+
+    def get_period_revenue(start, end):
+        return db.query(func.coalesce(func.sum(models.Order.total_amount), 0))\
+            .filter(models.Order.created_at >= start, models.Order.created_at <= end)\
+            .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+            .scalar()
+
+    rev_this = get_period_revenue(this_month_start, now)
+    rev_last = get_period_revenue(last_month_start, last_month_end)
+
+    if rev_last == 0:
+        return 100 if rev_this > 0 else 0
+    return round(((rev_this - rev_last) / rev_last) * 100, 1)
 
 # ======================================================================
 # 8. آدرس‌ها و علاقه‌مندی‌ها
@@ -730,6 +794,44 @@ def add_ticket_message(db: Session, ticket_id: int, sender_id: str, text: str, i
             ticket.status = "open" # باز (نیاز به پاسخ ادمین)
     db.commit()
     return msg
+
+def get_user_activity_history(db: Session, user_id: str) -> List[Dict]:
+    """دریافت تمام فعالیت‌های یک کاربر خاص به صورت زمانی"""
+    history = []
+    uid = str(user_id)
+
+    # سفارشات
+    orders = db.query(models.Order).filter_by(user_id=uid).all()
+    for o in orders:
+        history.append({
+            "type": "order",
+            "title": f"ثبت سفارش #{o.id}",
+            "desc": f"مبلغ {int(o.total_amount):,} تومان | وضعیت: {o.status}",
+            "time": o.created_at
+        })
+
+    # تیکت‌ها
+    tickets = db.query(models.Ticket).filter_by(user_id=uid).all()
+    for t in tickets:
+        history.append({
+            "type": "ticket",
+            "title": f"ایجاد تیکت: {t.subject}",
+            "desc": f"وضعیت نهایی: {t.status}",
+            "time": t.created_at
+        })
+
+    # زمان عضویت
+    user = db.query(models.User).filter_by(user_id=uid).first()
+    if user:
+        history.append({
+            "type": "join",
+            "title": "عضویت در فروشگاه",
+            "desc": f"پلتفرم: {user.platform}",
+            "time": user.created_at
+        })
+
+    history.sort(key=lambda x: x["time"], reverse=True)
+    return history
 
 def get_user_tickets(db: Session, user_id: str) -> List[models.Ticket]:
     return db.query(models.Ticket).filter_by(user_id=str(user_id)).order_by(desc(models.Ticket.updated_at)).all()
