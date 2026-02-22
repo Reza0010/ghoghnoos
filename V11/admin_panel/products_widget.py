@@ -21,7 +21,7 @@ from qasync import asyncSlot
 import qtawesome as qta
 
 from db.database import get_db
-from db import crud
+from db import crud, models
 from config import BASE_DIR, MEDIA_PRODUCTS_DIR
 
 logger = logging.getLogger(__name__)

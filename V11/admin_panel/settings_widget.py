@@ -12,7 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QProgressBar, QListWidget, QListWidgetItem,
     QStackedWidget, QFrame, QScrollArea, QTimeEdit, QFileDialog, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox
+    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox,
+    QSpinBox
 )
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QFont, QPen, QBrush
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize
@@ -20,7 +21,7 @@ from qasync import asyncSlot
 import qtawesome as qta
 
 from db.database import get_db
-from db import crud
+from db import crud, models
 from config import BASE_DIR
 
 logger = logging.getLogger(__name__)
