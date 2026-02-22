@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 
 # واردات نسبتی به ساختار پروژه
 from .rubika_client import RubikaAPI, RubikaError
+from bot.utils import run_db
 from db.database import SessionLocal
 from db import crud, models
 

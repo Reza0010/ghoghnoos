@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import (
     Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
 )
+from qasync import asyncSlot
 from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon
 import qtawesome as qta
 
@@ -394,9 +395,16 @@ class MainWindow(QMainWindow):
         self.sidebar.setMaximumWidth(target)
         self.sidebar.setMinimumWidth(target)
 
-    def _check_new_notifications(self):
+    @asyncSlot()
+    async def _check_new_notifications(self):
         """بررسی برای سفارشات یا تیکت‌های جدید و نمایش نقطه اعلان"""
-        asyncio.create_task(self._fetch_notification_stats())
+        if getattr(self, '_fetching_notifications', False):
+            return
+        try:
+            self._fetching_notifications = True
+            await self._fetch_notification_stats()
+        finally:
+            self._fetching_notifications = False
 
     async def _fetch_notification_stats(self):
         from db.database import SessionLocal
@@ -447,10 +455,11 @@ class MainWindow(QMainWindow):
         self.rb_indicator.setStyleSheet("")
         self.rb_indicator.setToolTip("آنلاین" if self.rubika_client else "آفلاین")
 
-    def _handle_restart_click(self):
+    @asyncSlot()
+    async def _handle_restart_click(self):
         if hasattr(self, 'app_manager'):
             self.show_toast("در حال بازآوری سرویس‌ها...")
-            asyncio.create_task(self.app_manager.restart_services())
+            await self.app_manager.restart_services()
         else:
             self.show_toast("خطا: مدیر برنامه در دسترس نیست", is_error=True)
 
