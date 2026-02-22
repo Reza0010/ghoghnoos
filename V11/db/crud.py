@@ -977,7 +977,10 @@ def get_all_proxies(db: Session) -> List[models.Proxy]:
     return db.query(models.Proxy).order_by(desc(models.Proxy.created_at)).all()
 
 def add_proxy(db: Session, data: dict) -> models.Proxy:
-    proxy = models.Proxy(**data)
+    # فیلتر کردن فیلدهای اضافی (مثل uuid یا params در لینک‌های v2ray) برای جلوگیری از کرش
+    valid_keys = {c.name for c in models.Proxy.__table__.columns}
+    clean_data = {k: v for k, v in data.items() if k in valid_keys}
+    proxy = models.Proxy(**clean_data)
     db.add(proxy)
     db.commit()
     db.refresh(proxy)
