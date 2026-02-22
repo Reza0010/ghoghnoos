@@ -193,6 +193,7 @@ class SettingsWidget(QWidget):
         nav_items = [
             (" تنظیمات پایه", "fa5s.network-wired"),
             (" مدیریت پروکسی", "fa5s.shield-alt"),
+            (" پاسخگوی خودکار", "fa5s.robot"),
             (" ربات تلگرام", "fa5b.telegram"),
             (" ربات روبیکا", "fa5s.infinity"),
             (" مالی و ارسال", "fa5s.credit-card"),
@@ -212,6 +213,7 @@ class SettingsWidget(QWidget):
         self.pages_stack = QStackedWidget()
         self.pages_stack.addWidget(self._ui_core_page())
         self.pages_stack.addWidget(self._ui_proxy_page())
+        self.pages_stack.addWidget(self._ui_auto_reply_page())
         self.pages_stack.addWidget(self._ui_telegram_page())
         self.pages_stack.addWidget(self._ui_rubika_page())
         self.pages_stack.addWidget(self._ui_payment_page())
@@ -542,9 +544,39 @@ class SettingsWidget(QWidget):
         layout.addWidget(scroll)
         return page
 
+    def _ui_auto_reply_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("پاسخگوی خودکار کلمات کلیدی")
+        self.auto_reply_table = QTableWidget(0, 4)
+        self.auto_reply_table.setHorizontalHeaderLabels(["کلمه کلیدی", "پاسخ", "نوع تطبیق", "عملیات"])
+        self.auto_reply_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.auto_reply_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        btn_add = QPushButton(" ➕ افزودن قانون جدید")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.clicked.connect(self.show_add_auto_reply_dialog)
+
+        card.add_widget(self.auto_reply_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
+
+        QTimer.singleShot(800, self.load_auto_replies)
+        return page
+
     def _ui_payment_page(self):
         page = QWidget()
         layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        # بخش وفادارسازی
+        card_loyalty = SettingCard("سیستم وفادارسازی مشتریان (Loyalty)")
+        self.loyalty_percent = QSpinBox()
+        self.loyalty_percent.setRange(0, 100); self.loyalty_percent.setSuffix(" %")
+        self.loyalty_percent.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px;")
+        card_loyalty.add_layout(self._form_row("درصد هدیه از هر خرید:", self.loyalty_percent))
+        layout.addWidget(card_loyalty)
 
         card1 = SettingCard("حساب‌های بانکی")
         self.card_table = QTableWidget(0, 3)
@@ -884,6 +916,52 @@ class SettingsWidget(QWidget):
         except Exception as e:
             self.window().show_toast(f"خطا در اتصال: {str(e)}", is_error=True)
 
+    def load_auto_replies(self):
+        try:
+            with next(get_db()) as db:
+                items = crud.get_all_auto_responses(db)
+            self.auto_reply_table.setRowCount(0)
+            for i, item in enumerate(items):
+                self.auto_reply_table.insertRow(i)
+                self.auto_reply_table.setItem(i, 0, QTableWidgetItem(item.keyword))
+                self.auto_reply_table.setItem(i, 1, QTableWidgetItem(item.response_text[:50] + "..."))
+                self.auto_reply_table.setItem(i, 2, QTableWidgetItem("دقیق" if item.match_type == "exact" else "محتوایی"))
+
+                btn_del = QPushButton(); btn_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                btn_del.clicked.connect(lambda _, rid=item.id: self.delete_auto_reply(rid))
+                self.auto_reply_table.setCellWidget(i, 3, btn_del)
+        except: pass
+
+    def show_add_auto_reply_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("قانون پاسخ خودکار"); dlg.setFixedWidth(450)
+        l = QVBoxLayout(dlg)
+
+        kw = QLineEdit(); kw.setPlaceholderText("کلمه کلیدی (مثلا: آدرس)")
+        resp = QTextEdit(); resp.setPlaceholderText("متن پاسخ...")
+        m_type = QComboBox(); m_type.addItems(["دقیق (Exact)", "محتوایی (Contains)"])
+
+        for w in [kw, resp]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px; border-radius: 5px;")
+
+        l.addWidget(QLabel("کلمه کلیدی:")); l.addWidget(kw)
+        l.addWidget(QLabel("نوع تطبیق:")); l.addWidget(m_type)
+        l.addWidget(QLabel("متن پاسخ:")); l.addWidget(resp)
+
+        b = QPushButton("ذخیره"); b.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not kw.text() or not resp.toPlainText(): return
+            match = "exact" if "Exact" in m_type.currentText() else "contains"
+            with next(get_db()) as db: crud.set_auto_response(db, kw.text(), resp.toPlainText(), match)
+            dlg.accept(); self.load_auto_replies()
+
+        b.clicked.connect(save); dlg.exec()
+
+    def delete_auto_reply(self, rid):
+        if QMessageBox.question(self, "حذف", "این قانون حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_auto_response(db, rid)
+            self.load_auto_replies()
+
     @asyncSlot()
     async def refresh_data(self, *args, **kwargs):
         try:
@@ -949,6 +1027,7 @@ class SettingsWidget(QWidget):
 
             self.zarinpal_enabled.setChecked(data.get("zarinpal_enabled", "false") == "true")
             self.zarinpal_merchant.setText(data.get("zarinpal_merchant", ""))
+            self.loyalty_percent.setValue(int(data.get("loyalty_percent", "1")))
 
             self.panel_pass.setText(data.get("panel_password", "admin"))
             self.admin_ids_input.setText(data.get("admin_user_ids", ""))
@@ -1030,6 +1109,7 @@ class SettingsWidget(QWidget):
             "auto_backup_time": self.auto_bk_time.time().toString("HH:mm"),
             "zarinpal_enabled": "true" if self.zarinpal_enabled.isChecked() else "false",
             "zarinpal_merchant": self.zarinpal_merchant.text().strip(),
+            "loyalty_percent": str(self.loyalty_percent.value()),
             "panel_password": self.panel_pass.text().strip() or "admin",
             "admin_user_ids": self.admin_ids_main.toPlainText().strip() or self.admin_ids_input.text().strip(),
             "telegram_bot_token": self.tg_token_inp.text().strip(),

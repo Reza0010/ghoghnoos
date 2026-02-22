@@ -24,33 +24,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not user:
         return
 
-    # ۱. پردازش Deep Linking (ورود مستقیم به صفحه محصول)
-    # مثال: t.me/bot?start=p_12
-    if context.args and context.args[0].startswith('p_'):
-        try:
-            prod_id = int(context.args[0].replace('p_', ''))
-            # شبیه‌سازی یک CallbackQuery برای استفاده از هندلر جزئیات محصول
-            from bot.handlers.products_handler import show_product_details
-            
-            # ذخیره دیتای محصول در آبجکت موقت جهت پردازش در products_handler
-            fake_update = update
-            if not fake_update.callback_query:
-                fake_update.callback_query = type('FakeQuery', (object,), {
-                    'data': f"prod:show:{prod_id}",
-                    'answer': lambda *a, **k: None,
-                    'message': update.message,
-                    'from_user': user
-                })
-            
-            await show_product_details(fake_update, context)
-            return
-        except (ValueError, IndexError):
-            pass # در صورت بروز خطا در آیدی، منوی اصلی نمایش داده می‌شود
+    # ۱. پردازش Deep Linking (محصول یا زیرمجموعه‌گیری)
+    # مثال: t.me/bot?start=p_12 یا t.me/bot?start=ref_1234
+    referred_by = None
+    if context.args:
+        arg = context.args[0]
+        if arg.startswith('ref_'):
+            referred_by = arg.replace('ref_', '')
+            # جلوگیری از معرفی خود به خود
+            if referred_by == str(user.id): referred_by = None
+
+        if arg.startswith('p_'):
+            try:
+                prod_id = int(arg.replace('p_', ''))
+                # شبیه‌سازی یک CallbackQuery برای استفاده از هندلر جزئیات محصول
+                from bot.handlers.products_handler import show_product_details
+
+                # ذخیره دیتای محصول در آبجکت موقت جهت پردازش در products_handler
+                fake_update = update
+                if not fake_update.callback_query:
+                    fake_update.callback_query = type('FakeQuery', (object,), {
+                        'data': f"prod:show:{prod_id}",
+                        'answer': lambda *a, **k: None,
+                        'message': update.message,
+                        'from_user': user
+                    })
+
+                await show_product_details(fake_update, context)
+                return
+            except (ValueError, IndexError):
+                pass # در صورت بروز خطا در آیدی، منوی اصلی نمایش داده می‌شود
 
     # ۲. دریافت اطلاعات مورد نیاز به صورت موازی (بهبود چشمگیر سرعت لود)
     try:
         tasks = [
-            run_db(crud.get_or_create_user, user.id, user.full_name or "کاربر", user.username, "telegram"),
+            run_db(crud.get_or_create_user, user.id, user.full_name or "کاربر", user.username, "telegram", referred_by=referred_by),
             run_db(crud.get_setting, "tg_shop_name", "فروشگاه"),
             run_db(crud.get_setting, "tg_is_open", "true"),
             run_db(crud.get_setting, "tg_welcome_message", ""),

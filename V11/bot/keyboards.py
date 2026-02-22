@@ -182,7 +182,10 @@ def get_user_profile_keyboard() -> InlineKeyboardMarkup:
     """منوی اصلی حساب کاربری."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📦 تاریخچه سفارشات من", callback_data="order_history")],
-        [InlineKeyboardButton("📍 مدیریت دفترچه آدرس", callback_data="user_addresses")],
+        [
+            InlineKeyboardButton("📍 دفترچه آدرس", callback_data="user_addresses"),
+            InlineKeyboardButton("💎 زیرمجموعه‌گیری", callback_data="user_referral")
+        ],
         [InlineKeyboardButton(responses.MAIN_MENU_BUTTON, callback_data="main_menu")]
     ])
 

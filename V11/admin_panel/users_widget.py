@@ -246,26 +246,6 @@ class UserDetailsDialog(QDialog):
                 u.private_note = txt
                 db.commit()
 
-    def _stat_box(self, val, txt):
-        f = QFrame()
-        f.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
-        l = QVBoxLayout(f)
-        v = QLabel(val); v.setAlignment(Qt.AlignmentFlag.AlignCenter); v.setStyleSheet("font-weight: bold; font-size: 16px;")
-        t = QLabel(txt); t.setAlignment(Qt.AlignmentFlag.AlignCenter); t.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
-        l.addWidget(v); l.addWidget(t)
-        return f
-
-    def save_note(self):
-        asyncio.create_task(self._save_db_note(self.txt_note.toPlainText()))
-        self.accept()
-
-    async def _save_db_note(self, txt):
-        with SessionLocal() as db:
-            u = db.query(models.User).filter(models.User.user_id == str(self.user.user_id)).first()
-            if u:
-                u.private_note = txt
-                db.commit()
-
 # ==============================================================================
 # Component: User Card
 # ==============================================================================

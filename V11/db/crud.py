@@ -35,7 +35,8 @@ def get_or_create_user(
     telegram_id: Union[int, str],
     full_name: str,
     username: str = None,
-    platform: str = "telegram"
+    platform: str = "telegram",
+    referred_by: str = None
 ) -> models.User:
     """ایجاد یا آپدیت کاربر (سازگار با تلگرام و روبیکا)"""
     user_id_str = str(telegram_id)
@@ -55,6 +56,7 @@ def get_or_create_user(
                 username=username,
                 platform=platform,
                 is_admin=is_admin_flag,
+                referred_by_id=referred_by,
                 created_at=datetime.now()
             )
             db.add(user)
@@ -546,10 +548,37 @@ def get_filtered_orders(db: Session, status: str = "all", limit: int = 500) -> L
 def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[models.Order]:
     order = db.query(models.Order).filter_by(id=order_id).first()
     if order:
+        old_status = order.status
         order.status = new_status
+
+        # منطق وفادارسازی: اگر سفارش تایید شد، امتیاز اضافه کن
+        if new_status in ['approved', 'paid'] and old_status not in ['approved', 'paid']:
+            _award_loyalty_points(db, order)
+
         db.commit()
         db.refresh(order)
     return order
+
+def _award_loyalty_points(db: Session, order: models.Order):
+    """محاسبه و واریز امتیاز وفاداری"""
+    try:
+        # درصد امتیاز از تنظیمات (پیش‌فرض ۱٪)
+        percent = int(get_setting(db, "loyalty_percent", "1"))
+        points = int(float(order.total_amount) * (percent / 100))
+
+        if points > 0 and order.user:
+            order.user.loyalty_points += points
+            logger.info(f"Awarded {points} points to user {order.user_id}")
+
+            # اگر زیرمجموعه کسی باشد، به معرف هم امتیاز بده (مثلاً نیم درصد)
+            if order.user.referred_by_id:
+                referrer = db.query(models.User).get(order.user.referred_by_id)
+                if referrer:
+                    ref_points = int(float(order.total_amount) * 0.005) # 0.5%
+                    referrer.loyalty_points += ref_points
+                    logger.info(f"Awarded {ref_points} referral points to {referrer.user_id}")
+    except Exception as e:
+        logger.error(f"Loyalty Award Error: {e}")
 
 def get_order_by_id(db: Session, order_id: int) -> Optional[models.Order]:
     return db.query(models.Order).options(
@@ -847,6 +876,43 @@ def get_ticket_with_messages(db: Session, ticket_id: int) -> Optional[models.Tic
         selectinload(models.Ticket.messages),
         joinedload(models.Ticket.user)
     ).filter_by(id=ticket_id).first()
+
+def get_all_auto_responses(db: Session) -> List[models.AutoResponse]:
+    return db.query(models.AutoResponse).all()
+
+def set_auto_response(db: Session, keyword: str, response: str, match_type: str = "exact"):
+    res = db.query(models.AutoResponse).filter_by(keyword=keyword).first()
+    if res:
+        res.response_text = response
+        res.match_type = match_type
+    else:
+        db.add(models.AutoResponse(keyword=keyword, response_text=response, match_type=match_type))
+    db.commit()
+
+def delete_auto_response(db: Session, res_id: int):
+    db.query(models.AutoResponse).filter_by(id=res_id).delete()
+    db.commit()
+
+def find_auto_response(db: Session, text: str) -> Optional[str]:
+    """یافتن بهترین پاسخ خودکار برای متن ورودی"""
+    text = text.strip().lower()
+    # اول تطابق دقیق
+    exact = db.query(models.AutoResponse).filter(
+        models.AutoResponse.keyword == text,
+        models.AutoResponse.is_active == True,
+        models.AutoResponse.match_type == "exact"
+    ).first()
+    if exact: return exact.response_text
+
+    # سپس تطابق محتوایی
+    contains = db.query(models.AutoResponse).filter(
+        models.AutoResponse.match_type == "contains",
+        models.AutoResponse.is_active == True
+    ).all()
+    for item in contains:
+        if item.keyword.lower() in text:
+            return item.response_text
+    return None
 
 def close_ticket(db: Session, ticket_id: int):
     ticket = db.query(models.Ticket).get(ticket_id)

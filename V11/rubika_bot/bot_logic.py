@@ -105,6 +105,11 @@ class RubikaWorker:
         """مدیریت پیام‌های متنی"""
         text = text.strip()
 
+        # ۱. بررسی پاسخگوی خودکار کلمات کلیدی
+        auto_reply = await run_db(crud.find_auto_response, text)
+        if auto_reply:
+            return await self.api.send_message(chat_id, auto_reply)
+
         if text == "/start" or text == "🏠 بازگشت به منو":
             await self.send_main_menu(chat_id)
         elif text == "🛍 محصولات":
@@ -113,6 +118,8 @@ class RubikaWorker:
             await self.send_cart(chat_id, user_id)
         elif text == "📞 پشتیبانی":
             await self.send_support_menu(chat_id, user_id)
+        elif text == "👤 پروفایل":
+            await self.send_user_profile(chat_id, user_id)
         elif text.startswith("/search") or text == "🔍 جستجو":
             q = text.replace("/search", "").strip()
             if not q:
@@ -161,7 +168,8 @@ class RubikaWorker:
         # ساختار Reply Keyboard طبق مستندات (لیست سطرها)
         keyboard = [
             [{"id": "menu:shop", "text": "🛍 محصولات"}],
-            [{"id": "menu:cart", "text": "🛒 سبد خرید"}, {"id": "menu:support", "text": "📞 پشتیبانی"}]
+            [{"id": "menu:cart", "text": "🛒 سبد خرید"}, {"id": "menu:profile", "text": "👤 پروفایل"}],
+            [{"id": "menu:support", "text": "📞 پشتیبانی"}]
         ]
 
         await self.api.send_message(chat_id, text, reply_keyboard=keyboard)
@@ -405,6 +413,28 @@ class RubikaWorker:
             inline_kb.append([{"id": f"t_show:{t.id}", "text": f"{status} #{t.id} - {t.subject}"}])
 
         await self.api.send_message(chat_id, msg, inline_keyboard=inline_kb)
+
+    async def send_user_profile(self, chat_id: str, user_id: str):
+        """نمایش پروفایل کاربری در روبیکا"""
+        with SessionLocal() as db:
+            user = crud.get_user_by_id(db, user_id)
+            stats = crud.get_user_stats(db, user_id)
+
+        if not user: return
+
+        msg = (
+            f"👤 **پروفایل کاربری شما**\n"
+            f"━━━━━━━━━━━━\n"
+            f"🆔 شناسه: `{user.user_id}`\n"
+            f"💎 امتیاز وفاداری: `{user.loyalty_points}`\n\n"
+            f"📊 آمار خرید شما:\n"
+            f"📦 تعداد سفارشات: {stats.get('total_orders', 0)}\n"
+            f"💰 مجموع خرید: {int(stats.get('total_spent', 0)):,} تومان\n"
+            f"━━━━━━━━━━━━\n"
+            f"🔗 لینک دعوت اختصاصی شما (برای تلگرام):\n"
+            f"https://t.me/{(await self.api.get_me())['bot']['username']}?start=ref_{user.user_id}"
+        )
+        await self.api.send_message(chat_id, msg)
 
     async def send_ticket_details(self, chat_id: str, user_id: str, ticket_id: int):
         with SessionLocal() as db:

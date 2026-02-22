@@ -24,6 +24,10 @@ class User(Base):
     saved_phone = Column(String(20), nullable=True)
     private_note = Column(Text, nullable=True)  # یادداشت ادمین برای کاربر
     
+    # وفادارسازی و زیرمجموعه‌گیری
+    loyalty_points = Column(Integer, default=0, nullable=False)
+    referred_by_id = Column(String(50), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+
     last_seen = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -228,6 +232,16 @@ class Ticket(Base):
 
     user = relationship("User")
     messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketMessage.created_at")
+
+
+class AutoResponse(Base):
+    __tablename__ = "auto_responses"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String(255), nullable=False, unique=True, index=True)
+    response_text = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    match_type = Column(String(20), default="exact") # exact, contains
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class TicketMessage(Base):
