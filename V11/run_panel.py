@@ -115,12 +115,15 @@ def run_rubika_bot(token, admin_ids=None):
 # ==============================================================================
 # مدیریت برنامه
 # ==============================================================================
+from bot.proxy_utils import XrayManager, parse_v2ray_link
+
 class ApplicationManager:
     def __init__(self, loop):
         self.loop = loop
         self.window = None
         self.tg_process = None
         self.rb_process = None
+        self.xray_manager = XrayManager()
         self._is_shutting_down = False
 
     async def _load_db_config(self):
@@ -135,10 +138,13 @@ class ApplicationManager:
                     active_proxy = crud.get_active_proxy(db)
                     proxy_str = None
                     if active_proxy:
-                        proxy_str = f"{active_proxy.protocol}://"
-                        if active_proxy.username and active_proxy.password:
-                            proxy_str += f"{active_proxy.username}:{active_proxy.password}@"
-                        proxy_str += f"{active_proxy.host}:{active_proxy.port}"
+                        if active_proxy.raw_link:
+                            proxy_str = active_proxy.raw_link
+                        else:
+                            proxy_str = f"{active_proxy.protocol}://"
+                            if active_proxy.username and active_proxy.password:
+                                proxy_str += f"{active_proxy.username}:{active_proxy.password}@"
+                            proxy_str += f"{active_proxy.host}:{active_proxy.port}"
 
                     return {
                         "tg_token": crud.get_setting(db, "telegram_bot_token"),
@@ -167,7 +173,29 @@ class ApplicationManager:
                 ADMIN_USER_IDS = db_conf["admin_ids"]
 
             # اولویت با پروکسی پیشرفته (v2) است، اگر نبود از v1 استفاده می‌شود
-            final_proxy = db_conf["proxy_url_v2"] or (db_conf["proxy_url_v1"] if db_conf["proxy_enabled"] else None)
+            base_proxy = db_conf["proxy_url_v2"] or (db_conf["proxy_url_v1"] if db_conf["proxy_enabled"] else None)
+            final_proxy = None
+
+            # مدیریت لینک‌های V2Ray
+            if base_proxy and any(proto in base_proxy for proto in ["vless://", "vmess://", "ss://", "trojan://"]):
+                if self.xray_manager.is_available():
+                    logger.info("Starting Xray bridge for V2Ray link...")
+                    proxy_data = parse_v2ray_link(base_proxy)
+                    if proxy_data:
+                        try:
+                            self.xray_manager.stop()
+                            final_proxy = await self.xray_manager.start(proxy_data)
+                            logger.info(f"Xray bridge started at {final_proxy}")
+                        except Exception as e:
+                            logger.error(f"Failed to start Xray bridge: {e}")
+                            final_proxy = None
+                else:
+                    logger.warning("V2Ray link detected but Xray core is not available. Please place xray.exe in tools/xray/")
+                    final_proxy = None
+            else:
+                # پروکسی استاندارد
+                self.xray_manager.stop()
+                final_proxy = base_proxy
 
             global PROXY_URL
             if final_proxy:
@@ -319,6 +347,9 @@ class ApplicationManager:
         if self._is_shutting_down: return
         self._is_shutting_down = True
         logger.info("Shutting down Application...")
+
+        # بستن پل Xray
+        self.xray_manager.stop()
 
         # بستن پروسه‌های فرزند
         if self.tg_process and self.tg_process.is_alive():

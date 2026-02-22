@@ -308,22 +308,29 @@ class SettingsWidget(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30); layout.setSpacing(20)
 
-        card = SettingCard("مدیریت پروکسی‌های پیشرفته")
+        card = SettingCard("مدیریت پروکسی‌های پیشرفته (Hiddify / V2Ray / Standard)")
 
         self.proxy_table = QTableWidget(0, 6)
         self.proxy_table.setHorizontalHeaderLabels(["نام", "پروتکل", "آدرس:پورت", "وضعیت", "تأخیر", "عملیات"])
         self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.proxy_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
 
-        btn_add = QPushButton(" ➕ افزودن پروکسی جدید")
-        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px; font-weight: bold;")
+        h_btns = QHBoxLayout()
+        btn_add = QPushButton(" ➕ افزودن دستی")
+        btn_add.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {ACCENT_COLOR}; color: {ACCENT_COLOR}; padding: 10px; border-radius: 8px; font-weight: bold;")
         btn_add.clicked.connect(self.show_add_proxy_dialog)
 
+        btn_import = QPushButton(" 🔗 وارد کردن لینک (V2Ray/Hiddify)")
+        btn_import.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px; font-weight: bold;")
+        btn_import.clicked.connect(self.show_import_proxy_dialog)
+
+        h_btns.addWidget(btn_add); h_btns.addWidget(btn_import)
+
         card.add_widget(self.proxy_table)
-        card.add_widget(btn_add)
+        card.add_layout(h_btns)
         layout.addWidget(card)
 
-        hint = QLabel("💡 نکته: پروکسی فعال برای اتصال ربات تلگرام و بررسی آپدیت‌ها استفاده می‌شود.")
+        hint = QLabel("💡 نکته: پروکسی فعال برای اتصال ربات تلگرام استفاده می‌شود. لینک‌های V2Ray برای اتصال مستقیم نیاز به هسته Xray دارند.")
         hint.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
         layout.addWidget(hint)
         layout.addStretch()
@@ -969,6 +976,18 @@ class SettingsWidget(QWidget):
 
         b.clicked.connect(save); dlg.exec()
 
+    def show_import_proxy_dialog(self):
+        text, ok = QInputDialog.getMultiLineText(self, "وارد کردن لینک", "لینک V2Ray را وارد کنید:")
+        if ok and text.strip():
+            from bot.proxy_utils import parse_v2ray_link
+            data = parse_v2ray_link(text.strip())
+            if data:
+                with next(get_db()) as db: crud.add_proxy(db, data)
+                self.load_proxies()
+                self.window().show_toast("لینک با موفقیت وارد شد.")
+            else:
+                QMessageBox.warning(self, "خطا", "فرمت لینک صحیح نیست.")
+
     def activate_proxy(self, pid):
         with next(get_db()) as db: crud.set_active_proxy(db, pid)
         self.load_proxies()
@@ -981,14 +1000,26 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def test_proxy_connection(self, pid):
-        self.window().show_toast("در حال تست اتصال...")
-        import time
-        import httpx
+        self.window().show_toast("در حال بررسی وضعیت...")
 
         with next(get_db()) as db:
             p = db.query(models.Proxy).get(pid)
             if not p: return
 
+        # اگر لینک مستقیم است، تست TCP Ping انجام بده
+        if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
+            from bot.proxy_utils import tcp_ping
+            latency = await tcp_ping(p.host, p.port)
+            if latency is not None:
+                with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
+                self.load_proxies()
+                self.window().show_toast(f"سرور در دسترس است! تأخیر: {latency}ms")
+            else:
+                self.window().show_toast("خطا: سرور پاسخگو نیست (Timeout)", is_error=True)
+            return
+
+        import time
+        import httpx
         proxy_url = f"{p.protocol}://"
         if p.username and p.password: proxy_url += f"{p.username}:{p.password}@"
         proxy_url += f"{p.host}:{p.port}"
