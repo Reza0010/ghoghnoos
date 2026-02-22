@@ -242,7 +242,14 @@ class ProductEditorDialog(QDialog):
         l_extra.addWidget(QLabel("تگ‌ها:")); l_extra.addWidget(self.inp_tags)
         l_extra.addWidget(QLabel("مرتبط:")); l_extra.addWidget(self.inp_rel); l_extra.addStretch()
 
-        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع"); self.tabs.addTab(tab_extra, "سئو")
+        # Digital Tab
+        tab_digi = QWidget(); l_digi = QVBoxLayout(tab_digi); l_digi.setContentsMargins(20, 20, 20, 20)
+        self.chk_digital = QCheckBox("این محصول دیجیتال است (ارسال خودکار پس از پرداخت)"); self.chk_digital.setStyleSheet(f"color: {ACCENT_COLOR}; font-weight: bold;")
+        self.inp_digi_content = QTextEdit(); self.inp_digi_content.setPlaceholderText("محتوای دیجیتال (لایسنس، لینک و ...) که پس از خرید برای مشتری ارسال می‌شود")
+        self.inp_digi_content.setStyleSheet(f"background: {BG_COLOR}; color: white; border: 1px solid {BORDER_COLOR}; border-radius: 8px;")
+        l_digi.addWidget(self.chk_digital); l_digi.addWidget(QLabel("محتوای ارسالی:")); l_digi.addWidget(self.inp_digi_content)
+
+        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع"); self.tabs.addTab(tab_extra, "سئو"); self.tabs.addTab(tab_digi, "دیجیتال")
         layout.addWidget(self.tabs)
 
         btn_box = QHBoxLayout()
@@ -282,6 +289,8 @@ class ProductEditorDialog(QDialog):
         self.inp_brand.setText(p.brand or ""); self.inp_desc.setPlainText(p.description or "")
         self.inp_tags.set_tags(p.tags or ""); self.inp_rel.setText(p.related_product_ids or "")
         self.chk_top.setChecked(p.is_top_seller)
+        self.chk_digital.setChecked(p.is_digital)
+        self.inp_digi_content.setPlainText(p.digital_content or "")
         idx = self.inp_cat.findData(p.category_id)
         if idx >= 0: self.inp_cat.setCurrentIndex(idx)
         self.img_manager.set_images(data["images"])
@@ -297,7 +306,8 @@ class ProductEditorDialog(QDialog):
             "discount_end_date": datetime.strptime(self.inp_disc_end.text(), "%Y-%m-%d") if self.inp_disc_end.text() else None,
             "stock": self.inp_stock.value(), "brand": self.inp_brand.text(),
             "description": self.inp_desc.toPlainText(), "tags": ",".join(self.inp_tags.get_tags_list()),
-            "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked()
+            "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked(),
+            "is_digital": self.chk_digital.isChecked(), "digital_content": self.inp_digi_content.toPlainText()
         }
         raw_images = self.img_manager.get_images()
         final_images = []
@@ -665,7 +675,7 @@ class ProductsWidget(QWidget):
                         limit=self.items_per_page,
                         offset=offset
                     )
-                    
+
                     return cats, prods, total
 
             cats, prods, total = await loop.run_in_executor(None, fetch)

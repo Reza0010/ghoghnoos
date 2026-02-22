@@ -922,6 +922,55 @@ def close_ticket(db: Session, ticket_id: int):
     return ticket
 
 # ======================================================================
+# 11. مدیریت کوپن‌ها (Coupons)
+# ======================================================================
+def get_all_coupons(db: Session) -> List[models.Coupon]:
+    return db.query(models.Coupon).all()
+
+def create_coupon(db: Session, data: dict) -> models.Coupon:
+    coupon = models.Coupon(**data)
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+def delete_coupon(db: Session, coupon_id: int):
+    db.query(models.Coupon).filter_by(id=coupon_id).delete()
+    db.commit()
+
+def validate_coupon(db: Session, code: str, total_amount: float) -> Tuple[bool, str, Optional[float]]:
+    """اعتبارسنجی کد تخفیف و بازگرداندن مبلغ تخفیف"""
+    code = code.strip().upper()
+    coupon = db.query(models.Coupon).filter_by(code=code, is_active=True).first()
+
+    if not coupon:
+        return False, "❌ کد تخفیف معتبر نیست.", None
+
+    if coupon.expiry_date and datetime.now() > coupon.expiry_date:
+        return False, "❌ مهلت استفاده از این کد به پایان رسیده است.", None
+
+    if coupon.used_count >= coupon.usage_limit:
+        return False, "❌ ظرفیت استفاده از این کد تکمیل شده است.", None
+
+    if float(total_amount) < float(coupon.min_purchase):
+        return False, f"❌ حداقل خرید برای این کد {int(coupon.min_purchase):,} تومان است.", None
+
+    # محاسبه مبلغ تخفیف
+    discount = 0
+    if coupon.percent > 0:
+        discount = float(total_amount) * (coupon.percent / 100)
+    else:
+        discount = float(coupon.amount)
+
+    return True, "✅ کد تخفیف اعمال شد.", min(discount, float(total_amount))
+
+def use_coupon(db: Session, code: str):
+    coupon = db.query(models.Coupon).filter_by(code=code.upper()).first()
+    if coupon:
+        coupon.used_count += 1
+        db.commit()
+
+# ======================================================================
 # 10. مدیریت پروکسی (Proxy Management)
 # ======================================================================
 def get_all_proxies(db: Session) -> List[models.Proxy]:

@@ -90,3 +90,30 @@ async def get_branded_text(text: str) -> str:
     if footer:
         return f"{text}\n\n---\n{footer}"
     return text
+
+async def send_digital_items(bot_app, rubika_client, order):
+    """ارسال خودکار کالاهای دیجیتال برای مشتری"""
+    if not order or not order.user: return
+
+    digital_items = [i for i in order.items if i.product and i.product.is_digital and i.product.digital_content]
+    if not digital_items: return
+
+    msg = f"🎁 **تحویل خودکار سفارش #{order.id}**\n\n"
+    msg += "بابت خرید شما متشکریم. اطلاعات محصولات دیجیتال شما در ادامه آمده است:\n\n"
+
+    for item in digital_items:
+        msg += f"📦 **{item.product.name}**\n"
+        msg += f"🔑 محتوا:\n`{item.product.digital_content}`\n"
+        msg += "----------------\n"
+
+    msg += "\nدر صورت بروز هرگونه مشکل با پشتیبانی در ارتباط باشید."
+
+    try:
+        if order.user.platform == 'telegram' and bot_app:
+            # اگر bot_app از نوع PanelBotWrapper باشد مستقیماً bot دارد
+            bot = getattr(bot_app, 'bot', bot_app)
+            await bot.send_message(chat_id=int(order.user_id), text=msg.replace("**", "<b>").replace("**", "</b>"), parse_mode='HTML')
+        elif order.user.platform == 'rubika' and rubika_client:
+            await rubika_client.api.send_message(chat_id=order.user_id, text=msg.replace("**", ""))
+    except Exception as e:
+        logger.error(f"Failed to send digital items for order {order.id}: {e}")

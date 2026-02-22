@@ -75,6 +75,10 @@ class Product(Base):
     discount_start_date = Column(DateTime(timezone=True), nullable=True)
     discount_end_date = Column(DateTime(timezone=True), nullable=True)
     stock = Column(Integer, default=0, nullable=False)
+
+    # کالای دیجیتال
+    is_digital = Column(Boolean, default=False)
+    digital_content = Column(Text, nullable=True) # لایسنس یا متن ارسالی خودکار
     
     is_active = Column(Boolean, default=True, nullable=False)
     is_top_seller = Column(Boolean, default=False, nullable=False)
@@ -160,6 +164,10 @@ class Order(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
+    # کد تخفیف اعمال شده
+    coupon_code = Column(String(50), nullable=True)
+    coupon_discount_amount = Column(Numeric(12, 0), default=0)
+
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin")
 
@@ -210,6 +218,20 @@ class UserAddress(Base):
     postal_code = Column(String(20), nullable=True)
 
     user = relationship("User", back_populates="addresses")
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    percent = Column(Integer, default=0) # درصد تخفیف
+    amount = Column(Numeric(12, 0), default=0) # مبلغ ثابت (اگر درصد ۰ باشد)
+    usage_limit = Column(Integer, default=100)
+    used_count = Column(Integer, default=0)
+    min_purchase = Column(Numeric(12, 0), default=0)
+    expiry_date = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Setting(Base):

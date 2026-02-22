@@ -69,10 +69,11 @@ async def get_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     support_admins = await run_db(_get_support_admins)
     admin_msg = f"🔔 **تیکت جدید ثبت شد! #{ticket.id}**\n👤 کاربر: {update.effective_user.full_name}\n📌 موضوع: {subject}\n\n💬 متن: {message}"
+    admin_kbd = InlineKeyboardMarkup([[InlineKeyboardButton("✍️ پاسخ سریع", callback_data=f"adm_ticket_reply:{ticket.id}")]])
 
     for admin_id in support_admins:
         try:
-            await context.bot.send_message(admin_id, admin_msg, parse_mode='Markdown')
+            await context.bot.send_message(admin_id, admin_msg, reply_markup=admin_kbd, parse_mode='Markdown')
         except: pass
 
     context.user_data.clear()
@@ -143,24 +144,75 @@ async def get_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     support_admins = await run_db(_get_support_admins)
     admin_msg = f"📩 **پاسخ جدید برای تیکت #{ticket_id}**\n👤 کاربر: {update.effective_user.full_name}\n\n💬 متن: {text}"
+    admin_kbd = InlineKeyboardMarkup([[InlineKeyboardButton("✍️ پاسخ به تیکت", callback_data=f"adm_ticket_reply:{ticket_id}")]])
 
     for admin_id in support_admins:
         try:
-            await context.bot.send_message(admin_id, admin_msg, parse_mode='Markdown')
+            await context.bot.send_message(admin_id, admin_msg, reply_markup=admin_kbd, parse_mode='Markdown')
         except: pass
 
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def admin_start_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع پاسخگویی ادمین از تلگرام"""
+    query = update.callback_query
+    await query.answer()
+
+    ticket_id = int(query.data.split(':')[1])
+    context.user_data['adm_reply_tid'] = ticket_id
+
+    await query.message.reply_text(f"✍️ در حال پاسخگویی به تیکت #{ticket_id}...\nپیام خود را بفرستید:")
+    return REPLY_TICKET
+
+async def admin_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ارسال پاسخ ادمین به کاربر"""
+    text = update.message.text.strip()
+    ticket_id = context.user_data.get('adm_reply_tid')
+    admin_id = update.effective_user.id
+
+    # ثبت در دیتابیس
+    await run_db(crud.add_ticket_message, ticket_id, admin_id, text, is_admin=True)
+
+    # اطلاع به کاربر
+    ticket = await run_db(crud.get_ticket_with_messages, ticket_id)
+    if ticket and ticket.user_id:
+        user_msg = f"📩 **پاسخ جدید از پشتیبانی (تیکت #{ticket_id}):**\n\n{text}"
+        try:
+             # تلگرام
+             if not ticket.user.platform or ticket.user.platform == 'telegram':
+                await context.bot.send_message(chat_id=int(ticket.user_id), text=user_msg, parse_mode='Markdown')
+             # روبیکا (نیازمند کلاینت در ترد اصلی است، فعلا برای تلگرام فعال می‌کنیم)
+        except: pass
+
+    await update.message.reply_text(f"✅ پاسخ شما برای کاربر ارسال شد.")
     context.user_data.clear()
     return ConversationHandler.END
 
 support_conversation_handler = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_new_ticket, pattern="^ticket:new$"),
-        CallbackQueryHandler(start_reply, pattern="^ticket:reply:")
+        CallbackQueryHandler(start_reply, pattern="^ticket:reply:"),
+        CallbackQueryHandler(admin_start_reply, pattern="^adm_ticket_reply:")
     ],
     states={
         GET_SUBJECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_subject)],
         GET_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_message)],
-        REPLY_TICKET: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_reply)],
+        REPLY_TICKET: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, get_reply),
+            # ادمین هم از همین استیت استفاده می‌کند اما با منطق متفاوت
+            MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, admin_send_reply)
+        ],
     },
     fallbacks=[CallbackQueryHandler(support_menu, pattern="^support$")],
 )
+
+# چون هر دو از REPLY_TICKET استفاده میکنند، باید در هندلر اصلی تفکیک شوند.
+# اصلاح شده: استفاده از یک تابع توزیع کننده در استیت REPLY_TICKET
+async def dispatcher_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if 'adm_reply_tid' in context.user_data:
+        return await admin_send_reply(update, context)
+    else:
+        return await get_reply(update, context)
+
+support_conversation_handler.states[REPLY_TICKET] = [MessageHandler(filters.TEXT & ~filters.COMMAND, dispatcher_reply)]

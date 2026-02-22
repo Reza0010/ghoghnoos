@@ -192,6 +192,7 @@ class SettingsWidget(QWidget):
 
         nav_items = [
             (" تنظیمات پایه", "fa5s.network-wired"),
+            (" کدهای تخفیف", "fa5s.ticket-alt"),
             (" مدیریت پروکسی", "fa5s.shield-alt"),
             (" پاسخگوی خودکار", "fa5s.robot"),
             (" ربات تلگرام", "fa5b.telegram"),
@@ -212,6 +213,7 @@ class SettingsWidget(QWidget):
         # --- صفحات محتوا ---
         self.pages_stack = QStackedWidget()
         self.pages_stack.addWidget(self._ui_core_page())
+        self.pages_stack.addWidget(self._ui_coupons_page())
         self.pages_stack.addWidget(self._ui_proxy_page())
         self.pages_stack.addWidget(self._ui_auto_reply_page())
         self.pages_stack.addWidget(self._ui_telegram_page())
@@ -277,6 +279,28 @@ class SettingsWidget(QWidget):
         v_box.addStretch()
         scroll.setWidget(container)
         layout.addWidget(scroll)
+        return page
+
+    def _ui_coupons_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("مدیریت کدهای تخفیف (Coupons)")
+        self.coupon_table = QTableWidget(0, 6)
+        self.coupon_table.setHorizontalHeaderLabels(["کد", "تخفیف", "ظرفیت", "استفاده شده", "تاریخ انقضا", "عملیات"])
+        self.coupon_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.coupon_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        btn_add = QPushButton(" ➕ تعریف کد تخفیف جدید")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.clicked.connect(self.show_add_coupon_dialog)
+
+        card.add_widget(self.coupon_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
+
+        QTimer.singleShot(1000, self.load_coupons)
         return page
 
     def _ui_proxy_page(self):
@@ -809,6 +833,72 @@ class SettingsWidget(QWidget):
                 html += f"<div style='color:{col}; font-size: 12px;'>{line.strip()}</div>"
             self.log_viewer.setHtml(html)
         except: pass
+
+    def load_coupons(self):
+        try:
+            with next(get_db()) as db:
+                items = crud.get_all_coupons(db)
+            self.coupon_table.setRowCount(0)
+            for i, item in enumerate(items):
+                self.coupon_table.insertRow(i)
+                self.coupon_table.setItem(i, 0, QTableWidgetItem(item.code))
+                val = f"{item.percent}%" if item.percent > 0 else f"{int(item.amount):,} ت"
+                self.coupon_table.setItem(i, 1, QTableWidgetItem(val))
+                self.coupon_table.setItem(i, 2, QTableWidgetItem(str(item.usage_limit)))
+                self.coupon_table.setItem(i, 3, QTableWidgetItem(str(item.used_count)))
+                exp = item.expiry_date.strftime("%Y/%m/%d") if item.expiry_date else "بدون انقضا"
+                self.coupon_table.setItem(i, 4, QTableWidgetItem(exp))
+
+                btn_del = QPushButton(); btn_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                btn_del.clicked.connect(lambda _, cid=item.id: self.delete_coupon_ui(cid))
+                self.coupon_table.setCellWidget(i, 5, btn_del)
+        except: pass
+
+    def show_add_coupon_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("تعریف کد تخفیف"); dlg.setFixedWidth(400)
+        l = QVBoxLayout(dlg); l.setSpacing(10)
+
+        code = QLineEdit(); code.setPlaceholderText("کد (مثلا: OFF20)")
+        percent = QSpinBox(); percent.setRange(0, 100); percent.setSuffix(" %")
+        amount = FormattedPriceInput(placeholder="مبلغ ثابت (اگر درصد صفر باشد)")
+        limit = QSpinBox(); limit.setRange(1, 10000); limit.setValue(100)
+        min_p = FormattedPriceInput(placeholder="حداقل مبلغ خرید")
+        expiry = QLineEdit(); expiry.setPlaceholderText("تاریخ انقضا (YYYY-MM-DD)")
+
+        for w in [code, expiry]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px;")
+
+        l.addWidget(QLabel("کد تخفیف (انگلیسی):")); l.addWidget(code)
+        l.addWidget(QLabel("درصد تخفیف:")); l.addWidget(percent)
+        l.addWidget(QLabel("یا مبلغ ثابت تخفیف (تومان):")); l.addWidget(amount)
+        l.addWidget(QLabel("ظرفیت استفاده (تعداد):")); l.addWidget(limit)
+        l.addWidget(QLabel("حداقل خرید (تومان):")); l.addWidget(min_p)
+        l.addWidget(QLabel("تاریخ انقضا (اختیاری):")); l.addWidget(expiry)
+
+        b = QPushButton("ذخیره کد تخفیف"); b.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not code.text(): return
+            try:
+                exp_date = datetime.strptime(expiry.text(), "%Y-%m-%d") if expiry.text() else None
+                data = {
+                    "code": code.text().strip().upper(),
+                    "percent": percent.value(),
+                    "amount": amount.value(),
+                    "usage_limit": limit.value(),
+                    "min_purchase": min_p.value(),
+                    "expiry_date": exp_date
+                }
+                with next(get_db()) as db: crud.create_coupon(db, data)
+                dlg.accept(); self.load_coupons()
+            except Exception as e: QMessageBox.warning(dlg, "خطا", "فرمت تاریخ صحیح نیست (YYYY-MM-DD)")
+
+        b.clicked.connect(save); dlg.exec()
+
+    def delete_coupon_ui(self, cid):
+        if QMessageBox.question(self, "حذف", "این کد تخفیف حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_coupon(db, cid)
+            self.load_coupons()
 
     def load_proxies(self):
         try:

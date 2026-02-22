@@ -16,7 +16,7 @@ from bot import keyboards, responses
 logger = logging.getLogger("CartHandler")
 
 # وضعیت‌های گفتگوی خرید (Checkout States)
-GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, CHOOSE_PAYMENT, GET_RECEIPT = range(5)
+GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, GET_COUPON, CHOOSE_PAYMENT, GET_RECEIPT = range(6)
 
 # ==============================================================================
 # توابع کمکی (Helpers)
@@ -239,7 +239,37 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         
     context.user_data['phone'] = phone
     await run_db(crud.update_user_phone, update.effective_user.id, phone)
-    return await show_invoice_step(update.message, context)
+
+    # مرحله جدید: کد تخفیف
+    kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⏩ رد کردن (بدون کد تخفیف)", callback_data="skip_coupon")]])
+    await update.message.reply_text("🎫 آیا کد تخفیف دارید؟ (در صورت داشتن، آن را ارسال کنید):", reply_markup=kbd)
+    return GET_COUPON
+
+async def get_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """دریافت و بررسی کد تخفیف"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        return await show_invoice_step(query.message, context)
+
+    code = update.message.text.strip().upper()
+    total = context.user_data.get('items_total', 0) # باید در مراحل قبل ذخیره شود
+
+    # محاسبه مجدد مبلغ جهت اعتبارسنجی (موقت)
+    user_id = update.effective_user.id
+    items = await run_db(crud.get_cart_items, user_id)
+    items_total = sum(float(item.product.discount_price if crud.is_product_discount_active(item.product) else item.product.price) * item.quantity for item in items)
+
+    success, msg, discount = await run_db(crud.validate_coupon, code, items_total)
+
+    if success:
+        context.user_data['coupon_code'] = code
+        context.user_data['coupon_discount'] = discount
+        await update.message.reply_text(f"{msg}\n💰 مبلغ {int(discount):,} تومان از سفارش شما کسر شد.")
+        return await show_invoice_step(update.message, context)
+    else:
+        await update.message.reply_text(msg + "\nلطفاً کد دیگری وارد کنید یا دکمه رد کردن را بزنید:")
+        return GET_COUPON
 
 async def show_invoice_step(message, context) -> int:
     """نمایش فاکتور و انتخاب روش پرداخت"""
@@ -262,8 +292,12 @@ async def show_invoice_step(message, context) -> int:
     free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
 
     final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
-    final_total = items_total + final_ship
 
+    # اعمال کوپن
+    coupon_discount = context.user_data.get('coupon_discount', 0)
+    final_total = items_total + final_ship - coupon_discount
+
+    context.user_data['items_total'] = items_total
     context.user_data['final_total'] = final_total
 
     zp_enabled = await run_db(crud.get_setting, "zarinpal_enabled", "false") == "true"
@@ -271,6 +305,8 @@ async def show_invoice_step(message, context) -> int:
     invoice_text = f"🧾 <b>پیش‌فاکتور نهایی</b>\n\n"
     invoice_text += f"💰 مبلغ محصولات: {responses.format_price(items_total)}\n"
     invoice_text += f"🚚 هزینه ارسال: {'رایگان' if final_ship == 0 else responses.format_price(final_ship)}\n"
+    if coupon_discount > 0:
+        invoice_text += f"🎫 تخفیف کد هدیه: <b>-{int(coupon_discount):,}</b> تومان\n"
     invoice_text += f"{responses.get_divider()}\n"
     invoice_text += f"💎 <b>مبلغ قابل پرداخت: {responses.format_price(final_total)}</b>\n\n"
     invoice_text += "لطفا روش پرداخت مورد نظر خود را انتخاب کنید:"
@@ -384,14 +420,28 @@ async def finalize_order(update: Update, context: ContextTypes.DEFAULT_TYPE, pay
     try:
         order = await run_db(crud.create_order_from_cart, user.id, shipping_data)
         
-        def _update_details(db, oid, pid, p_type):
+        def _update_details(db, oid, pid, p_type, ctx_data):
             order_obj = db.query(models.Order).filter_by(id=oid).first()
             if order_obj:
                 if pid: order_obj.payment_receipt_photo_id = pid
                 if p_type == "online": order_obj.status = "paid"
+                # ثبت کوپن در سفارش
+                if ctx_data.get('coupon_code'):
+                    order_obj.coupon_code = ctx_data['coupon_code']
+                    order_obj.coupon_discount_amount = ctx_data['coupon_discount']
+                    # مصرف کردن کوپن در دیتابیس
+                    crud.use_coupon(db, ctx_data['coupon_code'])
             db.commit()
         
-        await run_db(_update_details, order.id, photo_id, payment_type)
+        await run_db(_update_details, order.id, photo_id, payment_type, context.user_data)
+
+        # اگر پرداخت آنلاین بود، کالای دیجیتال را ارسال کن
+        if payment_type == "online":
+            from bot.utils import send_digital_items
+            # بارگذاری مجدد سفارش با متعلقات
+            full_order = await run_db(crud.get_order_by_id, order.id)
+            # در محیط هندلر ربات، context.bot در دسترس است
+            await send_digital_items(context.bot, None, full_order) # روبیکا فعلا هندلر جدای خود را دارد
 
         success_text = responses.ORDER_CONFIRMATION.format(
             order_id=order.id,
@@ -473,6 +523,10 @@ checkout_conversation_handler = ConversationHandler(
         GET_PHONE: [
             CallbackQueryHandler(handle_phone_choice, pattern=r"^(use_saved_phone|new_phone)$"),
             MessageHandler((filters.TEXT | filters.CONTACT) & ~filters.COMMAND, get_phone)
+        ],
+        GET_COUPON: [
+            CallbackQueryHandler(get_coupon, pattern="^skip_coupon$"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, get_coupon)
         ],
         CHOOSE_PAYMENT: [
             CallbackQueryHandler(handle_payment_choice, pattern=r"^(pay_online|pay_receipt|verify_online)$")

@@ -581,7 +581,13 @@ class OrdersWidget(QWidget):
         try:
             def db_op():
                 with next(get_db()) as db:
-                    order = db.query(crud.models.Order).get(order_id)
+                    # استفاده از eager loading برای دسترسی در ترد دیگر
+                    from sqlalchemy.orm import selectinload
+                    order = db.query(crud.models.Order).options(
+                        selectinload(crud.models.Order.items).joinedload(crud.models.OrderItem.product),
+                        selectinload(crud.models.Order.user)
+                    ).filter_by(id=order_id).first()
+
                     if order:
                         order.status = new_status
                         if tracking_code: order.tracking_code = tracking_code
@@ -592,6 +598,11 @@ class OrdersWidget(QWidget):
             updated_order = await loop.run_in_executor(None, db_op)
 
             if updated_order and updated_order.user:
+                # اگر تایید شد و کالای دیجیتال داشت، ارسال کن
+                if new_status in ['approved', 'paid']:
+                    from bot.utils import send_digital_items
+                    await send_digital_items(self.bot_app, self.rubika_client, updated_order)
+
                 user_platform = updated_order.user.platform
                 user_id = updated_order.user_id
 
