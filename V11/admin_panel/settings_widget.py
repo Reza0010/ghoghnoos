@@ -989,7 +989,19 @@ class SettingsWidget(QWidget):
                 QMessageBox.warning(self, "خطا", "فرمت لینک صحیح نیست.")
 
     def activate_proxy(self, pid):
-        with next(get_db()) as db: crud.set_active_proxy(db, pid)
+        with next(get_db()) as db:
+            p = db.query(models.Proxy).get(pid)
+            if not p: return
+
+            # چک کردن وجود هسته Xray برای لینک‌های v2ray
+            if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
+                if not hasattr(self.window(), 'app_manager') or not self.window().app_manager.xray_manager.is_available():
+                    QMessageBox.warning(self, "هسته Xray یافت نشد",
+                        "برای استفاده از لینک‌های مستقیم V2ray/Hiddify، باید فایل xray.exe را در پوشه tools/xray قرار دهید.\n"
+                        "در غیر این صورت ربات قادر به اتصال نخواهد بود.")
+
+            crud.set_active_proxy(db, pid)
+
         self.load_proxies()
         self.window().show_toast("پروکسی فعال شد. برای اعمال نهایی، سرویس‌ها را ریستارت کنید.")
 
@@ -1000,24 +1012,26 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def test_proxy_connection(self, pid):
-        self.window().show_toast("در حال بررسی وضعیت...")
+        self.window().show_toast("در حال بررسی وضعیت اتصال...")
 
         with next(get_db()) as db:
             p = db.query(models.Proxy).get(pid)
             if not p: return
 
-        # اگر لینک مستقیم است، تست TCP Ping انجام بده
+        # برای لینک‌های V2Ray (تست مستقیم TCP)
         if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
             from bot.proxy_utils import tcp_ping
-            latency = await tcp_ping(p.host, p.port)
+            # استفاده از تایم اوت بیشتر در UI
+            latency = await tcp_ping(p.host, p.port, timeout=10.0)
             if latency is not None:
                 with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
                 self.load_proxies()
-                self.window().show_toast(f"سرور در دسترس است! تأخیر: {latency}ms")
+                self.window().show_toast(f"✅ سرور در دسترس است! تأخیر: {latency}ms")
             else:
-                self.window().show_toast("خطا: سرور پاسخگو نیست (Timeout)", is_error=True)
+                self.window().show_toast("❌ خطا: سرور پاسخگو نیست یا IP مسدود است (Timeout)", is_error=True)
             return
 
+        # برای پروکسی‌های استاندارد (SOCKS5/HTTP)
         import time
         import httpx
         proxy_url = f"{p.protocol}://"
@@ -1026,17 +1040,22 @@ class SettingsWidget(QWidget):
 
         start = time.time()
         try:
-            async with httpx.AsyncClient(proxies=proxy_url, timeout=10) as client:
+            # تست واقعی اتصال به تلگرام از طریق پروکسی
+            async with httpx.AsyncClient(proxies=proxy_url, timeout=15) as client:
                 resp = await client.get("https://api.telegram.org", follow_redirects=True)
-                if resp.status_code == 200:
+                if resp.status_code in [200, 404]: # 404 هم یعنی به سرور تلگرام رسیده
                     latency = int((time.time() - start) * 1000)
                     with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
                     self.load_proxies()
-                    self.window().show_toast(f"اتصال موفق! تأخیر: {latency}ms")
+                    self.window().show_toast(f"✅ اتصال موفق! تأخیر: {latency}ms")
                 else:
-                    self.window().show_toast(f"خطا در پاسخ: {resp.status_code}", is_error=True)
+                    self.window().show_toast(f"⚠️ پاسخ غیرمنتظره از سرور: {resp.status_code}", is_error=True)
+        except httpx.ConnectError:
+            self.window().show_toast("❌ خطا: امکان اتصال به پروکسی وجود ندارد.", is_error=True)
+        except httpx.TimeoutException:
+            self.window().show_toast("❌ خطا: زمان پاسخگویی پروکسی بیش از حد طولانی شد.", is_error=True)
         except Exception as e:
-            self.window().show_toast(f"خطا در اتصال: {str(e)}", is_error=True)
+            self.window().show_toast(f"❌ خطا در اتصال: {str(e)}", is_error=True)
 
     def load_auto_replies(self):
         try:
@@ -1271,11 +1290,17 @@ class SettingsWidget(QWidget):
 
     @asyncSlot()
     async def restart_all_services(self, *args, **kwargs):
+        if getattr(self, '_restarting', False): return
+
         if not hasattr(self.window(), 'app_manager'):
             return QMessageBox.warning(self, "خطا", "مدیریت برنامه در دسترس نیست.")
 
         if QMessageBox.question(self, "تایید", "سرویس‌های ربات با تنظیمات جدید ریستارت شوند؟\n(ممکن است برای اعمال کامل توکن جدید نیاز به بستن و باز کردن برنامه باشد)") == QMessageBox.StandardButton.Yes:
-            await self.window().app_manager.restart_services()
+            try:
+                self._restarting = True
+                await self.window().app_manager.restart_services()
+            finally:
+                self._restarting = False
 
     @asyncSlot()
     async def update_bot_commands(self, *args, **kwargs):

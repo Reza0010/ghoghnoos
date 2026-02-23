@@ -126,22 +126,32 @@ def _parse_trojan(link: str) -> Dict[str, Any]:
         "config_type": "link"
     }
 
-async def tcp_ping(host: str, port: int, timeout: float = 3.0) -> Optional[int]:
+async def tcp_ping(host: str, port: int, timeout: float = 7.0) -> Optional[int]:
     """
     تست در دسترس بودن سرور (Latency ساده TCP)
+    برگرداندن تأخیر به میلی‌ثانیه یا None در صورت بروز خطا
     """
     import time
     import asyncio
 
     start = time.time()
     try:
+        # افزایش زمان انتظار برای شبکه‌های ضعیف
         conn = asyncio.open_connection(host, port)
         reader, writer = await asyncio.wait_for(conn, timeout=timeout)
         latency = int((time.time() - start) * 1000)
-        writer.close()
-        await writer.wait_closed()
+
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except: pass
+
         return latency
-    except:
+    except asyncio.TimeoutError:
+        logger.warning(f"TCP Ping Timeout for {host}:{port}")
+        return None
+    except Exception as e:
+        logger.warning(f"TCP Ping Error for {host}:{port} -> {e}")
         return None
 
 def generate_xray_config(proxy_data: Dict[str, Any], local_port: int = 2080) -> Dict[str, Any]:

@@ -407,20 +407,27 @@ class MainWindow(QMainWindow):
             self._fetching_notifications = False
 
     async def _fetch_notification_stats(self):
+        if self._is_shutting_down: return
+
         from db.database import SessionLocal
         from db import crud, models
 
+        # استفاده از loop ذخیره شده در کلاس یا گرفتن loop فعلی با احتیاط
         loop = asyncio.get_running_loop()
         def fetch():
-            with SessionLocal() as db:
-                new_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
-                new_tickets = db.query(models.Ticket).filter(models.Ticket.status == 'open').count()
-                return new_orders, new_tickets
+            try:
+                with SessionLocal() as db:
+                    new_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
+                    new_tickets = db.query(models.Ticket).filter(models.Ticket.status == 'open').count()
+                    return new_orders, new_tickets
+            except: return 0, 0
 
         try:
             orders_count, tickets_count = await loop.run_in_executor(None, fetch)
-            self._update_sidebar_badges(orders_count, tickets_count)
-        except: pass
+            if not self._is_shutting_down:
+                self._update_sidebar_badges(orders_count, tickets_count)
+        except Exception as e:
+            logger.debug(f"Notification fetch failed: {e}")
 
     def _update_sidebar_badges(self, orders, tickets):
         # ایندکس ۳ سفارشات، ۴ تیکت‌ها است طبق PAGE_MAP
