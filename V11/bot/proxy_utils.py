@@ -126,13 +126,14 @@ def _parse_trojan(link: str) -> Dict[str, Any]:
         "config_type": "link"
     }
 
-async def tcp_ping(host: str, port: int, timeout: float = 7.0) -> Optional[int]:
+async def tcp_ping(host: str, port: int, timeout: float = 7.0) -> tuple[Optional[int], str]:
     """
     تست در دسترس بودن سرور (Latency ساده TCP)
-    برگرداندن تأخیر به میلی‌ثانیه یا None در صورت بروز خطا
+    برگرداندن (تأخیر، پیام وضعیت)
     """
     import time
     import asyncio
+    import socket
 
     start = time.time()
     try:
@@ -146,13 +147,18 @@ async def tcp_ping(host: str, port: int, timeout: float = 7.0) -> Optional[int]:
             await writer.wait_closed()
         except: pass
 
-        return latency
+        return latency, "OK"
     except asyncio.TimeoutError:
-        logger.warning(f"TCP Ping Timeout for {host}:{port}")
-        return None
+        return None, "Timeout (سرور پاسخگو نیست)"
+    except ConnectionRefusedError:
+        return None, "Refused (اتصال رد شد - احتمالا سرور خاموش است)"
+    except socket.gaierror:
+        return None, "DNS Error (آدرس یافت نشد)"
     except Exception as e:
-        logger.warning(f"TCP Ping Error for {host}:{port} -> {e}")
-        return None
+        err_msg = str(e)
+        if "1225" in err_msg or "refused" in err_msg.lower():
+             return None, "Connection Refused (اتصال توسط مقصد رد شد)"
+        return None, f"Error: {err_msg}"
 
 def generate_xray_config(proxy_data: Dict[str, Any], local_port: int = 2080) -> Dict[str, Any]:
     """

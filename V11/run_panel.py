@@ -34,7 +34,7 @@ logger = logging.getLogger("Launcher")
 # ترد ایزوله تلگرام
 # ==============================================================================
 def run_telegram_bot(token, proxy=None, admin_ids=None):
-    """اجرای ربات تلگرام در پروسه مجزا"""
+    """اجرای ربات تلگرام در پروسه مجزا با مدیریت دستی حلقه برای پایداری در ویندوز"""
     if not token: return
 
     # تزریق تنظیمات به ماژول کانفیگ در پروسه جدید
@@ -50,23 +50,46 @@ def run_telegram_bot(token, proxy=None, admin_ids=None):
     from telegram import Update
     from bot.loader import setup_application_handlers
 
+    # ساخت حلقه رویداد جدید برای پروسه فرزند
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def main_loop():
+        try:
+            builder = Application.builder().token(token)
+            if proxy:
+                builder.proxy_url(proxy)
+                builder.get_updates_proxy_url(proxy)
+                logger.info(f"Using Proxy: {proxy}")
+
+            app = builder.build()
+            setup_application_handlers(app)
+
+            await app.initialize()
+            await app.start()
+            # استفاده از start_polling به جای run_polling برای جلوگیری از خطای Cleanup در ساب‌پروسس
+            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+            logger.info("✅ Telegram Bot Process Polling Started")
+
+            # حلقه انتظار تا زمانی که پروسه زنده است
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            logger.info("TG Bot Process Cancelled")
+        except Exception as e:
+            logger.error(f"TG Bot Fatal Error: {e}")
+        finally:
+            if 'app' in locals():
+                try:
+                    await app.updater.stop()
+                    await app.stop()
+                    await app.shutdown()
+                except: pass
+
     try:
-        builder = Application.builder().token(token)
-        if proxy:
-            builder.proxy_url(proxy)
-            builder.get_updates_proxy_url(proxy)
-            logger.info(f"Using Proxy for bot: {proxy}")
-
-        app = builder.build()
-        setup_application_handlers(app)
-
-        logger.info("✅ Telegram Bot Process Started")
-        # استفاده از run_polling با غیرفعال کردن سیگنال‌ها (برای ویندوز و پروسه فرزند)
-        # این متد به طور خودکار حلقه رویداد را مدیریت می‌کند
-        app.run_polling(allowed_updates=Update.ALL_TYPES, stop_signals=None)
-
+        loop.run_until_complete(main_loop())
     except Exception as e:
-        logger.error(f"TG Process Fatal Error: {e}")
+        logger.error(f"TG Process Loop Exception: {e}")
 
 # ==============================================================================
 # ترد ایزوله روبیکا

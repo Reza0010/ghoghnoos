@@ -324,7 +324,11 @@ class SettingsWidget(QWidget):
         btn_import.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px; font-weight: bold;")
         btn_import.clicked.connect(self.show_import_proxy_dialog)
 
-        h_btns.addWidget(btn_add); h_btns.addWidget(btn_import)
+        btn_tools = QPushButton(" 📁 پوشه ابزارها")
+        btn_tools.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {INFO_COLOR}; color: {INFO_COLOR}; padding: 10px; border-radius: 8px;")
+        btn_tools.clicked.connect(self.open_tools_folder)
+
+        h_btns.addWidget(btn_add); h_btns.addWidget(btn_import); h_btns.addWidget(btn_tools)
 
         card.add_widget(self.proxy_table)
         card.add_layout(h_btns)
@@ -728,17 +732,40 @@ class SettingsWidget(QWidget):
         self.log_viewer = QTextEdit()
         self.log_viewer.setReadOnly(True)
         self.log_viewer.setStyleSheet(f"background: #0f1015; color: #ccc; font-family: Consolas; border-radius: 8px; padding: 10px;")
+
         h_btn = QHBoxLayout()
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["همه", "ERROR", "WARNING", "INFO"])
         self.filter_combo.currentTextChanged.connect(self.read_app_logs)
+
         btn_ref = QPushButton("بروزرسانی"); btn_ref.clicked.connect(self.read_app_logs)
+        btn_copy = QPushButton(" کپی کامل لاگ"); btn_copy.setIcon(qta.icon('fa5s.copy'))
+        btn_copy.clicked.connect(self.copy_logs_to_clipboard)
+
         h_btn.addWidget(QLabel("فیلتر:")); h_btn.addWidget(self.filter_combo)
-        h_btn.addStretch(); h_btn.addWidget(btn_ref)
+        h_btn.addStretch(); h_btn.addWidget(btn_copy); h_btn.addWidget(btn_ref)
+
         card.add_widget(self.log_viewer)
         card.add_layout(h_btn)
         layout.addWidget(card)
         return page
+
+    def copy_logs_to_clipboard(self):
+        path = BASE_DIR / "logs" / "app.log"
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                QApplication.clipboard().setText(text)
+                self.window().show_toast("تمام لاگ‌ها در کلیپ‌بورد کپی شد.")
+            except: pass
+
+    def open_tools_folder(self):
+        import os
+        import webbrowser
+        path = BASE_DIR / "tools" / "xray"
+        path.mkdir(parents=True, exist_ok=True)
+        webbrowser.open(f"file:///{path.absolute()}")
 
     # --- Helper Layout ---
     def _form_row(self, label_text, widget):
@@ -977,16 +1004,24 @@ class SettingsWidget(QWidget):
         b.clicked.connect(save); dlg.exec()
 
     def show_import_proxy_dialog(self):
-        text, ok = QInputDialog.getMultiLineText(self, "وارد کردن لینک", "لینک V2Ray را وارد کنید:")
+        text, ok = QInputDialog.getMultiLineText(self, "وارد کردن لینک‌ها",
+            "لینک‌های V2Ray (VLESS, VMESS, SS) را وارد کنید (هر لینک در یک خط):")
         if ok and text.strip():
             from bot.proxy_utils import parse_v2ray_link
-            data = parse_v2ray_link(text.strip())
-            if data:
-                with next(get_db()) as db: crud.add_proxy(db, data)
-                self.load_proxies()
-                self.window().show_toast("لینک با موفقیت وارد شد.")
+            links = text.strip().splitlines()
+            imported = 0
+            for link in links:
+                if not link.strip(): continue
+                data = parse_v2ray_link(link.strip())
+                if data:
+                    with next(get_db()) as db: crud.add_proxy(db, data)
+                    imported += 1
+
+            self.load_proxies()
+            if imported > 0:
+                self.window().show_toast(f"✅ تعداد {imported} لینک با موفقیت وارد شد.")
             else:
-                QMessageBox.warning(self, "خطا", "فرمت لینک صحیح نیست.")
+                QMessageBox.warning(self, "خطا", "هیچ لینک معتبری یافت نشد.")
 
     def activate_proxy(self, pid):
         with next(get_db()) as db:
@@ -1022,13 +1057,13 @@ class SettingsWidget(QWidget):
         if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
             from bot.proxy_utils import tcp_ping
             # استفاده از تایم اوت بیشتر در UI
-            latency = await tcp_ping(p.host, p.port, timeout=10.0)
+            latency, status = await tcp_ping(p.host, p.port, timeout=10.0)
             if latency is not None:
                 with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
                 self.load_proxies()
                 self.window().show_toast(f"✅ سرور در دسترس است! تأخیر: {latency}ms")
             else:
-                self.window().show_toast("❌ خطا: سرور پاسخگو نیست یا IP مسدود است (Timeout)", is_error=True)
+                self.window().show_toast(f"❌ {status}", is_error=True)
             return
 
         # برای پروکسی‌های استاندارد (SOCKS5/HTTP)
