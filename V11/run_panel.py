@@ -65,15 +65,18 @@ def run_telegram_bot(token, proxy=None, admin_ids=None):
             app = builder.build()
             setup_application_handlers(app)
 
-            logger.info("✅ Telegram Bot Process Starting Polling...")
-            # استفاده از run_polling با تنظیمات ایمن برای ساب‌پروسس
-            # stop_signals=None باعث می‌شود PTB سعی نکند هندلر سیگنال نصب کند (که در ترد/پروسه فرعی خطا می‌دهد)
-            # close_loop=False اجازه می‌دهد خودمان حلقه را مدیریت کنیم
-            await app.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                stop_signals=None,
-                close_loop=False
-            )
+            logger.info("✅ Telegram Bot Process Starting Manual Polling...")
+
+            # استفاده از مدیریت دستی به جای run_polling برای جلوگیری از خطای _Updater__polling_cleanup_cb در ساب‌پروسس
+            async with app:
+                await app.start()
+                # شروع دریافت آپدیت‌ها
+                await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+                logger.info("✅ TG Polling Started Successfully.")
+
+                # نگه داشتن حلقه تا زمان کنسل شدن
+                while True:
+                    await asyncio.sleep(3600)
 
         except asyncio.CancelledError:
             logger.info("TG Bot Process Cancelled")
@@ -169,7 +172,8 @@ class ApplicationManager:
 
             # اولویت با پروکسی پیشرفته (v2) است، اگر نبود از v1 استفاده می‌شود
             base_proxy = db_conf["proxy_url_v2"] or (db_conf["proxy_url_v1"] if db_conf["proxy_enabled"] else None)
-            final_proxy = None
+            final_proxy_tg = None
+            final_proxy_rb = None
 
             # مدیریت لینک‌های V2Ray
             if base_proxy and any(proto in base_proxy for proto in ["vless://", "vmess://", "ss://", "trojan://"]):
@@ -179,27 +183,34 @@ class ApplicationManager:
                     if proxy_data:
                         try:
                             self.xray_manager.stop()
-                            final_proxy = await self.xray_manager.start(proxy_data)
-                            logger.info(f"Xray bridge started at {final_proxy}")
+                            # تلگرام SOCKS5 و روبیکا HTTP دریافت می‌کنند
+                            final_proxy_tg, final_proxy_rb = await self.xray_manager.start(proxy_data)
+                            logger.info(f"Xray bridge started. TG: {final_proxy_tg} | RB: {final_proxy_rb}")
                         except Exception as e:
                             logger.error(f"Failed to start Xray bridge: {e}")
-                            final_proxy = None
+                            final_proxy_tg = None
                 else:
                     logger.warning("V2Ray link detected but Xray core is not available. Please place xray.exe in tools/xray/")
-                    final_proxy = None
+                    final_proxy_tg = None
             else:
-                # پروکسی استاندارد
+                # پروکسی استاندارد (HTTP/SOCKS5)
                 self.xray_manager.stop()
-                final_proxy = base_proxy
+                final_proxy_tg = base_proxy
+                # اگر پروکسی SOCKS5 دستی داده شده، روبیکا (aiohttp) احتمالا بدون افزونه وصل نمی‌شود
+                if base_proxy and base_proxy.startswith("socks5"):
+                     final_proxy_rb = None # غیرفعال برای روبیکا جهت جلوگیری از خطای اتصال
+                else:
+                     final_proxy_rb = base_proxy
 
             global PROXY_URL
-            if final_proxy:
-                config.PROXY_URL = final_proxy
-                PROXY_URL = final_proxy
-                logger.info(f"Connected using dynamic proxy: {final_proxy}")
-            else:
-                config.PROXY_URL = None
-                PROXY_URL = None
+            config.PROXY_URL = final_proxy_tg
+            PROXY_URL = final_proxy_tg
+
+            # ذخیره پروکسی مخصوص روبیکا در کلاس منیجر
+            self.rubika_proxy = final_proxy_rb
+
+            if final_proxy_tg:
+                logger.info(f"TG Connected using dynamic proxy: {final_proxy_tg}")
 
         except Exception as e:
             logger.error(f"Error loading DB config: {e}")
@@ -273,9 +284,11 @@ class ApplicationManager:
                 logger.info("Rubika process already running, terminating...")
                 self.rb_process.terminate()
 
+            # استفاده از پروکسی سازگار با روبیکا (HTTP)
+            rb_proxy = getattr(self, 'rubika_proxy', None)
             self.rb_process = multiprocessing.Process(
                 target=run_rubika_bot,
-                args=(RUBIKA_BOT_TOKEN, PROXY_URL, ADMIN_USER_IDS),
+                args=(RUBIKA_BOT_TOKEN, rb_proxy, ADMIN_USER_IDS),
                 name="RB_Process",
                 daemon=True
             )
@@ -329,9 +342,10 @@ class ApplicationManager:
         # کلاینت روبیکا برای پنل
         if RUBIKA_BOT_TOKEN:
             try:
-                rb_light = RubikaAPI(RUBIKA_BOT_TOKEN)
+                rb_proxy = getattr(self, 'rubika_proxy', None)
+                rb_light = RubikaAPI(RUBIKA_BOT_TOKEN, proxy=rb_proxy)
                 self.window.rubika_client = rb_light
-                logger.info("✅ Panel Rubika Client Connected")
+                logger.info(f"✅ Panel Rubika Client Connected (Proxy: {rb_proxy})")
             except Exception as e:
                 logger.warning(f"⚠️ Panel Rubika Client failed: {e}")
         # آپدیت آیکون‌های وضعیت در گوشه پنل

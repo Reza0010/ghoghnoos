@@ -216,12 +216,20 @@ def generate_xray_config(proxy_data: Dict[str, Any], local_port: int = 2080) -> 
 
     return {
         "log": {"loglevel": "warning"},
-        "inbounds": [{
-            "port": local_port,
-            "listen": "127.0.0.1",
-            "protocol": "socks",
-            "settings": {"auth": "noauth", "udp": True}
-        }],
+        "inbounds": [
+            {
+                "port": local_port,
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": {"auth": "noauth", "udp": True}
+            },
+            {
+                "port": local_port + 1,
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": {"auth": "noauth"}
+            }
+        ],
         "outbounds": [outbound, {"protocol": "freedom", "tag": "direct"}]
     }
 
@@ -260,7 +268,8 @@ class XrayManager:
             stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
-        return f"socks5://127.0.0.1:{port}"
+        # برگرداندن هر دو پروکسی (SOCKS5 برای تلگرام، HTTP برای روبیکا/aiohttp)
+        return f"socks5://127.0.0.1:{port}", f"http://127.0.0.1:{port+1}"
 
     def stop(self):
         if self.process:
