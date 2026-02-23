@@ -65,26 +65,20 @@ def run_telegram_bot(token, proxy=None, admin_ids=None):
             app = builder.build()
             setup_application_handlers(app)
 
-            await app.initialize()
-            await app.start()
-            # استفاده از start_polling به جای run_polling برای جلوگیری از خطای Cleanup در ساب‌پروسس
-            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            logger.info("✅ Telegram Bot Process Polling Started")
+            logger.info("✅ Telegram Bot Process Starting Polling...")
+            # استفاده از run_polling با تنظیمات ایمن برای ساب‌پروسس
+            # stop_signals=None باعث می‌شود PTB سعی نکند هندلر سیگنال نصب کند (که در ترد/پروسه فرعی خطا می‌دهد)
+            # close_loop=False اجازه می‌دهد خودمان حلقه را مدیریت کنیم
+            await app.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                stop_signals=None,
+                close_loop=False
+            )
 
-            # حلقه انتظار تا زمانی که پروسه زنده است
-            while True:
-                await asyncio.sleep(3600)
         except asyncio.CancelledError:
             logger.info("TG Bot Process Cancelled")
         except Exception as e:
             logger.error(f"TG Bot Fatal Error: {e}")
-        finally:
-            if 'app' in locals():
-                try:
-                    await app.updater.stop()
-                    await app.stop()
-                    await app.shutdown()
-                except: pass
 
     try:
         loop.run_until_complete(main_loop())
@@ -94,7 +88,7 @@ def run_telegram_bot(token, proxy=None, admin_ids=None):
 # ==============================================================================
 # ترد ایزوله روبیکا
 # ==============================================================================
-def run_rubika_bot(token, admin_ids=None):
+def run_rubika_bot(token, proxy=None, admin_ids=None):
     """اجرای ربات روبیکا در پروسه مجزا"""
     if not token: return
 
@@ -108,7 +102,7 @@ def run_rubika_bot(token, admin_ids=None):
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        bot = RubikaWorker(token)
+        bot = RubikaWorker(token, proxy=proxy)
         logger.info("✅ Rubika Bot Process Started")
         loop.run_until_complete(bot.start_polling())
     except Exception as e:
@@ -281,7 +275,7 @@ class ApplicationManager:
 
             self.rb_process = multiprocessing.Process(
                 target=run_rubika_bot,
-                args=(RUBIKA_BOT_TOKEN, ADMIN_USER_IDS),
+                args=(RUBIKA_BOT_TOKEN, PROXY_URL, ADMIN_USER_IDS),
                 name="RB_Process",
                 daemon=True
             )

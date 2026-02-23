@@ -12,8 +12,8 @@ from db import crud, models
 logger = logging.getLogger("RubikaBot")
 
 class RubikaWorker:
-    def __init__(self, token: str):
-        self.api = RubikaAPI(token)
+    def __init__(self, token: str, proxy: str = None):
+        self.api = RubikaAPI(token, proxy=proxy)
         self.running = False
         self.bot_guid: Optional[str] = None
 

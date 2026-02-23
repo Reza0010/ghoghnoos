@@ -171,6 +171,13 @@ class UserDetailsDialog(QDialog):
         stats_row.addWidget(self._stat_box(str(orders), "تعداد سفارشات"))
         l1.addLayout(stats_row)
 
+        l1.addWidget(QLabel("🏷️ تگ‌های کاربر (سگمنتیشن - با کاما جدا کنید):"))
+        self.inp_tags = QLineEdit()
+        self.inp_tags.setText(getattr(self.user, 'tags', "") or "")
+        self.inp_tags.setPlaceholderText("مثلاً: وفادار، همکار، تهرانی")
+        self.inp_tags.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 10px;")
+        l1.addWidget(self.inp_tags)
+
         l1.addWidget(QLabel("📝 یادداشت‌های مدیریتی (خصوصی):"))
         self.txt_note = QTextEdit()
         self.txt_note.setPlainText(getattr(self.user, 'private_note', "") or "")
@@ -236,14 +243,15 @@ class UserDetailsDialog(QDialog):
             self.p_widget.window().show_toast(f"خطا در ارسال: {e}", is_error=True)
 
     def save_note(self):
-        asyncio.create_task(self._save_db_note(self.txt_note.toPlainText()))
+        asyncio.create_task(self._save_db_profile(self.txt_note.toPlainText(), self.inp_tags.text()))
         self.accept()
 
-    async def _save_db_note(self, txt):
+    async def _save_db_profile(self, note, tags):
         with SessionLocal() as db:
             u = db.query(models.User).filter(models.User.user_id == str(self.user.user_id)).first()
             if u:
-                u.private_note = txt
+                u.private_note = note
+                u.tags = tags
                 db.commit()
 
 # ==============================================================================
@@ -646,7 +654,7 @@ class UsersWidget(QWidget):
 
                 obj = type('U', (), {
                     "user_id": u.user_id, "full_name": u.full_name, "platform": u.platform,
-                    "is_banned": u.is_banned, "private_note": u.private_note,
+                    "is_banned": u.is_banned, "private_note": u.private_note, "tags": u.tags,
                     "order_count": len(u.orders), "total_spent": spent, "last_seen": u.last_seen
                 })
                 res.append(obj)

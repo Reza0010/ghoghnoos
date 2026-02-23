@@ -23,6 +23,7 @@ class User(Base):
     saved_address = Column(Text, nullable=True)
     saved_phone = Column(String(20), nullable=True)
     private_note = Column(Text, nullable=True)  # یادداشت ادمین برای کاربر
+    tags = Column(String(255), nullable=True) # تگ‌های کاربر (سگمنتیشن) - جدا شده با کاما
     
     # وفادارسازی و زیرمجموعه‌گیری
     loyalty_points = Column(Integer, default=0, nullable=False)
@@ -42,6 +43,7 @@ class User(Base):
         Index('idx_user_platform', 'platform'),
         Index('idx_user_created', 'created_at'),
         Index('idx_user_banned', 'is_banned'),
+        Index('idx_user_tags', 'tags'),
     )
 
     def __repr__(self):
@@ -71,6 +73,7 @@ class Product(Base):
     brand = Column(String(100), nullable=True)
     
     price = Column(Numeric(12, 0), nullable=False)
+    purchase_price = Column(Numeric(12, 0), default=0) # قیمت خرید (برای محاسبه سود)
     discount_price = Column(Numeric(12, 0), nullable=True)
     discount_start_date = Column(DateTime(timezone=True), nullable=True)
     discount_end_date = Column(DateTime(timezone=True), nullable=True)
@@ -184,6 +187,7 @@ class OrderItem(Base):
     
     quantity = Column(Integer, nullable=False)
     price_at_purchase = Column(Numeric(12, 0), nullable=False)
+    purchase_price_at_purchase = Column(Numeric(12, 0), default=0) # هزینه خرید در زمان سفارش
     selected_attributes = Column(Text, nullable=True)
 
     order = relationship("Order", back_populates="items")
@@ -296,3 +300,26 @@ class Proxy(Base):
     latency = Column(Integer, nullable=True) # ms
     last_tested = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(String(50), index=True) # کی انجام داده
+    action = Column(String(100), nullable=False) # چه کاری (مثلاً حذف محصول)
+    target_type = Column(String(50)) # روی چه نوع موجودیتی (product, user, order)
+    target_id = Column(String(50)) # ID مورد نظر
+    details = Column(Text, nullable=True) # جزئیات بیشتر (مثلاً قیمت قبل و بعد)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class StockLog(Base):
+    __tablename__ = "stock_logs"
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    old_stock = Column(Integer, nullable=False)
+    new_stock = Column(Integer, nullable=False)
+    change_reason = Column(String(100), nullable=True) # sale, manual_update, restock
+    admin_id = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product")

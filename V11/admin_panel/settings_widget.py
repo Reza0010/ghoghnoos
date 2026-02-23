@@ -687,6 +687,11 @@ class SettingsWidget(QWidget):
 
         # --- پیام همگانی ---
         card_bc = SettingCard("ارسال پیام همگانی (Broadcast)")
+
+        self.bc_tag_filter = QLineEdit()
+        self.bc_tag_filter.setPlaceholderText("فیلتر تگ (مثلاً: وفادار) - خالی برای همه")
+        card_bc.add_layout(self._form_row("ارسال به تگ خاص:", self.bc_tag_filter))
+
         self.bc_text = QTextEdit(); self.bc_text.setMaximumHeight(80)
         h_bc_img = QHBoxLayout()
         self.lbl_bc_img = QLabel("عکس: بدون عکس")
@@ -1409,14 +1414,27 @@ class SettingsWidget(QWidget):
     @asyncSlot()
     async def on_start_broadcast(self, *args, **kwargs):
         msg = self.bc_text.toPlainText().strip()
+        tag_filter = self.bc_tag_filter.text().strip()
+
         if not msg and not self._broadcast_image_path:
             return QMessageBox.warning(self, "خطا", "متن یا عکس الزامی است.")
             
         self.bc_progress.show(); self.bc_progress.setValue(0)
         loop = asyncio.get_running_loop()
-        users = await loop.run_in_executor(None, lambda: crud.get_all_users(next(get_db())))
+
+        def fetch_filtered():
+            with next(get_db()) as db:
+                if tag_filter:
+                    return db.query(models.User).filter(models.User.tags.ilike(f"%{tag_filter}%")).all()
+                return crud.get_all_users(db, limit=5000)
+
+        users = await loop.run_in_executor(None, fetch_filtered)
         total = len(users); sent = 0
         
+        if total == 0:
+            self.bc_progress.hide()
+            return QMessageBox.information(self, "پیام", "هیچ کاربری با این مشخصات یافت نشد.")
+
         for i, u in enumerate(users):
             try:
                 if u.platform == 'telegram' and self.bot_app:

@@ -111,7 +111,7 @@ def get_users_count(db: Session, query: str = "", platform: str = "all", status:
 
     if query:
         search = f"%{query}%"
-        q = q.filter(or_(models.User.full_name.ilike(search), models.User.user_id.ilike(search)))
+        q = q.filter(or_(models.User.full_name.ilike(search), models.User.user_id.ilike(search), models.User.tags.ilike(search)))
 
     return q.scalar()
 
@@ -336,6 +336,10 @@ def create_product_with_variants(
         db.add(prod)
         db.flush() # برای گرفتن ID
 
+        # لاگ موجودی اولیه
+        if prod.stock > 0:
+            log_stock_change(db, prod.id, 0, prod.stock, "initial_creation")
+
         # افزودن تصاویر به جدول جدید
         if image_paths:
             for path in image_paths:
@@ -359,12 +363,15 @@ def update_product_with_variants(
     prod_id: int,
     product_data: dict,
     variants_data: List[dict],
-    image_paths: List[str] = None
+    image_paths: List[str] = None,
+    admin_id: str = "Panel"
 ):
     """آپدیت کامل محصول شامل عکس‌ها و متغیرها"""
     try:
         prod = db.query(models.Product).filter_by(id=prod_id).first()
         if not prod: raise ValueError("Product not found")
+
+        old_stock = prod.stock
 
         # آپدیت فیلدهای اصلی
         valid_keys = {c.name for c in models.Product.__table__.columns}
@@ -377,6 +384,10 @@ def update_product_with_variants(
             prod.image_path = image_paths[0]
 
         prod.updated_at = datetime.now()
+
+        # لاگ موجودی اگر تغییر کرده
+        if old_stock != prod.stock:
+            log_stock_change(db, prod_id, old_stock, prod.stock, "manual_update", admin_id)
 
         # آپدیت تصاویر: حذف قدیمی‌ها و افزودن جدیدها
         if image_paths is not None:
@@ -392,19 +403,21 @@ def update_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+        log_audit(db, admin_id, "update_product", "product", str(prod_id), f"Name: {prod.name}")
         return prod
     except Exception as e:
         db.rollback()
         raise e
 
-def delete_product(db: Session, prod_id: int):
-    return bulk_delete_products(db, [prod_id])
+def delete_product(db: Session, prod_id: int, admin_id: str = "Panel"):
+    return bulk_delete_products(db, [prod_id], admin_id=admin_id)
 
-def bulk_delete_products(db: Session, product_ids: List[int]):
+def bulk_delete_products(db: Session, product_ids: List[int], admin_id: str = "Panel"):
     try:
         # حذف وابسته ها خودکار انجام میشود (Cascade) اما برای اطمینان:
         db.query(models.Product).filter(models.Product.id.in_(product_ids)).delete(synchronize_session=False)
         db.commit()
+        log_audit(db, admin_id, "delete_products", "product", ",".join(map(str, product_ids)))
         return True
     except SQLAlchemyError:
         db.rollback()
@@ -480,16 +493,16 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
             order_items = []
 
             for item in cart_items:
-                # قفل کردن ردیف محصول برای جلوگیری از Race Condition (در دیتابیس‌های پیشرفته مثل PG)
-                # در SQLite این کار با تراکنش معمولی انجام می‌شود
                 prod = db.query(models.Product).filter_by(id=item.product_id).first()
                 
                 if prod.stock < item.quantity:
                     raise ValueError(f"موجودی '{prod.name}' تمام شده است.")
                 
                 # کسر موجودی
+                old_stock = prod.stock
                 prod.stock -= item.quantity
-                
+                log_stock_change(db, prod.id, old_stock, prod.stock, "sale", f"Order {user_id}")
+
                 # محاسبه قیمت (با تخفیف)
                 price = prod.discount_price if (prod.discount_price and prod.discount_price > 0) else prod.price
                 line_total = price * item.quantity
@@ -500,6 +513,7 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
                     variant_id=item.variant_id,
                     quantity=item.quantity,
                     price_at_purchase=price,
+                    purchase_price_at_purchase=prod.purchase_price or 0,
                     selected_attributes=item.selected_attributes
                 ))
 
@@ -545,7 +559,7 @@ def get_filtered_orders(db: Session, status: str = "all", limit: int = 500) -> L
     
     return q.order_by(desc(models.Order.created_at)).limit(limit).all()
 
-def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[models.Order]:
+def update_order_status(db: Session, order_id: int, new_status: str, admin_id: str = "Panel") -> Optional[models.Order]:
     order = db.query(models.Order).filter_by(id=order_id).first()
     if order:
         old_status = order.status
@@ -557,6 +571,7 @@ def update_order_status(db: Session, order_id: int, new_status: str) -> Optional
 
         db.commit()
         db.refresh(order)
+        log_audit(db, admin_id, "update_order_status", "order", str(order_id), f"Old: {old_status} -> New: {new_status}")
     return order
 
 def _award_loyalty_points(db: Session, order: models.Order):
@@ -596,14 +611,17 @@ def get_setting(db: Session, key: str, default: str = "") -> str:
     s = db.query(models.Setting).filter_by(key=key).first()
     return s.value if s else default
 
-def set_setting(db: Session, key: str, value: str):
+def set_setting(db: Session, key: str, value: str, admin_id: str = "Panel"):
     s = db.query(models.Setting).filter_by(key=key).first()
+    old_val = s.value if s else None
     if s:
         s.value = str(value)
         s.updated_at = datetime.now()
     else:
         db.add(models.Setting(key=key, value=str(value)))
     db.commit()
+    if old_val != str(value):
+        log_audit(db, admin_id, "change_setting", "setting", key, f"Old: {old_val} -> New: {value}")
 
 def is_shop_currently_open(db: Session) -> bool:
     """بررسی باز یا بسته بودن فروشگاه با لحاظ کردن ساعات کاری"""
@@ -652,6 +670,26 @@ def get_total_revenue_by_platform(db: Session, platform: str) -> float:
             models.Order.status.in_(['approved', 'shipped', 'paid']),
             models.User.platform == platform
         ).scalar()
+
+def get_total_profit(db: Session, days: int = 30) -> float:
+    """محاسبه سود خالص (فروش منهای هزینه خرید) در بازه زمانی مشخص"""
+    start_date = datetime.now() - timedelta(days=days)
+
+    revenue = db.query(func.coalesce(func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase), 0))\
+        .join(models.Order)\
+        .filter(
+            models.Order.status.in_(['approved', 'shipped', 'paid']),
+            models.Order.created_at >= start_date
+        ).scalar()
+
+    cost = db.query(func.coalesce(func.sum(models.OrderItem.quantity * models.OrderItem.purchase_price_at_purchase), 0))\
+        .join(models.Order)\
+        .filter(
+            models.Order.status.in_(['approved', 'shipped', 'paid']),
+            models.Order.created_at >= start_date
+        ).scalar()
+
+    return float(revenue) - float(cost)
 
 def get_orders_count_by_platform_and_status(db: Session, platform: str, status: str) -> int:
     return db.query(func.count(models.Order.id))\
@@ -1006,3 +1044,42 @@ def update_proxy_latency(db: Session, proxy_id: int, latency: int):
         proxy.latency = latency
         proxy.last_tested = datetime.now()
         db.commit()
+
+# ======================================================================
+# 12. سیستم گزارشات امنیتی و انبار (Audit & Stock Logs)
+# ======================================================================
+def log_audit(db: Session, admin_id: str, action: str, target_type: str = None, target_id: str = None, details: str = None):
+    try:
+        log = models.AuditLog(
+            admin_id=str(admin_id),
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id) if target_id else None,
+            details=details
+        )
+        db.add(log)
+        db.commit()
+        return log
+    except Exception as e:
+        logger.error(f"Audit Log Error: {e}")
+        db.rollback()
+
+def get_recent_audit_logs(db: Session, limit: int = 100):
+    return db.query(models.AuditLog).order_by(desc(models.AuditLog.created_at)).limit(limit).all()
+
+def log_stock_change(db: Session, product_id: int, old_stock: int, new_stock: int, reason: str, admin_id: str = None):
+    try:
+        log = models.StockLog(
+            product_id=product_id,
+            old_stock=old_stock,
+            new_stock=new_stock,
+            change_reason=reason,
+            admin_id=admin_id
+        )
+        db.add(log)
+        # توجه: کامیت اینجا انجام نمی‌شود چون معمولا بخشی از یک تراکنش بزرگتر است
+    except Exception as e:
+        logger.error(f"Stock Log Error: {e}")
+
+def get_product_stock_history(db: Session, product_id: int, limit: int = 50):
+    return db.query(models.StockLog).filter_by(product_id=product_id).order_by(desc(models.StockLog.created_at)).limit(limit).all()
