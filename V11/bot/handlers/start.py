@@ -51,9 +51,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         tasks = [
             run_db(crud.get_or_create_user, user.id, user.full_name or "کاربر", user.username, "telegram"),
-            run_db(crud.get_setting, "tg_shop_name", "فروشگاه"),
+            run_db(crud.get_setting, "shop_name", "فروشگاه ما"),
             run_db(crud.get_setting, "tg_is_open", "true"),
-            run_db(crud.get_setting, "tg_welcome_message", ""),
+            run_db(crud.get_setting, "tmpl_welcome", ""),
             run_db(crud.get_setting, "tg_welcome_image", ""),
             run_db(crud.get_setting, "channel_link", ""),
             run_db(crud.get_user_stats, user.id)

@@ -273,8 +273,10 @@ async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     if query.data == "pay_online":
-        merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
-        if not merchant_id:
+        merchant_id = await run_db(crud.get_setting, "zp_merchant", "")
+        is_active = await run_db(crud.get_setting, "pay_online_active", "true")
+
+        if not merchant_id or is_active == "false":
             await query.message.reply_text("⚠️ در حال حاضر پرداخت آنلاین غیرفعال است. لطفا از روش فیش واریزی استفاده کنید.")
             return await start_offline_payment(query.message, context)
 
@@ -283,7 +285,7 @@ async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TY
         desc = f"خرید از ربات فروشگاهی - کاربر {query.from_user.id}"
 
         # دریافت آدرس کال‌بک از تنظیمات
-        callback_url = await run_db(crud.get_setting, "zarinpal_callback", "https://t.me/your_bot?start=verify")
+        callback_url = await run_db(crud.get_setting, "zp_callback", "https://t.me/your_bot?start=verify")
         res = await zp.create_payment(amount, desc, callback_url)
 
         if res['status']:
@@ -327,7 +329,7 @@ async def verify_online_payment(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("اطلاعات تراکنش یافت نشد.", show_alert=True)
         return CHOOSE_PAYMENT
 
-    merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
+    merchant_id = await run_db(crud.get_setting, "zp_merchant", "")
     zp = ZarinPal(merchant_id)
     res = await zp.verify_payment(amount, authority)
 

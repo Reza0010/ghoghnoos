@@ -103,26 +103,33 @@ class ApplicationManager:
         QTimer.singleShot(500, lambda: asyncio.create_task(self.connect_light_clients()))
 
     def start_background_bots(self):
-        """اجرای ربات‌ها در پروسس کاملاً مجزا (Stability)"""
-        if TELEGRAM_BOT_TOKEN:
+        """اجرای ربات‌ها با اولویت تنظیمات دیتابیس"""
+        from db.database import get_db
+        from db import crud
+
+        with next(get_db()) as db:
+            tg_token = crud.get_setting(db, "tg_bot_token", TELEGRAM_BOT_TOKEN)
+            rb_token = crud.get_setting(db, "rb_bot_token", RUBIKA_BOT_TOKEN)
+
+        if tg_token:
             self.tg_process = multiprocessing.Process(
                 target=run_telegram_bot,
-                args=(TELEGRAM_BOT_TOKEN,),
+                args=(tg_token,),
                 name="TG_Process",
                 daemon=True
             )
             self.tg_process.start()
-            logger.info(f"✅ Telegram Process PID: {self.tg_process.pid}")
+            logger.info(f"✅ Telegram Bot Process Started (Token from DB/Config)")
 
-        if RUBIKA_BOT_TOKEN:
+        if rb_token:
             self.rb_process = multiprocessing.Process(
                 target=run_rubika_bot,
-                args=(RUBIKA_BOT_TOKEN,),
+                args=(rb_token,),
                 name="RB_Process",
                 daemon=True
             )
             self.rb_process.start()
-            logger.info(f"✅ Rubika Process PID: {self.rb_process.pid}")
+            logger.info(f"✅ Rubika Bot Process Started (Token from DB/Config)")
 
     def restart_services(self):
         """توقف و اجرای مجدد ربات‌ها بدون بستن پنل"""
@@ -139,22 +146,28 @@ class ApplicationManager:
         QTimer.singleShot(2000, lambda: self.window.show_toast("سرویس‌ها با موفقیت بازنشانی شدند."))
 
     async def connect_light_clients(self):
-        """اتصال کلاینت‌های مخصوص ارسال پیام در پنل (با مدیریت خطا)"""
+        """اتصال کلاینت‌های پنل با استفاده از آخرین توکن‌ها"""
+        from db.database import get_db
+        from db import crud
+
+        with next(get_db()) as db:
+            tg_token = crud.get_setting(db, "tg_bot_token", TELEGRAM_BOT_TOKEN)
+            rb_token = crud.get_setting(db, "rb_bot_token", RUBIKA_BOT_TOKEN)
+
         # کلاینت تلگرام برای پنل
-        if TELEGRAM_BOT_TOKEN:
+        if tg_token:
             try:
-                # ایجاد اپلیکیشن سبک با تایم‌اوت کم
-                tg_light = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-                # استفاده از wait_for برای جلوگیری از فریز طولانی در صورت خرابی پروکسی
+                tg_light = Application.builder().token(tg_token).build()
                 await asyncio.wait_for(tg_light.initialize(), timeout=5.0)
                 self.window.bot_application = tg_light
                 logger.info("✅ Panel Telegram Client Connected")
             except Exception as e:
-                logger.warning(f"⚠️ Panel Telegram Client failed (Check Proxy/Internet): {e}")
+                logger.warning(f"⚠️ Panel Telegram Client failed: {e}")
+
         # کلاینت روبیکا برای پنل
-        if RUBIKA_BOT_TOKEN:
+        if rb_token:
             try:
-                rb_light = RubikaAPI(RUBIKA_BOT_TOKEN)
+                rb_light = RubikaAPI(rb_token)
                 self.window.rubika_client = rb_light
                 logger.info("✅ Panel Rubika Client Connected")
             except Exception as e:

@@ -62,18 +62,39 @@ def get_tracking_timeline(status: str) -> str:
     return timeline
 
 def format_dynamic_text(template: str, user_data: Dict[str, Any]) -> str:
+    """جایگزینی هوشمند متغیرها در متن"""
     if not template: return ""
+
+    # متغیرهای پیش‌فرض
     replacements = {
         "{user_name}": str(user_data.get("user_name") or "کاربر"),
         "{shop_name}": str(user_data.get("shop_name") or "فروشگاه ما"),
+        "{order_id}": str(user_data.get("order_id") or "---"),
+        "{total_amount}": format_price(user_data.get("total_amount", 0)),
         "{order_count}": str(user_data.get("order_count", 0)),
         "{total_spent}": format_price(user_data.get("total_spent", 0)),
         "{discount}": str(user_data.get("discount", "0")),
     }
+
     text = template
     for key, value in replacements.items():
         text = text.replace(key, value)
     return text
+
+def get_dynamic_response(key: str, default: str, db_session=None, user_data: Dict = None) -> str:
+    """دریافت متن داینامیک از دیتابیس با جایگزینی متغیرها"""
+    from db import crud
+
+    template = default
+    if db_session:
+        try:
+            db_val = crud.get_setting(db_session, f"tmpl_{key}", default)
+            if db_val: template = db_val
+        except: pass
+
+    if user_data:
+        return format_dynamic_text(template, user_data)
+    return template
 
 # ====================================================================
 # پیام‌های سیستمی و عمومی

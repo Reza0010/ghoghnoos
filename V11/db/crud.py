@@ -53,11 +53,16 @@ def get_or_create_user(
     try:
         user = db.query(models.User).filter(models.User.user_id == user_id_str).first()
         
-        # بررسی ادمین بودن (فقط برای تلگرام و بر اساس کانفیگ)
+        # بررسی ادمین بودن (اولویت با لیست دیتابیس)
         is_admin_flag = False
-        if platform == "telegram" and user_id_str.isdigit():
-            if int(user_id_str) in ADMIN_USER_IDS:
-                is_admin_flag = True
+        db_admin_ids = get_setting(db, "admin_ids", "")
+        allowed_ids = [i.strip() for i in db_admin_ids.split(",") if i.strip()]
+
+        if not allowed_ids: # فال‌بک به کانفیگ
+            allowed_ids = [str(i) for i in ADMIN_USER_IDS]
+
+        if user_id_str in allowed_ids:
+            is_admin_flag = True
 
         if not user:
             user = models.User(

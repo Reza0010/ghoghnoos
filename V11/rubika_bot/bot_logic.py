@@ -97,6 +97,7 @@ class RubikaWorker:
         # ثبت یا آپدیت کاربر در دیتابیس
         with SessionLocal() as db:
             user = crud.get_or_create_user(db, user_id, "کاربر روبیکا", None, "rubika")
+            shop_name = crud.get_setting(db, "shop_name", "فروشگاه ما")
 
         text = text.strip()
 
@@ -135,12 +136,20 @@ class RubikaWorker:
 
     async def send_main_menu(self, chat_id: str):
         """ارسال منوی اصلی با Reply Keyboard"""
-        text = (
-            "💎 **به فروشگاه ما خوش آمدید**\n"
-            "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
-            "بهترین کالاها را با تضمین قیمت و کیفیت از ما بخواهید. 👋\n\n"
-            "👇 لطفا یکی از گزینه‌های زیر را انتخاب کنید:"
-        )
+        with SessionLocal() as db:
+            shop_name = crud.get_setting(db, "shop_name", "فروشگاه ما")
+            welcome_tpl = crud.get_setting(db, "tmpl_welcome", "")
+
+        if welcome_tpl:
+            from bot.responses import format_dynamic_text
+            text = format_dynamic_text(welcome_tpl, {"user_name": "کاربر", "shop_name": shop_name})
+        else:
+            text = (
+                f"💎 **به فروشگاه {shop_name} خوش آمدید**\n"
+                "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
+                "بهترین کالاها را با تضمین قیمت و کیفیت از ما بخواهید. 👋\n\n"
+                "👇 لطفا یکی از گزینه‌های زیر را انتخاب کنید:"
+            )
 
         # ساختار Reply Keyboard طبق مستندات (لیست سطرها)
         keyboard = [
@@ -289,12 +298,16 @@ class RubikaWorker:
             await self.api.send_message(chat_id, "❌ متاسفانه خطایی در ثبت نهایی سفارش رخ داد. لطفا با پشتیبانی تماس بگیرید.")
 
     async def send_support(self, chat_id: str):
-        div = "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯"
-        msg = (
-            "📞 **مرکز پشتیبانی مشتریان**\n"
-            f"{div}\n"
-            "در صورت داشتن هرگونه سوال یا مشکل در فرآیند خرید، از طریق آیدی زیر با ما در ارتباط باشید:\n\n"
-            "🆔 @YourSupportID\n\n"
-            "⏰ ساعت پاسخگویی: ۱۰ صبح الی ۲۲"
-        )
+        with SessionLocal() as db:
+            msg = crud.get_setting(db, "tmpl_support", "")
+
+        if not msg:
+            div = "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯"
+            msg = (
+                "📞 **مرکز پشتیبانی مشتریان**\n"
+                f"{div}\n"
+                "در صورت داشتن هرگونه سوال یا مشکل در فرآیند خرید، از طریق آیدی زیر با ما در ارتباط باشید:\n\n"
+                "🆔 @YourSupportID\n\n"
+                "⏰ ساعت پاسخگویی: ۱۰ صبح الی ۲۲"
+            )
         await self.api.send_message(chat_id, msg)

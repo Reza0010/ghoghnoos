@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import (
     Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
 )
-from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon
+from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon, QPixmap
 import qtawesome as qta
 
 from config import BASE_DIR
@@ -102,6 +102,11 @@ class MainWindow(QMainWindow):
             logger.warning("Vazirmatn font not found. Using system default.")
 
     def setup_ui(self):
+        # دریافت اطلاعات برندینگ از دیتابیس
+        with next(get_db()) as db:
+            shop_name = crud.get_setting(db, "shop_name", "پنل ادمین")
+            shop_logo = crud.get_setting(db, "shop_logo", "")
+
         central_widget = QWidget()
         central_widget.setObjectName("centralwidget") 
         self.setCentralWidget(central_widget)
@@ -146,10 +151,16 @@ class MainWindow(QMainWindow):
         self.menu_btn.setObjectName("menu_btn")
         self.menu_btn.clicked.connect(self.toggle_sidebar)
         
-        self.app_title = QLabel("پنل ادمین")
+        self.app_title = QLabel(shop_name)
         self.app_title.setObjectName("app_title")
         
+        self.logo_lbl = QLabel()
+        if shop_logo and Path(shop_logo).exists():
+            pix = QPixmap(shop_logo).scaled(30, 30, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.logo_lbl.setPixmap(pix)
+
         header_box.addWidget(self.menu_btn)
+        header_box.addWidget(self.logo_lbl)
         header_box.addWidget(self.app_title)
         header_box.addStretch()
         sidebar_layout.addLayout(header_box)
@@ -356,7 +367,7 @@ class MainWindow(QMainWindow):
 
     def _handle_restart_click(self):
         self.show_toast("درخواست ریستارت ارسال شد...")
-        QTimer.singleShot(1000, lambda: self.show_toast("سرویس‌ها در حال راه‌اندازی مجدد..."))
+        # منطق ریستارت توسط ApplicationManager در run_panel مدیریت می‌شود
 
     def load_stylesheet(self):
         path = self.base_path / "themes" / "dark_theme.qss"
