@@ -16,7 +16,8 @@ from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon, QPixmap
 import qtawesome as qta
 
 from config import BASE_DIR
-from db.database import create_backup
+from db.database import create_backup, get_db
+from db import crud
 
 # ایمپورت ویجت‌ها
 from .dashboard_widget import DashboardWidget

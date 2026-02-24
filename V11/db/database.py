@@ -182,7 +182,9 @@ def run_auto_migrations():
         "orders": {
             "tracking_code": "VARCHAR(100)",
             "payment_receipt_photo_id": "VARCHAR(255)",
-            "postal_code": "VARCHAR(20)"
+            "postal_code": "VARCHAR(20)",
+            "discount_amount": "NUMERIC(12, 0) DEFAULT 0",
+            "coupon_id": "INTEGER"
         }
     }
 

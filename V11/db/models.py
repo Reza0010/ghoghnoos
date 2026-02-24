@@ -145,6 +145,10 @@ class Order(Base):
     total_amount = Column(Numeric(12, 0), nullable=False)
     shipping_cost = Column(Numeric(12, 0), default=0)
     
+    # فیلدهای تخفیف
+    discount_amount = Column(Numeric(12, 0), default=0)
+    coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
+
     shipping_address = Column(Text, nullable=False)
     postal_code = Column(String(20), nullable=True)
     phone_number = Column(String(20), nullable=True)
@@ -156,6 +160,7 @@ class Order(Base):
 
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin")
+    coupon = relationship("Coupon", back_populates="orders")
 
     def __repr__(self):
         return f"<Order(id={self.id}, status={self.status})>"
@@ -231,4 +236,28 @@ class StockLog(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     change_amount = Column(Integer, nullable=False) # مقدار تغییر (+ یا -)
     reason = Column(String(255), nullable=True) # مثلا: خرید کاربر، اصلاح ادمین
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    percent = Column(Integer, nullable=False) # درصد تخفیف (مثلا ۲۰)
+    max_uses = Column(Integer, default=0) # صفر یعنی نامحدود
+    current_uses = Column(Integer, default=0)
+    expire_date = Column(DateTime(timezone=True), nullable=True)
+    min_purchase = Column(Numeric(12, 0), default=0) # حداقل خرید برای اعمال کد
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    orders = relationship("Order", back_populates="coupon")
+
+
+class AutoReply(Base):
+    __tablename__ = "auto_replies"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String(255), unique=True, nullable=False, index=True)
+    response = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -110,6 +110,12 @@ class RubikaWorker:
         elif text == "📞 پشتیبانی":
             await self.send_support(chat_id)
         else:
+            # بررسی پاسخ خودکار
+            with SessionLocal() as db:
+                response = crud.get_auto_reply(db, text)
+                if response:
+                    return await self.api.send_message(chat_id, response)
+
             # پاسخ پیش‌فرض
             await self.api.send_message(chat_id, "⚠️ متوجه این دستور نشدم. لطفا از منوی زیر استفاده کنید.")
 

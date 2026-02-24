@@ -1,9 +1,9 @@
 import logging
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    MessageHandler, 
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
     filters
 )
 from bot.error_handler import global_error_handler
@@ -14,8 +14,23 @@ from bot.handlers import (
     cart_handler,
     main_menu_handler
 )
+from db.database import get_db
+from db import crud
 
 logger = logging.getLogger(__name__)
+
+async def _global_text_handler(update, context):
+    """بررسی کلمات کلیدی برای پاسخ خودکار"""
+    if not update.message or not update.message.text: return
+
+    text = update.message.text.strip()
+    # نادیده گرفتن دستورات
+    if text.startswith('/'): return
+
+    with next(get_db()) as db:
+        response = crud.get_auto_reply(db, text)
+        if response:
+            await update.message.reply_text(response, parse_mode='HTML')
 
 async def _unknown_callback(update, context):
     """جلوگیری از نمایش آیکون لودینگ روی دکمه‌هایی که هندلر ندارند"""
@@ -52,13 +67,13 @@ def setup_application_handlers(app: Application, admin_handler=None):
 
     # لیست محصولات و مدیریت صفحه‌بندی
     app.add_handler(CallbackQueryHandler(
-        products_handler.list_products, 
+        products_handler.list_products,
         pattern=r"^(prod:list:|noop)$"
     ))
 
     # نمایش جزئیات کامل یک محصول
     app.add_handler(CallbackQueryHandler(
-        products_handler.show_product_details, 
+        products_handler.show_product_details,
         pattern=r"^prod:show:\d+$"
     ))
 
@@ -97,12 +112,15 @@ def setup_application_handlers(app: Application, admin_handler=None):
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_about_us, pattern=r"^about_us$"))
 
     # ==================================================================
-    # 6. پنل مدیریت و پاکسازی نهایی - اولویت ۶
+    # 6. هندلرهای عمومی و پاسخ خودکار - اولویت ۶
     # ==================================================================
+    # هندلر پاسخ خودکار هوشمند (باید قبل از unknown_callback باشد)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _global_text_handler))
+
     if admin_handler:
         # مدیریت تایید/رد/ارسال سفارش از داخل تلگرام توسط ادمین
         app.add_handler(CallbackQueryHandler(admin_handler, pattern=r"^adm_(approve|reject|ship):"))
-    
+
     # هندلر فال‌بک برای کال‌بک‌های تعریف نشده (بسیار مهم برای UX)
     app.add_handler(CallbackQueryHandler(_unknown_callback, pattern=r".*"))
 

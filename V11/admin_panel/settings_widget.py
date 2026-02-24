@@ -130,10 +130,12 @@ class SettingsWidget(QWidget):
         nav_items = [
             ("⚙️ تنظیمات اصلی", 0),
             ("💬 محتوای متنی (Template)", 1),
-            ("💳 مالی و درگاه", 2),
-            ("🎨 شخصی‌سازی (Branding)", 3),
-            ("🔔 اطلاع‌رسانی", 4),
-            ("🛠 ابزارها و بک‌آپ", 5)
+            ("🎟 کدهای تخفیف", 2),
+            ("🤖 پاسخگوی خودکار", 3),
+            ("💳 مالی و درگاه", 4),
+            ("🎨 شخصی‌سازی (Branding)", 5),
+            ("🔔 اطلاع‌رسانی", 6),
+            ("🛠 ابزارها و بک‌آپ", 7)
         ]
 
         for t, i in nav_items:
@@ -147,6 +149,8 @@ class SettingsWidget(QWidget):
         self.pages_stack = QStackedWidget()
         self.pages_stack.addWidget(self._ui_core_settings())
         self.pages_stack.addWidget(self._ui_template_settings())
+        self.pages_stack.addWidget(self._ui_coupon_settings())
+        self.pages_stack.addWidget(self._ui_autoreply_settings())
         self.pages_stack.addWidget(self._ui_payment_settings())
         self.pages_stack.addWidget(self._ui_branding_settings())
         self.pages_stack.addWidget(self._ui_notification_settings())
@@ -192,6 +196,44 @@ class SettingsWidget(QWidget):
         layout.addStretch()
 
         page.setWidget(container)
+        return page
+
+    def _ui_coupon_settings(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("مدیریت کدهای تخفیف")
+        self.coupon_table = QTableWidget(0, 6)
+        self.coupon_table.setHorizontalHeaderLabels(["کد", "درصد", "ظرفیت", "استفاده", "حداقل خرید", "وضعیت"])
+        self.coupon_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        btn_add = QPushButton("➕ افزودن کد جدید")
+        btn_add.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white;")
+        btn_add.clicked.connect(self.add_coupon_dialog)
+
+        card.add_widget(self.coupon_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
+        return page
+
+    def _ui_autoreply_settings(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("پاسخگوی خودکار هوشمند")
+        self.autoreply_table = QTableWidget(0, 3)
+        self.autoreply_table.setHorizontalHeaderLabels(["کلمه کلیدی", "پاسخ ربات", "عملیات"])
+        self.autoreply_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        btn_add = QPushButton("➕ افزودن کلمه کلیدی")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white;")
+        btn_add.clicked.connect(self.add_autoreply_dialog)
+
+        card.add_widget(self.autoreply_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
         return page
 
     def _ui_template_settings(self):
@@ -340,7 +382,7 @@ class SettingsWidget(QWidget):
         btn_bk.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px;")
         card_bk.add_widget(btn_bk)
         layout.addWidget(card_bk)
-        
+
         card_log = SettingCard("Audit Logs (تاریخچه تغییرات پنل)")
         self.audit_table = QTableWidget(0, 4)
         self.audit_table.setHorizontalHeaderLabels(["زمان", "ادمین", "عملیات", "توضیح"])
@@ -396,10 +438,82 @@ class SettingsWidget(QWidget):
             self.chk_notif_ticket.setChecked(data.get("notif_ticket", "true") == "true")
             self.chk_dest_bot.setChecked(data.get("notif_dest_bot", "false") == "true")
 
+            # Coupons
+            await self.load_coupons()
+
+            # Auto Replies
+            await self.load_auto_replies()
+
             # Audit Logs
             await self.load_audit_logs()
 
         except Exception as e: logger.error(f"Settings refresh error: {e}")
+
+    async def load_coupons(self):
+        loop = asyncio.get_running_loop()
+        coupons = await loop.run_in_executor(None, lambda: crud.get_all_coupons(next(get_db())))
+        self.coupon_table.setRowCount(0)
+        for i, c in enumerate(coupons):
+            self.coupon_table.insertRow(i)
+            self.coupon_table.setItem(i, 0, QTableWidgetItem(c.code))
+            self.coupon_table.setItem(i, 1, QTableWidgetItem(f"{c.percent}%"))
+            self.coupon_table.setItem(i, 2, QTableWidgetItem("نامحدود" if c.max_uses == 0 else str(c.max_uses)))
+            self.coupon_table.setItem(i, 3, QTableWidgetItem(str(c.current_uses)))
+            self.coupon_table.setItem(i, 4, QTableWidgetItem(f"{int(c.min_purchase):,}"))
+            status = "فعال" if c.is_active else "غیرفعال"
+            self.coupon_table.setItem(i, 5, QTableWidgetItem(status))
+
+    async def load_auto_replies(self):
+        loop = asyncio.get_running_loop()
+        replies = await loop.run_in_executor(None, lambda: crud.get_all_auto_replies(next(get_db())))
+        self.autoreply_table.setRowCount(0)
+        for i, r in enumerate(replies):
+            self.autoreply_table.insertRow(i)
+            self.autoreply_table.setItem(i, 0, QTableWidgetItem(r.keyword))
+            self.autoreply_table.setItem(i, 1, QTableWidgetItem(r.response[:50] + "..."))
+
+            del_btn = QPushButton("حذف")
+            del_btn.setStyleSheet(f"background: {DANGER_COLOR}; color: white;")
+            del_btn.clicked.connect(lambda _, kid=r.id: self.delete_autoreply(kid))
+            self.autoreply_table.setCellWidget(i, 2, del_btn)
+
+    def add_coupon_dialog(self):
+        code, ok1 = QInputDialog.getText(self, "کد تخفیف", "کد را وارد کنید (مثلا OFF20):")
+        if not ok1 or not code: return
+
+        percent, ok2 = QInputDialog.getInt(self, "درصد تخفیف", "درصد (۱ تا ۱۰۰):", 20, 1, 100)
+        if not ok2: return
+
+        min_p, ok3 = QInputDialog.getInt(self, "حداقل خرید", "مبلغ به تومان:", 0, 0, 1000000000)
+        if not ok3: return
+
+        data = {"code": code.upper().strip(), "percent": percent, "min_purchase": min_p}
+        with next(get_db()) as db:
+            crud.create_coupon(db, data)
+
+        self.window().show_toast("کد تخفیف ایجاد شد.")
+        asyncio.create_task(self.load_coupons())
+
+    def add_autoreply_dialog(self):
+        key, ok1 = QInputDialog.getText(self, "کلمه کلیدی", "مثلاً (آدرس یا ساعت کاری):")
+        if not ok1 or not key: return
+
+        resp, ok2 = QInputDialog.getMultiLineText(self, "پاسخ ربات", "متن کامل پاسخ:")
+        if not ok2 or not resp: return
+
+        with next(get_db()) as db:
+            crud.set_auto_reply(db, key, resp)
+
+        self.window().show_toast("پاسخ خودکار ثبت شد.")
+        asyncio.create_task(self.load_auto_replies())
+
+    def delete_autoreply(self, kid):
+        if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db:
+                from db.models import AutoReply
+                db.query(AutoReply).filter_by(id=kid).delete()
+                db.commit()
+            asyncio.create_task(self.load_auto_replies())
 
     def _fetch_all_settings(self):
         with next(get_db()) as db:

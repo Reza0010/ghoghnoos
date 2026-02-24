@@ -624,3 +624,66 @@ def add_product_notification(db: Session, user_id, product_id):
     if not exists:
         db.add(models.ProductNotification(user_id=str(user_id), product_id=product_id))
         db.commit()
+
+# ======================================================================
+# 9. مدیریت کوپن و کد تخفیف
+# ======================================================================
+def get_all_coupons(db: Session) -> List[models.Coupon]:
+    return db.query(models.Coupon).all()
+
+def create_coupon(db: Session, data: dict) -> models.Coupon:
+    coupon = models.Coupon(**data)
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+def validate_coupon(db: Session, code: str, amount: float) -> Tuple[bool, Optional[models.Coupon], str]:
+    """بررسی اعتبار کد تخفیف"""
+    coupon = db.query(models.Coupon).filter_by(code=code.strip().upper(), is_active=True).first()
+    if not coupon:
+        return False, None, "کد تخفیف معتبر نیست."
+
+    if coupon.expire_date and coupon.expire_date < datetime.now():
+        return False, None, "کد تخفیف منقضی شده است."
+
+    if coupon.max_uses > 0 and coupon.current_uses >= coupon.max_uses:
+        return False, None, "ظرفیت استفاده از این کد به پایان رسیده است."
+
+    if amount < float(coupon.min_purchase):
+        return False, None, f"حداقل مبلغ خرید برای این کد {int(coupon.min_purchase):,} تومان است."
+
+    return True, coupon, "کد تایید شد."
+
+def use_coupon(db: Session, coupon_id: int):
+    coupon = db.query(models.Coupon).get(coupon_id)
+    if coupon:
+        coupon.current_uses += 1
+        db.commit()
+
+# ======================================================================
+# 10. پاسخگوی خودکار (Auto Reply)
+# ======================================================================
+def get_all_auto_replies(db: Session) -> List[models.AutoReply]:
+    return db.query(models.AutoReply).all()
+
+def set_auto_reply(db: Session, keyword: str, response: str):
+    ar = db.query(models.AutoReply).filter_by(keyword=keyword.strip()).first()
+    if ar:
+        ar.response = response
+        ar.is_active = True
+    else:
+        ar = models.AutoReply(keyword=keyword.strip(), response=response)
+        db.add(ar)
+    db.commit()
+    return ar
+
+def get_auto_reply(db: Session, text: str) -> Optional[str]:
+    """یافتن پاسخ مناسب برای متن ورودی"""
+    # در اینجا یک جستجوی ساده انجام می‌دهیم
+    replies = db.query(models.AutoReply).filter(models.AutoReply.is_active == True).all()
+    text = text.lower().strip()
+    for r in replies:
+        if r.keyword.lower() in text:
+            return r.response
+    return None
