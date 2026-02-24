@@ -6,7 +6,6 @@ from decimal import Decimal
 # ====================================================================
 # تنظیمات استیکرها (Stickers Config)
 # ====================================================================
-# این آیدی‌ها را می‌توانید از طریق ربات @idstickerbot به دست آورید
 STICKERS: Dict[str, str] = {
     "welcome": "",      # استیکر خوش‌آمدگویی
     "success": "",      # تیک سبز / ثبت موفق
@@ -20,14 +19,10 @@ STICKERS: Dict[str, str] = {
 # توابع کمکی (Helpers) - برای زیبایی و نظم متون
 # ====================================================================
 def format_price(amount: Union[int, float, str, Decimal, None]) -> str:
-    """
-    فرمت‌بندی قیمت به صورت ۳ رقم ۳ رقم با واحد تومان.
-    """
+    """فرمت‌بندی قیمت به صورت ۳ رقم ۳ رقم با واحد تومان."""
     try:
         if amount is None or str(amount) == "0":
             return "<b>0</b> تومان"
-        
-        # تبدیل Decimal یا String به عدد صحیح برای حذف اعشار
         val = int(float(amount))
         return f"<b>{val:,}</b> تومان"
     except (ValueError, TypeError):
@@ -35,18 +30,18 @@ def format_price(amount: Union[int, float, str, Decimal, None]) -> str:
 
 def get_divider() -> str:
     """جداکننده گرافیکی برای تفکیک بخش‌های پیام"""
-    return "\n━━━━━━━━━━━━━━\n"
+    return "\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
 
-def get_progress_bar(current_step: int, total_steps: int = 3) -> str:
+def get_progress_bar(current_step: int, total_steps: int = 4) -> str:
     """ایجاد نوار پیشرفت بصری برای مراحل خرید"""
-    filled = "🟩"
-    empty = "⬜"
+    filled = "🟢"
+    empty = "⚪️"
     bar = ""
     for i in range(1, total_steps + 1):
         if i < current_step: bar += filled
         elif i == current_step: bar += "🟠"
         else: bar += empty
-    return f"<b>مرحله {current_step} از {total_steps}</b>\n{bar}\n"
+    return f"<b>✨ مرحله {current_step} از {total_steps}</b>\n{bar}\n"
 
 def get_tracking_timeline(status: str) -> str:
     """نمودار وضعیت سفارش (Timeline) با ایموجی‌های مرتبط"""
@@ -59,22 +54,15 @@ def get_tracking_timeline(status: str) -> str:
     }
     s = steps.get(status, ("◽️", "◽️", "◽️", "◽️"))
     timeline = (
-        f"{s[0]} ثبت سفارش\n"
-        f"  └ {s[1]} تایید مالی\n"
-        f"    └ {s[2]} آماده‌سازی\n"
+        f"{s[0]} ثبت سفارش اولیه\n"
+        f"  └ {s[1]} تایید مدیریت\n"
+        f"    └ {s[2]} بسته‌بندی کالا\n"
         f"      └ {s[3]} تحویل به پست"
     )
     return timeline
 
 def format_dynamic_text(template: str, user_data: Dict[str, Any]) -> str:
-    """
-    جایگزینی هوشمند متغیرها در متن.
-    پشتیبانی از تگ‌های: {user_name}, {shop_name}, {order_count}, {total_spent} و غیره
-    """
-    if not template:
-        return ""
-
-    # مقادیر پیش‌فرض برای جلوگیری از خطا در صورت نبودن داده
+    if not template: return ""
     replacements = {
         "{user_name}": str(user_data.get("user_name") or "کاربر"),
         "{shop_name}": str(user_data.get("shop_name") or "فروشگاه ما"),
@@ -82,12 +70,9 @@ def format_dynamic_text(template: str, user_data: Dict[str, Any]) -> str:
         "{total_spent}": format_price(user_data.get("total_spent", 0)),
         "{discount}": str(user_data.get("discount", "0")),
     }
-
-    # جایگزینی امن با استفاده از متد replace
     text = template
     for key, value in replacements.items():
         text = text.replace(key, value)
-    
     return text
 
 # ====================================================================
@@ -99,21 +84,21 @@ ERROR_MESSAGE = (
 )
 UNKNOWN_COMMAND = "🤔 متوجه این دستور نشدم. لطفا از منوی زیر استفاده کنید."
 LOADING = "⏳ <i>در حال دریافت اطلاعات...</i>"
-WELCOME_MESSAGE = "سلام {user_name} عزیز 👋\nبه فروشگاه {shop_name} خوش آمدید."
+WELCOME_MESSAGE = "سلام {user_name} عزیز 👋\nبه فروشگاه <b>{shop_name}</b> خوش آمدید.\n\n💎 بهترین محصولات با نازل‌ترین قیمت!"
 
 # ====================================================================
 # برچسب دکمه‌ها (Button Labels)
 # ====================================================================
-PRODUCTS_BUTTON = "🛍 محصولات"
-SEARCH_BUTTON = "🔍 جستجو"
-SPECIAL_OFFERS_BUTTON = "🔥 پیشنهاد ویژه"
+PRODUCTS_BUTTON = "🛍 مشاهده ویترین محصولات"
+SEARCH_BUTTON = "🔎 جستجوی هوشمند"
+SPECIAL_OFFERS_BUTTON = "🔥 تخفیفات داغ"
 CART_BUTTON = "🛒 سبد خرید"
-TRACK_ORDER_BUTTON = "📦 پیگیری سفارش"
-SUPPORT_BUTTON = "📞 پشتیبانی"
-ABOUT_US_BUTTON = "ℹ️ درباره ما"
+TRACK_ORDER_BUTTON = "📦 پیگیری سفارشات"
+SUPPORT_BUTTON = "📞 ارتباط با ما"
+ABOUT_US_BUTTON = "ℹ️ درباره فروشگاه"
 BACK_BUTTON = "🔙 بازگشت"
-MAIN_MENU_BUTTON = "🏠 صفحه اصلی"
-USER_PROFILE_BUTTON = "👤 حساب کاربری"
+MAIN_MENU_BUTTON = "🏠 منوی اصلی"
+USER_PROFILE_BUTTON = "👤 پروفایل من"
 
 # ====================================================================
 # محصولات و جستجو
@@ -121,117 +106,90 @@ USER_PROFILE_BUTTON = "👤 حساب کاربری"
 CATEGORY_SELECT = "📂 <b>لطفاً دسته‌بندی مورد نظر را انتخاب کنید:</b>"
 PRODUCT_LIST = "📋 <b>لیست محصولات گروه:</b>\n{breadcrumbs}"
 PRODUCT_DETAILS = """
-✨ <b>{name}</b>
+💎 <b>{name}</b>
 {divider}
-📝 <b>توضیحات:</b>
+📑 <b>توضیحات محصول:</b>
 {description}
 
-🏷 <b>برند:</b> <code>{brand}</code>
-📦 <b>وضعیت:</b> {stock_status}
+🔹 <b>مشخصات فنی:</b>
+🏷 برند: <code>{brand}</code>
+📦 وضعیت انبار: {stock_status}
 {divider}
-💰 <b>قیمت:</b> {price_formatted}
+💰 <b>قیمت نهایی: {price_formatted}</b>
 {cart_preview}
 """
-SEARCH_PROMPT = "🔍 <b>چه محصولی نیاز دارید؟</b>\nنام محصول، برند یا تگ مورد نظر را بنویسید:"
+SEARCH_PROMPT = "🔍 <b>نام یا ویژگی محصول مورد نظر را وارد کنید:</b>\n<i>مثال: سامسونگ، پیراهن مشکی، ارزان</i>"
 SEARCH_NO_RESULT = "❌ <b>نتیجه‌ای یافت نشد!</b>\nلطفاً کلمات کلیدی دیگری را امتحان کنید."
-SEARCH_RESULT_TITLE = "🔎 نتایج جستجو برای: <code>{query}</code>"
+SEARCH_RESULT_TITLE = "🔎 نتایج یافت شده برای: <code>{query}</code>"
 
 # ====================================================================
 # سبد خرید و علاقه‌مندی
 # ====================================================================
-CART_EMPTY = "🛒 <b>سبد خرید شما خالی است!</b>\nمی‌توانید از بخش محصولات کالا اضافه کنید."
-CART_TITLE = "🛒 <b>لیست خرید شما:</b>\n"
-CART_ITEM_ROW = "🔸 <b>{name}</b>\n└ 🔢 {quantity} عدد × {total_formatted}\n"
-CART_TOTAL = "────────────────\n💵 <b>مبلغ قابل پرداخت: {total_amount_formatted}</b>"
-ADDED_TO_CART = "✅ محصول به سبد خرید اضافه شد."
-CART_CLEARED = "🗑 سبد خرید با موفقیت خالی شد."
+CART_EMPTY = "🛒 <b>سبد خرید شما فعلاً خالی است!</b>\nهمین حالا می‌توانید از ویترین ما دیدن کنید."
+CART_TITLE = "🛒 <b>آیتم‌های سبد خرید شما:</b>\n"
+CART_ITEM_ROW = "🎁 <b>{name}</b>\n└ 🔢 {quantity} عدد | قیمت واحد: {total_formatted}\n"
+CART_TOTAL = "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n💵 <b>جمع کل فاکتور: {total_amount_formatted}</b>"
+ADDED_TO_CART = "✅ به سبد خرید اضافه شد."
+CART_CLEARED = "🗑 سبد خرید خالی شد."
 FAV_ADDED = "❤️ به لیست علاقه‌مندی‌ها اضافه شد."
 FAV_REMOVED = "💔 از لیست علاقه‌مندی‌ها حذف شد."
 FAV_EMPTY = "💔 لیست علاقه‌مندی‌های شما خالی است."
-NOTIFY_SUCCESS = "🔔 <b>درخواست ثبت شد!</b>\nبه محض موجود شدن کالا، اطلاع‌رسانی می‌شود."
-NOTIFY_ALREADY = "⚠️ شما قبلاً در لیست انتظار این کالا بودید."
+NOTIFY_SUCCESS = "🔔 <b>درخواست شما ثبت شد.</b>\nبه محض موجود شدن کالا، از همینجا خبرتان می‌کنیم!"
 
 # ====================================================================
 # حساب کاربری و سوابق (User Account)
 # ====================================================================
 USER_PROFILE_DASHBOARD = """
-👤 <b>پروفایل کاربری</b>
+👤 <b>حساب کاربری من</b>
 {divider}
-🆔 کد کاربری: <code>{user_id}</code>
-👤 نام: <b>{full_name}</b>
-📱 موبایل: <code>{phone}</code>
+🆔 شناسه مشتری: <code>{user_id}</code>
+👤 نام و نشان: <b>{full_name}</b>
+📱 شماره تماس: <code>{phone}</code>
 
-📊 <b>آمار خرید:</b>
-📅 عضویت: <code>{join_date}</code>
-📦 سفارشات: <b>{order_count} مورد</b>
-💰 مجموع خرید: <b>{total_spent}</b>
+📊 <b>گزارش عملکرد:</b>
+📅 تاریخ عضویت: <code>{join_date}</code>
+📦 تعداد سفارشات: <b>{order_count} مورد</b>
+💰 مجموع وفاداری: <b>{total_spent}</b>
 {divider}
-👇 تنظیمات حساب:
+⚙️ تنظیمات حساب کاربری:
 """
-ORDER_HISTORY_LIST = """
-📦 <b>تاریخچه سفارشات اخیر</b>
-{divider}
-{orders_text}
-{divider}
-<i>برای جزئیات بیشتر روی هر سفارش کلیک کنید.</i>
-"""
-ADDRESS_MANAGEMENT_TITLE = "📍 <b>مدیریت آدرس‌ها</b>\nبرای حذف، روی ضربدر قرمز کنار آدرس کلیک کنید:"
 
 # ====================================================================
-# فرآیند چک‌اوت (ثبت سفارش)
+# فرآیند ثبت سفارش
 # ====================================================================
 def get_checkout_address(has_saved_addr: bool = False) -> str:
-    msg = f"{get_progress_bar(1)}\n📍 <b>مرحله اول: آدرس ارسال</b>\n"
+    msg = f"{get_progress_bar(1)}\n📍 <b>محل تحویل سفارش:</b>\n"
     if has_saved_addr:
-        msg += "می‌توانید از لیست آدرس‌های قبلی انتخاب کنید یا آدرس جدیدی تایپ کنید:"
+        msg += "می‌توانید از آدرس‌های قبلی استفاده کنید یا یک آدرس جدید بنویسید:"
     else:
-        msg += "لطفاً آدرس دقیق پستی خود را (استان، شهر، خیابان و پلاک) وارد کنید:"
+        msg += "لطفاً آدرس دقیق پستی خود را به همراه نام شهر وارد کنید:"
     return msg
 
 def get_checkout_phone() -> str:
-    return f"{get_progress_bar(2)}\n📱 <b>مرحله دوم: شماره تماس</b>\nلطفاً شماره موبایل خود را وارد کنید یا از دکمه زیر برای ارسال سریع استفاده کنید:"
+    return f"{get_progress_bar(2)}\n📱 <b>شماره تماس هماهنگی:</b>\nلطفاً شماره موبایل خود را تایید یا وارد کنید:"
 
 def get_checkout_payment(total: Any, shipping_cost: str, final_total: Any, card_number: str, card_owner: str) -> str:
     div = get_divider()
     return (
-        f"{get_progress_bar(3)}\n"
-        f"🧾 <b>پیش‌فاکتور نهایی</b>\n"
+        f"{get_progress_bar(4)}\n"
+        f"💳 <b>تسویه‌حساب نهایی</b>\n"
         f"{div}"
-        f"🛍 مبلغ کالاها: {format_price(total)}\n"
-        f"🛵 هزینه ارسال: <b>{shipping_cost}</b>\n"
+        f"🛍 جمع مبلغ کالاها: {format_price(total)}\n"
+        f"🚚 هزینه ارسال و خدمات: <b>{shipping_cost}</b>\n"
         f"{div}"
-        f"💳 <b>مبلغ نهایی جهت واریز:</b>\n"
-        f"👉 {format_price(final_total)}\n\n"
-        f"🏦 <b>اطلاعات کارت بانکی:</b>\n"
+        f"💰 <b>مبلغ نهایی قابل پرداخت:</b>\n"
+        f"👈 <code>{format_price(final_total)}</code>\n\n"
+        f"🏦 <b>اطلاعات بانکی:</b>\n"
         f"شماره کارت: <code>{card_number}</code>\n"
-        f"به نام: <b>{card_owner}</b>\n\n"
-        f"📸 <b>لطفاً پس از واریز، تصویر فیش را همینجا ارسال کنید.</b>"
+        f"نام صاحب حساب: <b>{card_owner}</b>\n\n"
+        f"✅ پس از واریز وجه، لطفاً <b>تصویر فیش</b> را ارسال کنید."
     )
 
 ORDER_CONFIRMATION = """
-🎉 <b>سفارش شما با موفقیت ثبت شد!</b> 😍
-🆔 کد پیگیری: <code>{order_id}</code>
+🎉 <b>سفارش شما با موفقیت ثبت گردید!</b> 😍
+🆔 شماره پیگیری: <code>#{order_id}</code>
 {divider}
 {timeline}
 {divider}
-<i>به محض تغییر وضعیت، اطلاع‌رسانی انجام خواهد شد.</i>
-"""
-
-# ====================================================================
-# صفحات ثابت (Static Pages)
-# ====================================================================
-SUPPORT_TEXT = """
-📞 <b>پشتیبانی فروشگاه</b>
-برای ارتباط مستقیم با کارشناسان ما روی آیدی زیر کلیک کنید:
-🆔 {support_id}
-{divider}
-⏰ ساعت پاسخگویی: ۱۰ صبح الی ۱۰ شب
-"""
-
-ABOUT_US_TEXT = """
-ℹ️ <b>درباره فروشگاه {shop_name}</b>
-📍 <b>آدرس:</b> {address}
-📞 <b>تلفن:</b> <code>{phone}</code>
-{divider}
-ممنون از حسن انتخاب و اعتماد شما! ❤️
+<i>از خرید شما متشکریم! وضعیت سفارش از طریق همین ربات اطلاع‌رسانی خواهد شد.</i>
 """

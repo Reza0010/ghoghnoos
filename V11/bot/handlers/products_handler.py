@@ -202,43 +202,56 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
     bot_info = await context.bot.get_me()
     kbd = keyboards.get_product_detail_keyboard(prod, is_fav, cart_qty, bot_info.username)
 
-    # --- منطق ارسال مدیا (بسیار مهم برای پرفورمنس) ---
-    image_to_send = None
-    
-    # 1. اولویت اول: استفاده از File ID تلگرام (بسیار سریع)
-    if prod.image_file_id:
-        image_to_send = prod.image_file_id
-    # 2. اولویت دوم: استفاده از گالری جدید (اولین عکس)
-    elif prod.images:
-        full_path = Path(BASE_DIR) / prod.images[0].image_path
-        if full_path.exists():
-            image_to_send = open(full_path, 'rb')
-    # 3. اولویت سوم: ستون قدیمی (برای سازگاری)
+    # --- منطق ارسال مدیا (پشتیبانی از آلبوم) ---
+    all_images = []
+    if prod.images:
+        all_images = [img.image_path for img in prod.images]
     elif hasattr(prod, 'image_path') and prod.image_path:
-        full_path = Path(BASE_DIR) / prod.image_path
-        if full_path.exists():
-            image_to_send = open(full_path, 'rb')
+        all_images = [prod.image_path]
 
     try:
-        if image_to_send:
-            if msg_obj.photo:
-                # ویرایش تصویر پیام فعلی (بدون پرش)
-                await msg_obj.edit_media(
-                    media=InputMediaPhoto(media=image_to_send, caption=text, parse_mode='HTML'),
-                    reply_markup=kbd
-                )
+        if len(all_images) > 1:
+            # ارسال به صورت آلبوم (Media Group)
+            if query: await msg_obj.delete()
+
+            media_group = []
+            for i, img_path in enumerate(all_images[:10]): # حداکثر ۱۰ عکس
+                full_path = Path(BASE_DIR) / img_path
+                if full_path.exists():
+                    # فقط اولین عکس کپشن داشته باشد
+                    caption = text if i == 0 else None
+                    media_group.append(InputMediaPhoto(media=open(full_path, 'rb'), caption=caption, parse_mode='HTML'))
+
+            if media_group:
+                # در آلبوم نمیتوان ریپلای مارک‌آپ (دکمه) فرستاد، پس دکمه‌ها را در پیام جداگانه میفرستیم
+                await context.bot.send_media_group(msg_obj.chat_id, media=media_group)
+                await context.bot.send_message(msg_obj.chat_id, "👆 برای خرید یا ثبت نظر از دکمه‌های زیر استفاده کنید:", reply_markup=kbd)
             else:
-                # ارسال پیام جدید اگر قبلی متنی بود
-                if query: await msg_obj.delete()
-                sent = await context.bot.send_photo(msg_obj.chat_id, image_to_send, caption=text, reply_markup=kbd, parse_mode='HTML')
-                
-                # ذخیره File ID در دیتابیس برای دفعات بعدی (Cache)
-                if not prod.image_file_id:
-                    def save_fid(db, pid, fid):
-                        p = db.query(models.Product).get(pid)
-                        p.image_file_id = fid
-                        db.commit()
-                    await run_db(save_fid, prod.id, sent.photo[-1].file_id)
+                await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
+
+        elif all_images or prod.image_file_id:
+            # ارسال تک عکس
+            image_to_send = prod.image_file_id
+            if not image_to_send and all_images:
+                full_path = Path(BASE_DIR) / all_images[0]
+                if full_path.exists():
+                    image_to_send = open(full_path, 'rb')
+
+            if image_to_send:
+                if msg_obj.photo and not query: # اگر پیام فعلی عکس است و از استارت نیامده
+                     await msg_obj.edit_media(
+                        media=InputMediaPhoto(media=image_to_send, caption=text, parse_mode='HTML'),
+                        reply_markup=kbd
+                    )
+                else:
+                    if query: await msg_obj.delete()
+                    sent = await context.bot.send_photo(msg_obj.chat_id, image_to_send, caption=text, reply_markup=kbd, parse_mode='HTML')
+                    if not prod.image_file_id:
+                        def save_fid(db, pid, fid):
+                            p = db.query(models.Product).get(pid); p.image_file_id = fid; db.commit()
+                        await run_db(save_fid, prod.id, sent.photo[-1].file_id)
+            else:
+                await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
         else:
             # ارسال متنی اگر هیچ عکسی یافت نشد
             if query: await msg_obj.edit_text(text, reply_markup=kbd, parse_mode='HTML')

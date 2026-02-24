@@ -520,9 +520,15 @@ def get_filtered_orders(db: Session, status: str = "all", limit: int = 500) -> L
 def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[models.Order]:
     order = db.query(models.Order).filter_by(id=order_id).first()
     if order:
+        old_status = order.status
         order.status = new_status
         db.commit()
         db.refresh(order)
+
+        # ثبت لاگ
+        record_audit_log(db, "update_order_status", target_type="order", target_id=order_id,
+                         description=f"وضعیت سفارش از '{old_status}' به '{new_status}' تغییر یافت.")
+
     return order
 
 def get_order_by_id(db: Session, order_id: int) -> Optional[models.Order]:

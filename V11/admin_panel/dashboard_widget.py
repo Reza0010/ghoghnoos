@@ -98,6 +98,51 @@ class ModernChart(FigureCanvasQTAgg):
         self.fig.tight_layout()
 
 # ==============================================================================
+# Circular KPI Widget
+# ==============================================================================
+class CircularKPI(QWidget):
+    def __init__(self, value=0, label="KPI", color=COLOR_PURPLE, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(120, 120)
+        self.value = value # 0 to 100
+        self.label = label
+        self.color = QColor(color)
+
+    def set_value(self, val):
+        self.value = min(100, max(0, val))
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect().adjusted(10, 10, -10, -10)
+
+        # Background Circle
+        pen = QPen(QColor("#2e2e38"), 8)
+        painter.setPen(pen)
+        painter.drawEllipse(rect)
+
+        # Progress Arc
+        pen.setColor(self.color)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+
+        span_angle = int(-self.value * 3.6 * 16)
+        painter.drawArc(rect, 90 * 16, span_angle)
+
+        # Text
+        painter.setPen(QColor("white"))
+        font = QFont("Vazirmatn", 14, QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{int(self.value)}%")
+
+        font.setPointSize(8)
+        painter.setFont(font)
+        painter.setPen(QColor(COLOR_GRAY))
+        painter.drawText(self.rect().adjusted(0, 80, 0, 0), Qt.AlignmentFlag.AlignHCenter, self.label)
+
+# ==============================================================================
 # Stat Card
 # ==============================================================================
 class StatCard(QFrame):
@@ -355,6 +400,19 @@ class DashboardWidget(QWidget):
         act_lay.addWidget(self.scroll_act)
         bottom_row.addWidget(act_frame, 2)
 
+        # KPI و موجودی
+        bottom_right_lay = QVBoxLayout()
+
+        # بخش KPIهای دایره‌ای
+        kpi_frame = QFrame()
+        kpi_frame.setStyleSheet(f"background: {COLOR_CARD}; border-radius: 15px; border: 1px solid #333;")
+        kpi_lay = QHBoxLayout(kpi_frame)
+        self.kpi_conv = CircularKPI(0, "نرخ تبدیل", COLOR_GREEN)
+        self.kpi_target = CircularKPI(0, "تحقق هدف", COLOR_BLUE)
+        kpi_lay.addWidget(self.kpi_conv)
+        kpi_lay.addWidget(self.kpi_target)
+        bottom_right_lay.addWidget(kpi_frame)
+
         # موجودی
         stock_frame = QFrame()
         stock_frame.setFixedWidth(400)
@@ -370,6 +428,7 @@ class DashboardWidget(QWidget):
         stock_lay.addStretch()
         bottom_row.addWidget(stock_frame)
 
+        bottom_row.addLayout(bottom_right_lay)
         self.main_layout.addLayout(bottom_row, 2)
 
     def showEvent(self, event):
@@ -414,14 +473,23 @@ class DashboardWidget(QWidget):
                     recent_orders = db.query(models.Order).order_by(models.Order.created_at.desc()).limit(5).all()
                     is_open = crud.get_setting(db, "tg_is_open", "true") == "true"
                     
+                    # محاسبه نرخ‌ها (فرضی برای دمو)
+                    conv_rate = min(95, (pending_orders / total_users * 100)) if total_users > 0 else 0
+                    target_rate = min(100, (rev_tg + rev_rb) / 10000000 * 100) # هدف ۱۰ میلیون تومان
+
                     return {
                         "rev_tg": rev_tg, "rev_rb": rev_rb, "pending": pending_orders, "users": total_users,
                         "dates": dates, "tg_sales": tg_sales, "rb_sales": rb_sales,
-                        "low_stock": low_stock, "recent_orders": recent_orders, "is_open": is_open
+                        "low_stock": low_stock, "recent_orders": recent_orders, "is_open": is_open,
+                        "conv": conv_rate, "target": target_rate
                     }
 
             data = await loop.run_in_executor(None, fetch_all)
             
+            # آپدیت KPIها
+            self.kpi_conv.set_value(data['conv'])
+            self.kpi_target.set_value(data['target'])
+
             # آپدیت کارت‌ها
             self.card_rev_tg.set_data(int(data['rev_tg']))
             self.card_rev_rb.set_data(int(data['rev_rb']))
@@ -478,16 +546,31 @@ class DashboardWidget(QWidget):
         # تبدیل تاریخ برای نمایش صحیح در نمودار
         short_dates = [farsi_text_for_chart(d[5:].replace('-', '/')) for d in dates]
         
-        ax.plot(short_dates, values, color=color, marker='o', linewidth=3, markersize=8, markerfacecolor=COLOR_BG, markeredgewidth=2, markeredgecolor=color)
-        ax.fill_between(short_dates, values, color=color, alpha=0.1)
+        # استایل حرفه‌ای‌تر با نقاط توخالی و خط ضخیم‌تر
+        ax.plot(short_dates, values, color=color, marker='o', linewidth=4,
+                markersize=10, markerfacecolor=COLOR_CARD, markeredgewidth=3, markeredgecolor=color)
+
+        # گرادینت زیر نمودار (شبیه‌سازی با آلفاهای مختلف)
+        ax.fill_between(short_dates, values, color=color, alpha=0.15)
+        ax.fill_between(short_dates, values, color=color, alpha=0.05)
+
+        # تنظیمات فواصل و مقیاس
+        if any(values):
+            ax.set_ylim(0, max(values) * 1.3)
+        else:
+            ax.set_ylim(0, 100)
+
+        ax.grid(True, axis='y', linestyle=':', alpha=0.2)
         
-        ax.set_ylim(0, max(values) * 1.2 if any(values) else 100)
-        ax.grid(True, axis='y', linestyle='--', alpha=0.1)
+        # حذف لبه‌های نمودار
+        for spine in ax.spines.values():
+            spine.set_visible(False)
         
         # اعمال فونت فارسی روی محور افقی
         if canvas.persian_font:
             for label in ax.get_xticklabels():
                 label.set_fontproperties(canvas.persian_font)
+                label.set_fontsize(9)
         canvas.draw()
 
     def update_shop_status_btn(self, is_open):

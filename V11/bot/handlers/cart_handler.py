@@ -282,8 +282,9 @@ async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TY
         amount = context.user_data.get('final_total')
         desc = f"خرید از ربات فروشگاهی - کاربر {query.from_user.id}"
 
-        # در محیط واقعی آدرس کال‌بک باید ولید باشد
-        res = await zp.create_payment(amount, desc, "https://t.me/your_bot?start=verify")
+        # دریافت آدرس کال‌بک از تنظیمات
+        callback_url = await run_db(crud.get_setting, "zarinpal_callback", "https://t.me/your_bot?start=verify")
+        res = await zp.create_payment(amount, desc, callback_url)
 
         if res['status']:
             context.user_data['authority'] = res['authority']

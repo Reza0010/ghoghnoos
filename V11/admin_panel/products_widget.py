@@ -13,10 +13,10 @@ from PyQt6.QtWidgets import (
     QFileDialog, QCheckBox, QScrollArea, QFrame, QGridLayout, 
     QGraphicsDropShadowEffect, QSizePolicy, QButtonGroup, QAbstractSpinBox,
     QApplication, QMenu, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QInputDialog, QAbstractItemView, QTabWidget, QDialog
+    QInputDialog, QAbstractItemView, QTabWidget, QDialog, QGraphicsOpacityEffect
 )
 from PyQt6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QColor, QAction, QCursor, QFont, QDoubleValidator, QIcon, QMouseEvent
-from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent, QPropertyAnimation, QRect
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent, QPropertyAnimation, QRect, QPoint, QEasingCurve
 from qasync import asyncSlot
 import qtawesome as qta
 
@@ -322,7 +322,7 @@ class ProductCard(QFrame):
     selectionChanged = pyqtSignal(int, bool)
     quickUpdateRequested = pyqtSignal(int, str, int) # ID, Field, Value
 
-    def __init__(self, product, parent_widget):
+    def __init__(self, product, parent_widget, delay=0):
         super().__init__()
         self.product = product
         self.p_widget = parent_widget
@@ -437,6 +437,23 @@ class ProductCard(QFrame):
         c_layout.addLayout(h_btn)
         
         layout.addWidget(content)
+
+        # انیمیشن ورود
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self._entrance_anim(delay)
+
+    def _entrance_anim(self, delay):
+        self.anim = QPropertyAnimation(self, b"pos")
+        self.anim.setDuration(400)
+        self.anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
+        self.fade = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.fade.setDuration(400)
+        self.fade.setStartValue(0)
+        self.fade.setEndValue(1)
+
+        QTimer.singleShot(delay, lambda: (self.anim.start(), self.fade.start()))
 
     def _add_badge(self, text, color, parent, right=False):
         lbl = QLabel(text, parent)
@@ -608,11 +625,16 @@ class ProductsWidget(QWidget):
                 self.empty_state.hide(); self.grid_container.show()
                 cols = max(1, self.grid_container.width() // 280)
                 for i, p in enumerate(prods):
-                    card = ProductCard(p, self)
+                    # اضافه کردن تاخیر برای انیمیشن آبشاری
+                    delay = (i % (cols * 3)) * 50
+                    card = ProductCard(p, self, delay=delay)
                     card.selectionChanged.connect(self.on_card_selection)
                     card.quickUpdateRequested.connect(self.handle_quick_update)
                     self.grid_layout.addWidget(card, i // cols, i % cols)
                     
+                    # موقعیت اولیه برای انیمیشن
+                    card.move(card.x(), card.y() + 20)
+
         except Exception as e: 
             logger.error(f"Refresh error: {e}")
 

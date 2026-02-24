@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, Callable
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QStackedWidget, QFrame, QButtonGroup, QLabel, QGraphicsDropShadowEffect,
-    QSizePolicy, QMessageBox
+    QSizePolicy, QMessageBox, QGraphicsOpacityEffect
 )
 from PyQt6.QtCore import (
     Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
@@ -31,12 +31,12 @@ logger = logging.getLogger("MainWindow")
 
 class MainWindow(QMainWindow):
     PAGE_MAP = {
-        0: ("داشبورد", "fa5s.chart-pie"),
-        1: ("محصولات", "fa5s.box-open"),
-        2: ("دسته‌بندی‌ها", "fa5s.layer-group"),
-        3: ("سفارشات", "fa5s.clipboard-list"),
-        4: ("کاربران", "fa5s.users"),
-        5: ("تنظیمات", "fa5s.cog"),
+        0: ("داشبورد", "fa5s.th-large"),
+        1: ("محصولات", "fa5s.shopping-bag"),
+        2: ("دسته‌بندی‌ها", "fa5s.stream"),
+        3: ("سفارشات", "fa5s.receipt"),
+        4: ("کاربران", "fa5s.user-friends"),
+        5: ("تنظیمات", "fa5s.sliders-h"),
     }
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
@@ -109,6 +109,17 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0) 
         main_layout.setSpacing(0)
+
+        # افکت درخشش پس‌زمینه (Background Glow)
+        self.bg_glow = QFrame(central_widget)
+        self.bg_glow.setObjectName("bg_glow")
+        self.bg_glow.setStyleSheet("""
+            QFrame#bg_glow {
+                background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5,
+                            stop:0 rgba(127, 90, 240, 0.05), stop:1 rgba(22, 22, 26, 0));
+            }
+        """)
+        self.bg_glow.lower() # فرستادن به پشت
 
         # ==================== ۱. سایدبار (Sidebar) ====================
         self.sidebar = QFrame()
@@ -272,7 +283,16 @@ class MainWindow(QMainWindow):
             else:
                 btn.setIcon(qta.icon(icon_name, color="#94a1b2"))
 
+        # انیمیشن تعویض صفحه (Fade In)
+        opacity = QGraphicsOpacityEffect(current_page)
+        current_page.setGraphicsEffect(opacity)
+        self.page_anim = QPropertyAnimation(opacity, b"opacity")
+        self.page_anim.setDuration(300)
+        self.page_anim.setStartValue(0)
+        self.page_anim.setEndValue(1)
+
         self.content_area.setCurrentWidget(current_page)
+        self.page_anim.start()
         
         if hasattr(current_page, "refresh_data"):
             res = current_page.refresh_data()
