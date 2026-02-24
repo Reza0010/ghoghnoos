@@ -11,6 +11,31 @@ from config import ADMIN_USER_IDS
 logger = logging.getLogger("CRUD")
 
 # ======================================================================
+# 0. سیستم لاگ و امنیت (Security & Logging)
+# ======================================================================
+def record_audit_log(db: Session, action: str, admin_id: str = "system", target_type: str = None, target_id: str = None, description: str = None):
+    try:
+        log = models.AuditLog(
+            admin_id=str(admin_id),
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id) if target_id else None,
+            description=description
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Audit Log Error: {e}")
+
+def record_stock_log(db: Session, product_id: int, change: int, reason: str):
+    try:
+        log = models.StockLog(product_id=product_id, change_amount=change, reason=reason)
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Stock Log Error: {e}")
+
+# ======================================================================
 # 1. مدیریت کاربران (User Management)
 # ======================================================================
 def get_user_by_id(db: Session, user_id: str) -> Optional[models.User]:
@@ -272,6 +297,12 @@ def create_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+
+        # ثبت لاگ
+        record_audit_log(db, "create_product", target_type="product", target_id=prod.id, description=f"محصول '{prod.name}' ایجاد شد.")
+        if prod.stock > 0:
+            record_stock_log(db, prod.id, prod.stock, "موجودی اولیه هنگام ایجاد")
+
         return prod
     except Exception as e:
         db.rollback()
@@ -316,6 +347,10 @@ def update_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+
+        # ثبت لاگ
+        record_audit_log(db, "update_product", target_type="product", target_id=prod_id, description=f"محصول '{prod.name}' ویرایش شد.")
+
         return prod
     except Exception as e:
         db.rollback()
@@ -326,9 +361,17 @@ def delete_product(db: Session, prod_id: int):
 
 def bulk_delete_products(db: Session, product_ids: List[int]):
     try:
+        # دریافت نام محصولات قبل از حذف برای لاگ
+        products = db.query(models.Product).filter(models.Product.id.in_(product_ids)).all()
+        prod_names = [p.name for p in products]
+
         # حذف وابسته ها خودکار انجام میشود (Cascade) اما برای اطمینان:
         db.query(models.Product).filter(models.Product.id.in_(product_ids)).delete(synchronize_session=False)
         db.commit()
+
+        for pid, name in zip(product_ids, prod_names):
+            record_audit_log(db, "delete_product", target_type="product", target_id=pid, description=f"محصول '{name}' حذف شد.")
+
         return True
     except SQLAlchemyError:
         db.rollback()
@@ -453,6 +496,11 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
             
         db.commit()
         db.refresh(order)
+
+        # ثبت لاگ موجودی برای هر آیتم
+        for item in order.items:
+            record_stock_log(db, item.product_id, -item.quantity, f"خرید در سفارش #{order.id}")
+
         return order
     except Exception as e:
         db.rollback()

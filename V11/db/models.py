@@ -212,3 +212,23 @@ class Setting(Base):
     value = Column(Text, nullable=True)
     description = Column(String(255), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(String(50), nullable=True) # شناسه ادمینی که تغییر را ایجاد کرده
+    action = Column(String(100), nullable=False) # مثلا: delete_product, change_price
+    target_type = Column(String(50), nullable=True) # مثلا: product, user, order
+    target_id = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class StockLog(Base):
+    __tablename__ = "stock_logs"
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    change_amount = Column(Integer, nullable=False) # مقدار تغییر (+ یا -)
+    reason = Column(String(255), nullable=True) # مثلا: خرید کاربر، اصلاح ادمین
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

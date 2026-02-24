@@ -117,6 +117,28 @@ def init_db():
         logger.critical(f"DB Init Failed: {e}")
         raise
 
+def create_backup():
+    """ایجاد یک نسخه پشتیبان دستی یا دوره‌ای"""
+    if "sqlite" not in DATABASE_URL:
+        return None
+
+    db_path = Path(DATABASE_URL.replace("sqlite:///", ""))
+    backup_dir = db_path.parent / "backups"
+    backup_dir.mkdir(exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"manual_{timestamp}.db"
+
+    try:
+        # در SQLite بهتر است از API مخصوص بک‌آپ استفاده شود تا دیتابیس لاک نشود
+        # اما برای سادگی اینجا از کپی استفاده می‌کنیم (چون WAL فعال است مشکلی نیست)
+        shutil.copy2(db_path, backup_path)
+        logger.info(f"Backup created: {backup_path}")
+        return str(backup_path)
+    except Exception as e:
+        logger.error(f"Backup creation failed: {e}")
+        return None
+
 def get_db() -> Generator[Session, None, None]:
     """Dependency برای استفاده در توابع"""
     db = SessionLocal()

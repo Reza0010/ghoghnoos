@@ -540,6 +540,11 @@ class OrdersWidget(QWidget):
                 continue
             self._add_card_to_column(data)
 
+    def filter_by_order_id(self, order_id):
+        """فیلتر کردن بر اساس یک سفارش خاص (استفاده توسط پالت جستجو)"""
+        self.search_inp.setText(str(order_id))
+        self.filter_cards(str(order_id))
+
     def change_status_safe(self, order_id, new_status):
         asyncio.create_task(self.update_order_status(order_id, new_status))
 

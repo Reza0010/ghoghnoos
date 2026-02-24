@@ -16,6 +16,7 @@ from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon
 import qtawesome as qta
 
 from config import BASE_DIR
+from db.database import create_backup
 
 # ایمپورت ویجت‌ها
 from .dashboard_widget import DashboardWidget
@@ -24,6 +25,7 @@ from .products_widget import ProductsWidget
 from .orders_widget import OrdersWidget
 from .settings_widget import SettingsWidget
 from .users_widget import UsersWidget
+from .command_palette import CommandPalette
 
 logger = logging.getLogger("MainWindow")
 
@@ -71,6 +73,11 @@ class MainWindow(QMainWindow):
         self.check_connection_timer = QTimer(self)
         self.check_connection_timer.timeout.connect(self._safe_check_connection)
         self.check_connection_timer.start(15000) # هر ۱۵ ثانیه
+
+        # تایمر بک‌آپ خودکار (هر ۶ ساعت)
+        self.backup_timer = QTimer(self)
+        self.backup_timer.timeout.connect(self._auto_backup)
+        self.backup_timer.start(6 * 3600 * 1000)
 
         self._toast = None
 
@@ -230,6 +237,9 @@ class MainWindow(QMainWindow):
 
         self.nav_group.idClicked.connect(self.switch_page)
 
+        # پالت دستورات (Ctrl+K)
+        self.command_palette = None
+
         # افزودن ویجت‌ها به لایه اصلی
         main_layout.addWidget(self.sidebar)
         main_layout.addWidget(content_margin)
@@ -357,6 +367,48 @@ class MainWindow(QMainWindow):
         self._toast.show()
         
         QTimer.singleShot(3500, self._toast.close)
+
+    def _auto_backup(self):
+        """اجرای بک‌آپ خودکار در پس‌زمینه"""
+        res = create_backup()
+        if res:
+            logger.info(f"Auto-backup created: {res}")
+
+    def keyPressEvent(self, event):
+        # تشخیص Ctrl+K برای باز کردن پالت جستجو
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_K:
+            self.show_command_palette()
+        else:
+            super().keyPressEvent(event)
+
+    def show_command_palette(self):
+        if not self.command_palette:
+            self.command_palette = CommandPalette(self)
+            self.command_palette.item_selected.connect(self.handle_palette_navigation)
+
+        # نمایش در مرکز پنجره
+        self.command_palette.move(
+            self.x() + (self.width() - self.command_palette.width()) // 2,
+            self.y() + 100
+        )
+        self.command_palette.show()
+        self.command_palette.search_input.setFocus()
+
+    def handle_palette_navigation(self, type_name, item_id):
+        """هدایت ادمین به بخش مربوطه بر اساس انتخاب در پالت"""
+        if type_name == "product":
+            self.switch_page(1)
+            if hasattr(self.pages[1], "search_and_highlight"):
+                self.pages[1].search_and_highlight(item_id)
+        elif type_name == "user":
+            self.switch_page(4)
+            # فرض می‌کنیم UsersWidget متدی برای نمایش جزئیات دارد
+            if hasattr(self.pages[4], "show_user_details_by_id"):
+                self.pages[4].show_user_details_by_id(item_id)
+        elif type_name == "order":
+            self.switch_page(3)
+            if hasattr(self.pages[3], "filter_by_order_id"):
+                self.pages[3].filter_by_order_id(item_id)
 
     def closeEvent(self, event):
         reply = QMessageBox.question(

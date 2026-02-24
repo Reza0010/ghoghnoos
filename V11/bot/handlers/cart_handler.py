@@ -10,12 +10,13 @@ from telegram.error import BadRequest
 from bot.utils import run_db
 from db import crud, models
 from bot import keyboards, responses
+from bot.zarinpal import ZarinPal
 from config import ADMIN_USER_IDS
 
 logger = logging.getLogger("CartHandler")
 
 # وضعیت‌های گفتگوی خرید (Checkout States)
-GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, GET_RECEIPT = range(4)
+GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, CHOOSE_PAYMENT, GET_RECEIPT = range(5)
 
 # ==============================================================================
 # توابع کمکی (Helpers)
@@ -233,7 +234,7 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await show_invoice_step(update.message, context)
 
 async def show_invoice_step(message, context) -> int:
-    """نمایش فاکتور نهایی و اطلاعات کارت بانکی"""
+    """نمایش فاکتور نهایی و انتخاب روش پرداخت"""
     user_id = context._user_id
     items = await run_db(crud.get_cart_items, user_id)
     
@@ -248,8 +249,57 @@ async def show_invoice_step(message, context) -> int:
     
     final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
     final_total = items_total + final_ship
+    context.user_data['final_total'] = final_total
 
-    # دریافت اطلاعات کارت از تنظیمات (پشتیبانی از لیست کارت‌ها)
+    text = (
+        f"💳 <b>فاکتور نهایی سفارش</b>\n\n"
+        f"مجموع کالاها: {int(items_total):,} تومان\n"
+        f"هزینه ارسال: {'رایگان' if final_ship == 0 else f'{int(final_ship):,} تومان'}\n"
+        f"---------------------------\n"
+        f"💰 <b>مبلغ قابل پرداخت: {int(final_total):,} تومان</b>\n\n"
+        f"لطفا روش پرداخت را انتخاب کنید:"
+    )
+
+    kbd = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 پرداخت آنلاین (زرین‌پال)", callback_data="pay_online")],
+        [InlineKeyboardButton("📷 ارسال فیش واریزی (کارت به کارت)", callback_data="pay_offline")]
+    ])
+
+    await message.reply_text(text, reply_markup=kbd, parse_mode='HTML')
+    return CHOOSE_PAYMENT
+
+async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "pay_online":
+        merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
+        if not merchant_id:
+            await query.message.reply_text("⚠️ در حال حاضر پرداخت آنلاین غیرفعال است. لطفا از روش فیش واریزی استفاده کنید.")
+            return await start_offline_payment(query.message, context)
+
+        zp = ZarinPal(merchant_id)
+        amount = context.user_data.get('final_total')
+        desc = f"خرید از ربات فروشگاهی - کاربر {query.from_user.id}"
+
+        # در محیط واقعی آدرس کال‌بک باید ولید باشد
+        res = await zp.create_payment(amount, desc, "https://t.me/your_bot?start=verify")
+
+        if res['status']:
+            context.user_data['authority'] = res['authority']
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 ورود به درگاه پرداخت", url=res['url'])],
+                [InlineKeyboardButton("✅ بررسی وضعیت پرداخت", callback_data="verify_online")]
+            ])
+            await query.message.reply_text("🔗 برای پرداخت آنلاین روی دکمه زیر کلیک کنید. پس از پرداخت، دکمه بررسی وضعیت را بزنید:", reply_markup=kbd)
+            return CHOOSE_PAYMENT
+        else:
+            await query.message.reply_text(f"❌ خطا در اتصال به درگاه: {res.get('error')}")
+            return await start_offline_payment(query.message, context)
+
+    return await start_offline_payment(query.message, context)
+
+async def start_offline_payment(message, context):
     raw_cards = await run_db(crud.get_setting, "bank_cards", "[]")
     try:
         cards = json.loads(raw_cards)
@@ -258,15 +308,53 @@ async def show_invoice_step(message, context) -> int:
         card = {"number": "----", "owner": "مدیریت"}
 
     text = responses.get_checkout_payment(
-        total=items_total,
-        shipping_cost="رایگان" if final_ship == 0 else f"{int(final_ship):,} ت",
-        final_total=final_total,
+        total=context.user_data.get('final_total', 0),
+        shipping_cost="--",
+        final_total=context.user_data.get('final_total', 0),
         card_number=card['number'],
         card_owner=card['owner']
     )
-
     await message.reply_text(text, reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
     return GET_RECEIPT
+
+async def verify_online_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    authority = context.user_data.get('authority')
+    amount = context.user_data.get('final_total')
+
+    if not authority:
+        await query.answer("اطلاعات تراکنش یافت نشد.", show_alert=True)
+        return CHOOSE_PAYMENT
+
+    merchant_id = await run_db(crud.get_setting, "zarinpal_merchant", "")
+    zp = ZarinPal(merchant_id)
+    res = await zp.verify_payment(amount, authority)
+
+    if res['status']:
+        # ثبت سفارش خودکار
+        user = update.effective_user
+        shipping_data = {
+            "address": context.user_data.get('address'),
+            "phone": context.user_data.get('phone'),
+            "postal_code": context.user_data.get('postal_code')
+        }
+        order = await run_db(crud.create_order_from_cart, user.id, shipping_data)
+
+        # آپدیت وضعیت به پرداخت شده
+        def _set_paid(db, oid, ref):
+            o = db.query(models.Order).filter_by(id=oid).first()
+            if o:
+                o.status = "paid"
+                o.tracking_code = f"ZP_REF_{ref}"
+            db.commit()
+        await run_db(_set_paid, order.id, res['ref_id'])
+
+        await query.message.reply_text(f"✅ پرداخت با موفقیت تایید شد!\nکد پیگیری: {res['ref_id']}\nسفارش شما در حال پردازش است.", reply_markup=keyboards.get_main_menu_keyboard())
+        context.user_data.clear()
+        return ConversationHandler.END
+    else:
+        await query.answer("❌ پرداخت تایید نشد یا هنوز واریز نکرده‌اید.", show_alert=True)
+        return CHOOSE_PAYMENT
 
 async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """دریافت فیش و ثبت نهایی سفارش"""
@@ -342,6 +430,10 @@ checkout_conversation_handler = ConversationHandler(
         GET_PHONE: [
             CallbackQueryHandler(handle_phone_choice, pattern=r"^(use_saved_phone|new_phone)$"),
             MessageHandler((filters.TEXT | filters.CONTACT) & ~filters.COMMAND, get_phone)
+        ],
+        CHOOSE_PAYMENT: [
+            CallbackQueryHandler(handle_payment_choice, pattern=r"^(pay_online|pay_offline)$"),
+            CallbackQueryHandler(verify_online_payment, pattern="^verify_online$")
         ],
         GET_RECEIPT: [MessageHandler(filters.PHOTO, get_receipt)],
     },

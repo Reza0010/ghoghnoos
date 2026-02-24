@@ -563,6 +563,11 @@ class ProductsWidget(QWidget):
         dialog.product_saved.connect(self.refresh_data_slot)
         dialog.exec()
 
+    def search_and_highlight(self, product_id):
+        """جستجو و هایلایت کردن یک محصول خاص (استفاده توسط پالت جستجو)"""
+        self.inp_search.setText(str(product_id))
+        asyncio.create_task(self.refresh_data())
+
     @asyncSlot()
     async def refresh_data_slot(self): await self.refresh_data()
 
