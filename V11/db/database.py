@@ -173,6 +173,13 @@ def run_auto_migrations():
             "purchase_price": "NUMERIC(12, 0) DEFAULT 0",
             "image_path": "VARCHAR(512)"
         },
+        "categories": {
+            "icon": "VARCHAR(50)",
+            "color": "VARCHAR(20)",
+            "banner_path": "VARCHAR(512)",
+            "sort_order": "INTEGER DEFAULT 0",
+            "description": "TEXT"
+        },
         "users": {
             "platform": "VARCHAR(20) DEFAULT 'telegram'",
             "saved_address": "TEXT",

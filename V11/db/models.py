@@ -52,6 +52,12 @@ class Category(Base):
     name = Column(String(255), nullable=False, unique=True)
     parent_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=True)
     
+    icon = Column(String(50), nullable=True)
+    color = Column(String(20), nullable=True)
+    banner_path = Column(String(512), nullable=True)
+    sort_order = Column(Integer, default=0)
+    description = Column(Text, nullable=True)
+
     parent = relationship("Category", remote_side=[id], back_populates="children")
     children = relationship("Category", back_populates="parent", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="category", cascade="all, delete-orphan")

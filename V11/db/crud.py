@@ -194,6 +194,48 @@ def delete_category(db: Session, cat_id: int):
     db.query(models.Category).filter_by(id=cat_id).delete()
     db.commit()
 
+def migrate_products(db: Session, from_cat_id: int, to_cat_id: int) -> int:
+    """انتقال تمام محصولات از یک دسته به دسته دیگر"""
+    count = db.query(models.Product).filter_by(category_id=from_cat_id).update(
+        {models.Product.category_id: to_cat_id},
+        synchronize_session=False
+    )
+    db.commit()
+    return count
+
+def get_category_stats(db: Session, cat_id: int) -> Dict[str, Any]:
+    """دریافت آمار سلسله‌مراتبی یک دسته (شامل زیرمجموعه‌ها)"""
+    # دریافت شناسه خود دسته و تمام فرزندانش به صورت بازگشتی (در SQLite ساده)
+    all_ids = [cat_id]
+    subs = db.query(models.Category.id).filter_by(parent_id=cat_id).all()
+    for s in subs:
+        all_ids.append(s[0])
+        # یک سطح پایین‌تر (برای سادگی فعلاً ۲ سطح، اما در آینده بازگشتی)
+        grand_subs = db.query(models.Category.id).filter_by(parent_id=s[0]).all()
+        all_ids.extend([gs[0] for gs in grand_subs])
+
+    product_count = db.query(func.count(models.Product.id)).filter(models.Product.category_id.in_(all_ids)).scalar() or 0
+
+    total_sales = db.query(func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase))\
+        .join(models.Product)\
+        .filter(models.Product.category_id.in_(all_ids)).scalar() or 0
+
+    return {
+        "product_count": product_count,
+        "total_sales": float(total_sales)
+    }
+
+def update_category_hierarchy(db: Session, cat_id: int, new_parent_id: Optional[int]):
+    """بروزرسانی والد برای Drag & Drop"""
+    cat = db.query(models.Category).get(cat_id)
+    if cat:
+        # جلوگیری از لوپ (والد نمی‌تواند فرزند خودش باشد)
+        if new_parent_id == cat_id: return False
+        cat.parent_id = new_parent_id
+        db.commit()
+        return True
+    return False
+
 # ======================================================================
 # 3. مدیریت محصولات
 # ======================================================================
