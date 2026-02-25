@@ -23,6 +23,16 @@ from config import BASE_DIR
 
 logger = logging.getLogger("CategoriesWidget")
 
+# --- پالت رنگی ---
+BG_COLOR = "#16161a"
+PANEL_BG = "#242629"
+ACCENT_COLOR = "#7f5af0"
+SUCCESS_COLOR = "#2cb67d"
+WARNING_COLOR = "#f39c12"
+DANGER_COLOR = "#ef4565"
+TEXT_COLOR = "#fffffe"
+HINT_COLOR = "#94a1b2"
+
 # ==============================================================================
 # Helper: Icon Picker Dialog
 # ==============================================================================
@@ -104,16 +114,6 @@ class InteractiveTree(QTreeWidget):
         new_pid = new_parent.data(0, Qt.ItemDataRole.UserRole) if new_parent else None
 
         self.item_dropped.emit(cid, new_pid)
-
-# --- پالت رنگی ---
-BG_COLOR = "#16161a"
-PANEL_BG = "#242629"
-ACCENT_COLOR = "#7f5af0"
-SUCCESS_COLOR = "#2cb67d"
-WARNING_COLOR = "#f39c12"
-DANGER_COLOR = "#ef4565"
-TEXT_COLOR = "#fffffe"
-HINT_COLOR = "#94a1b2"
 
 class CategoriesWidget(QWidget):
     def __init__(self):
@@ -598,28 +598,6 @@ class CategoriesWidget(QWidget):
             if exclude_id and cat.id == exclude_id:
                 continue
             self.cmb_parent.addItem(cat.name, cat.id)
-
-    def on_item_clicked(self, item):
-        cid = item.data(0, Qt.ItemDataRole.UserRole)
-        pid = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        clean_name = item.text(0).split(" (")[0]
-        
-        self.selected_cat_id = cid
-        self.inp_name.setText(clean_name)
-        self._update_parent_combo(exclude_id=cid)
-        
-        idx = self.cmb_parent.findData(pid)
-        self.cmb_parent.setCurrentIndex(max(0, idx))
-
-        self.lbl_form_title.setText("ویرایش دسته")
-        self.lbl_form_icon.setStyleSheet(f"background: {WARNING_COLOR}15; border-radius: 35px;")
-        self.lbl_form_icon.setPixmap(qta.icon('fa5s.edit', color=WARNING_COLOR).pixmap(30, 30))
-        
-        self.btn_save.setText("✏️ بروزرسانی")
-        self.btn_save.setStyleSheet(f"QPushButton {{ background: {WARNING_COLOR}; color: white; border-radius: 10px; font-weight: bold; }} QPushButton:hover {{ background: #d68910; }}")
-        
-        self.btn_delete.show()
-        self.btn_add_child.show()
 
     def reset_form(self):
         self.selected_cat_id = None

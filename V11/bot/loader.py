@@ -1,4 +1,6 @@
 import logging
+import asyncio
+from bot import responses
 from telegram.ext import (
     Application,
     CommandHandler,

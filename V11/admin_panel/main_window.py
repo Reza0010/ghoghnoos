@@ -7,10 +7,12 @@ from typing import Optional, Dict, Any, Callable
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QStackedWidget, QFrame, QButtonGroup, QLabel, QGraphicsDropShadowEffect,
-    QSizePolicy, QMessageBox, QGraphicsOpacityEffect
+    QSizePolicy, QMessageBox, QGraphicsOpacityEffect, QSystemTrayIcon, QMenu,
+    QPlainTextEdit
 )
 from PyQt6.QtCore import (
-    Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
+    Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot,
+    QObject, pyqtSignal
 )
 from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon, QPixmap
 import qtawesome as qta
@@ -30,6 +32,63 @@ from .command_palette import CommandPalette
 
 logger = logging.getLogger("MainWindow")
 
+# ==============================================================================
+# Helper: Live Log Viewer Widget
+# ==============================================================================
+class LogStreamHandler(logging.Handler, QObject):
+    new_log = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        QObject.__init__(self)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.new_log.emit(msg)
+
+class LogsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        header = QLabel("📜 مانیتورینگ لحظه‌ای لاگ‌ها")
+        header.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
+        layout.addWidget(header)
+
+        self.log_display = QPlainTextEdit()
+        self.log_display.setReadOnly(True)
+        self.log_display.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #0d1117; color: #c9d1d9;
+                font-family: 'Consolas', 'Courier New'; font-size: 12px;
+                border-radius: 10px; padding: 10px; border: 1px solid #30363d;
+            }
+        """)
+        layout.addWidget(self.log_display)
+
+        # دکمه‌های کنترل
+        btn_lay = QHBoxLayout()
+        self.btn_clear = QPushButton("پاکسازی کنسول")
+        self.btn_clear.clicked.connect(self.log_display.clear)
+        self.btn_clear.setStyleSheet("background: #21262d; color: white; padding: 8px; border-radius: 5px;")
+        btn_lay.addStretch(); btn_lay.addWidget(self.btn_clear)
+        layout.addLayout(btn_lay)
+
+        # اتصال به هندلر لاگ
+        self.handler = LogStreamHandler()
+        self.handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', '%H:%M:%S'))
+        self.handler.new_log.connect(self.append_log)
+        logging.getLogger().addHandler(self.handler)
+
+    def append_log(self, text):
+        self.log_display.appendPlainText(text)
+        self.log_display.moveCursor(self.log_display.textCursor().MoveOperation.End)
+
+# ==============================================================================
+# Main Window
+# ==============================================================================
 class MainWindow(QMainWindow):
     PAGE_MAP = {
         0: ("داشبورد", "fa5s.th-large"),
@@ -37,7 +96,8 @@ class MainWindow(QMainWindow):
         2: ("دسته‌بندی‌ها", "fa5s.stream"),
         3: ("سفارشات", "fa5s.receipt"),
         4: ("کاربران", "fa5s.user-friends"),
-        5: ("تنظیمات", "fa5s.sliders-h"),
+        5: ("لاگ‌های زنده", "fa5s.terminal"),
+        6: ("تنظیمات", "fa5s.sliders-h"),
     }
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
@@ -64,6 +124,7 @@ class MainWindow(QMainWindow):
             lambda: CategoriesWidget(),
             lambda: OrdersWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
             lambda: UsersWidget(),
+            lambda: LogsWidget(),
             lambda: SettingsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client)
         ]
         
@@ -81,7 +142,38 @@ class MainWindow(QMainWindow):
         self.backup_timer.timeout.connect(self._auto_backup)
         self.backup_timer.start(6 * 3600 * 1000)
 
+        # تنظیمات Tray
+        self._init_tray()
+
         self._toast = None
+
+    def _init_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.windowIcon())
+
+        tray_menu = QMenu()
+        show_action = tray_menu.addAction("نمایش پنل")
+        show_action.triggered.connect(self.showNormal)
+
+        tray_menu.addSeparator()
+        exit_action = tray_menu.addAction("خروج کامل")
+        exit_action.triggered.connect(QApplication.quit)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            if self.isVisible():
+                self.hide()
+            else:
+                self.showNormal()
+                self.activateWindow()
+
+    def send_notification(self, title, message):
+        """نمایش نوتیفیکیشن بومی سیستم‌عامل"""
+        self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 5000)
 
     def _load_font(self):
         # بررسی چند مسیر احتمالی برای فونت
@@ -294,6 +386,7 @@ class MainWindow(QMainWindow):
         if page_id not in self.pages:
             self.show_loading_state(True)
             try:
+                # فراخوانی لایمبدا برای ساخت ویجت
                 widget = self.page_factories[page_id]()
                 self.pages[page_id] = widget
                 self.content_area.addWidget(widget)
@@ -464,25 +557,28 @@ class MainWindow(QMainWindow):
         """هدایت ادمین به بخش مربوطه بر اساس انتخاب در پالت"""
         if type_name == "product":
             self.switch_page(1)
-            if hasattr(self.pages[1], "search_and_highlight"):
-                self.pages[1].search_and_highlight(item_id)
+            page = self.pages.get(1)
+            if page and hasattr(page, "search_and_highlight"):
+                page.search_and_highlight(item_id)
         elif type_name == "user":
             self.switch_page(4)
-            # فرض می‌کنیم UsersWidget متدی برای نمایش جزئیات دارد
-            if hasattr(self.pages[4], "show_user_details_by_id"):
-                self.pages[4].show_user_details_by_id(item_id)
+            page = self.pages.get(4)
+            if page and hasattr(page, "show_user_details_by_id"):
+                page.show_user_details_by_id(item_id)
         elif type_name == "order":
             self.switch_page(3)
-            if hasattr(self.pages[3], "filter_by_order_id"):
-                self.pages[3].filter_by_order_id(item_id)
+            page = self.pages.get(3)
+            if page and hasattr(page, "filter_by_order_id"):
+                page.filter_by_order_id(item_id)
 
     def closeEvent(self, event):
-        reply = QMessageBox.question(
-            self, 'خروج', "آیا از خروج و توقف مدیریت مطمئن هستید؟",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            event.accept()
-        else:
+        if self.tray_icon.isVisible():
+            self.hide()
+            self.send_notification("پنل مدیریت", "برنامه در پس‌زمینه در حال اجرا است.")
             event.ignore()
+        else:
+            event.accept()
+
+    def full_quit(self):
+        """خروج کامل از برنامه"""
+        QApplication.quit()

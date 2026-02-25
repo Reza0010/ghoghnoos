@@ -197,8 +197,17 @@ class SettingsWidget(QWidget):
         card_adm = SettingCard("مدیریت مدیران (Admins)")
         self.inp_admin_ids = QTextEdit(); self.inp_admin_ids.setPlaceholderText("آیدی‌های عددی ادمین‌ها را با کاما جدا کنید\nمثال: 1234567, 9876543")
         self.inp_admin_ids.setMaximumHeight(80)
-        card_adm.add_widget(QLabel("لیست ادمین‌ها:"))
+
+        self.inp_admin_user = QLineEdit(); self.inp_admin_user.setPlaceholderText("نام کاربری پنل")
+        self.inp_admin_pass = QLineEdit(); self.inp_admin_pass.setPlaceholderText("رمز عبور جدید پنل")
+        self.inp_admin_pass.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+
+        card_adm.add_widget(QLabel("لیست ادمین‌های ربات (Telegram IDs):"))
         card_adm.add_widget(self.inp_admin_ids)
+        card_adm.add_widget(QLabel("نام کاربری پنل دسکتاپ:"))
+        card_adm.add_widget(self.inp_admin_user)
+        card_adm.add_widget(QLabel("رمز عبور پنل دسکتاپ:"))
+        card_adm.add_widget(self.inp_admin_pass)
         layout.addWidget(card_adm)
 
         btn_save = QPushButton("💾 ذخیره و راه‌اندازی مجدد سرویس‌ها")
@@ -432,6 +441,8 @@ class SettingsWidget(QWidget):
             self.inp_tg_token.setText(data.get("tg_bot_token", ""))
             self.inp_rb_token.setText(data.get("rb_bot_token", ""))
             self.inp_admin_ids.setPlainText(data.get("admin_ids", ""))
+            self.inp_admin_user.setText(data.get("admin_username", "admin"))
+            self.inp_admin_pass.setText(data.get("admin_password", "1234"))
 
             # Templates
             self.tmpl_welcome.setPlainText(data.get("tmpl_welcome", ""))
@@ -538,6 +549,7 @@ class SettingsWidget(QWidget):
         with next(get_db()) as db:
             keys = [
                 "tg_bot_token", "rb_bot_token", "admin_ids",
+                "admin_username", "admin_password",
                 "tmpl_welcome", "tmpl_order", "tmpl_support",
                 "zp_merchant", "zp_callback", "pay_online_active", "pay_card_active", "currency",
                 "shop_name", "shop_logo", "accent_color",
@@ -556,7 +568,9 @@ class SettingsWidget(QWidget):
         data = {
             "tg_bot_token": self.inp_tg_token.text(),
             "rb_bot_token": self.inp_rb_token.text(),
-            "admin_ids": self.inp_admin_ids.toPlainText()
+            "admin_ids": self.inp_admin_ids.toPlainText(),
+            "admin_username": self.inp_admin_user.text(),
+            "admin_password": self.inp_admin_pass.text()
         }
         await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_all_settings(data))
         self.window().show_toast("تنظیمات اصلی ذخیره شد. برای اعمال تغییرات توکن، سرویس‌ها را ریستارت کنید.")
