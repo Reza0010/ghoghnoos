@@ -406,13 +406,20 @@ class MainWindow(QMainWindow):
             else:
                 btn.setIcon(qta.icon(icon_name, color="#94a1b2"))
 
-        # انیمیشن تعویض صفحه (Fade In)
-        opacity = QGraphicsOpacityEffect(current_page)
-        current_page.setGraphicsEffect(opacity)
-        self.page_anim = QPropertyAnimation(opacity, b"opacity")
-        self.page_anim.setDuration(300)
-        self.page_anim.setStartValue(0)
-        self.page_anim.setEndValue(1)
+        # انیمیشن تعویض صفحه (Fade In) - بهینه‌سازی شده برای جلوگیری از تداخل Painter
+        eff = current_page.graphicsEffect()
+        if not isinstance(eff, QGraphicsOpacityEffect):
+            eff = QGraphicsOpacityEffect(current_page)
+            current_page.setGraphicsEffect(eff)
+
+        if hasattr(self, 'page_anim'):
+            self.page_anim.stop()
+
+        self.page_anim = QPropertyAnimation(eff, b"opacity")
+        self.page_anim.setDuration(350)
+        self.page_anim.setStartValue(0.0)
+        self.page_anim.setEndValue(1.0)
+        self.page_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
 
         self.content_area.setCurrentWidget(current_page)
         self.page_anim.start()

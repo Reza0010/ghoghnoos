@@ -122,7 +122,11 @@ class ToggleSwitch(QCheckBox):
         self.animation.start()
 
     def paintEvent(self, event):
+        if not self.isVisible():
+            return
         p = QPainter(self)
+        if not p.isActive():
+            return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setBrush(QBrush(QColor(SUCCESS_COLOR if self.isChecked() else "#4a4a62")))
         p.setPen(Qt.PenStyle.NoPen)
@@ -266,13 +270,19 @@ class SettingsWidget(QWidget):
 
         current_widget = self.pages_stack.widget(index)
 
-        # انیمیشن تعویض تب (Fade In)
-        opacity = QGraphicsOpacityEffect(current_widget)
-        current_widget.setGraphicsEffect(opacity)
-        self.fade_anim = QPropertyAnimation(opacity, b"opacity")
+        # انیمیشن تعویض تب (Fade In) - بهینه‌سازی شده برای جلوگیری از تداخل Painter
+        eff = current_widget.graphicsEffect()
+        if not isinstance(eff, QGraphicsOpacityEffect):
+            eff = QGraphicsOpacityEffect(current_widget)
+            current_widget.setGraphicsEffect(eff)
+
+        if hasattr(self, 'fade_anim'):
+            self.fade_anim.stop()
+
+        self.fade_anim = QPropertyAnimation(eff, b"opacity")
         self.fade_anim.setDuration(400)
-        self.fade_anim.setStartValue(0)
-        self.fade_anim.setEndValue(1)
+        self.fade_anim.setStartValue(0.0)
+        self.fade_anim.setEndValue(1.0)
         self.fade_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
 
         self.pages_stack.setCurrentIndex(index)

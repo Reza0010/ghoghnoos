@@ -133,7 +133,13 @@ class CircularKPI(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        if not self.isVisible():
+            return
+
         painter = QPainter(self)
+        if not painter.isActive():
+            return
+
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
