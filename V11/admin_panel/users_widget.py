@@ -328,7 +328,15 @@ class UserCard(QFrame):
 
         h_top.addWidget(self.chk_select)
         h_top.addWidget(ico)
-        h_top.addLayout(v_info)
+
+        v_badge = QVBoxLayout()
+        v_badge.setSpacing(2)
+        lbl_badge = QLabel(self.badge['txt'])
+        lbl_badge.setStyleSheet(f"color: {self.badge['col']}; font-size: 9px; font-weight: bold; background: {self.badge['col']}15; padding: 2px 6px; border-radius: 4px;")
+        v_badge.addWidget(lbl_badge)
+        v_badge.addLayout(v_info)
+
+        h_top.addLayout(v_badge)
         h_top.addStretch()
         h_top.addWidget(lbl_plat)
         layout.addLayout(h_top)
@@ -422,11 +430,23 @@ class UserCard(QFrame):
         self.selectionChanged.emit(str(self.user_id), state == 2)
 
     def open_chat(self):
-        if self.platform == 'telegram':
-            webbrowser.open(f"tg://user?id={self.user_id}")
-        else:
-            QApplication.clipboard().setText(str(self.user_id))
-            self.parent_widget.window().show_toast("شناسه روبیکا کپی شد.")
+        """ارسال پیام مستقیم از طریق ربات"""
+        msg, ok = QInputDialog.getMultiLineText(self, "ارسال پیام مستقیم", f"متن پیام برای {self.user.full_name}:")
+        if ok and msg:
+            asyncio.create_task(self._async_send_direct_message(msg))
+
+    async def _async_send_direct_message(self, text):
+        try:
+            if self.platform == 'telegram' and self.parent_widget.bot_app:
+                await self.parent_widget.bot_app.bot.send_message(chat_id=self.user_id, text=text)
+                self.parent_widget.window().show_toast("پیام تلگرام ارسال شد.")
+            elif self.platform == 'rubika' and self.parent_widget.rubika_client:
+                await self.parent_widget.rubika_client.send_message(chat_id=self.user_id, text=text)
+                self.parent_widget.window().show_toast("پیام روبیکا ارسال شد.")
+            else:
+                self.parent_widget.window().show_toast("سرویس ربات متصل نیست!", is_error=True)
+        except Exception as e:
+            self.parent_widget.window().show_toast(f"خطا در ارسال: {str(e)}", is_error=True)
 
     def open_note(self):
         self.show_details()

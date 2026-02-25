@@ -160,7 +160,19 @@ class SettingsWidget(QWidget):
         self.nav_list.setCurrentRow(0)
 
     def change_page(self, index):
+        current_widget = self.pages_stack.widget(index)
+
+        # انیمیشن تعویض تب (Fade In)
+        opacity = QGraphicsOpacityEffect(current_widget)
+        current_widget.setGraphicsEffect(opacity)
+        self.fade_anim = QPropertyAnimation(opacity, b"opacity")
+        self.fade_anim.setDuration(400)
+        self.fade_anim.setStartValue(0)
+        self.fade_anim.setEndValue(1)
+        self.fade_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
         self.pages_stack.setCurrentIndex(index)
+        self.fade_anim.start()
 
     def _ui_core_settings(self):
         page = QScrollArea(); page.setWidgetResizable(True); page.setStyleSheet("background: transparent; border: none;")
@@ -328,9 +340,16 @@ class SettingsWidget(QWidget):
 
         # Theme
         card_theme = SettingCard("رنگ سازمانی (Accent Color)")
-        self.btn_pick_color = QPushButton("انتخاب رنگ"); self.btn_pick_color.clicked.connect(self.pick_accent_color)
-        self.lbl_color_preview = QLabel(); self.lbl_color_preview.setFixedSize(50, 30); self.lbl_color_preview.setStyleSheet("border-radius: 5px;")
-        h_col = QHBoxLayout(); h_col.addWidget(self.btn_pick_color); h_col.addWidget(self.lbl_color_preview); h_col.addStretch()
+        self.btn_pick_color = QPushButton("انتخاب رنگ")
+        self.btn_pick_color.clicked.connect(self.pick_accent_color)
+        self.lbl_color_preview = QLabel()
+        self.lbl_color_preview.setFixedSize(50, 30)
+        self.lbl_color_preview.setStyleSheet("border-radius: 5px; border: 1px solid white;")
+
+        h_col = QHBoxLayout()
+        h_col.addWidget(self.btn_pick_color)
+        h_col.addWidget(self.lbl_color_preview)
+        h_col.addStretch()
         card_theme.add_layout(h_col)
         layout.addWidget(card_theme)
 
@@ -590,11 +609,18 @@ class SettingsWidget(QWidget):
 
     def pick_accent_color(self):
         from PyQt6.QtWidgets import QColorDialog
-        col = QColorDialog.getColor()
+        # استفاده از رنگ فعلی به عنوان پیش‌فرض
+        current_style = self.lbl_color_preview.styleSheet()
+        match = re.search(r'background:\s*(#[0-9a-fA-F]+)', current_style)
+        initial = QColor(match.group(1)) if match else QColor(ACCENT_COLOR)
+
+        col = QColorDialog.getColor(initial, self, "انتخاب رنگ سازمانی")
         if col.isValid():
             hex_col = col.name()
             self.lbl_color_preview.setStyleSheet(f"background: {hex_col}; border: 1px solid white;")
-            with next(get_db()) as db: crud.set_setting(db, "accent_color", hex_col)
+            with next(get_db()) as db:
+                crud.set_setting(db, "accent_color", hex_col)
+            self.window().show_toast("رنگ با موفقیت تغییر کرد. برای اعمال سراسری پنل را ریستارت کنید.")
 
     async def load_audit_logs(self):
         loop = asyncio.get_running_loop()

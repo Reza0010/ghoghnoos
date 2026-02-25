@@ -200,7 +200,17 @@ class StatCard(QFrame):
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._update_count)
 
+        # Entrance Animation
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self.fade_anim = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.fade_anim.setDuration(800)
+        self.fade_anim.setStartValue(0)
+        self.fade_anim.setEndValue(1)
+        self.fade_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
     def set_data(self, value, trend_val=None):
+        self.fade_anim.start()
         self.target_value = value
         self.current_value = 0
         self.step = max(1, int(value / 30)) 
@@ -435,6 +445,10 @@ class DashboardWidget(QWidget):
         if not self._data_loaded:
             QTimer.singleShot(300, self.refresh_data)
             self._data_loaded = True
+
+        # Trigger entrance animations for cards if data exists
+        for card in [self.card_rev_tg, self.card_rev_rb, self.card_orders, self.card_users]:
+            card.fade_anim.start()
 
     @asyncSlot()
     async def refresh_data(self):

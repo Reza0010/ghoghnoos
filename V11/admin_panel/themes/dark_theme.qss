@@ -157,6 +157,7 @@ QTabWidget::pane {
     border: 1px solid rgba(255, 255, 255, 0.05);
     background: rgba(22, 22, 26, 0.4);
     border-radius: 12px;
+    top: -1px; /* Overlap border */
 }
 QTabBar::tab {
     background: transparent;
@@ -175,11 +176,48 @@ QTabBar::tab:selected {
 
 /* Status Indicators */
 QLabel#status_indicator {
-    min-width: 10px;
-    max-width: 10px;
-    min-height: 10px;
-    max-height: 10px;
-    border-radius: 5px;
+    min-width: 12px;
+    max-width: 12px;
+    min-height: 12px;
+    max-height: 12px;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
 }
-QLabel#status_indicator[status="online"] { background-color: #2cb67d; }
-QLabel#status_indicator[status="offline"] { background-color: #ef476f; }
+QLabel#status_indicator[status="online"] {
+    background-color: #2cb67d;
+}
+QLabel#status_indicator[status="offline"] {
+    background-color: #ef476f;
+}
+
+/* 11. Command Palette Specific */
+QFrame#PaletteContainer {
+    background-color: rgba(22, 22, 26, 0.95);
+    border: 1px solid #7f5af0;
+}
+
+QListWidget#PaletteList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QListWidget#PaletteList::item {
+    height: 60px;
+    padding-right: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #fffffe;
+}
+QListWidget#PaletteList::item:selected {
+    background: rgba(127, 90, 240, 0.2);
+    border-right: 3px solid #7f5af0;
+}
+
+/* 12. Notification Pulse (Indicator only) */
+QLabel#pulse_dot {
+    background-color: #ef476f;
+    border-radius: 4px;
+    min-width: 8px;
+    max-width: 8px;
+    min-height: 8px;
+    max-height: 8px;
+}

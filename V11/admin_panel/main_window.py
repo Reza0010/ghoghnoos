@@ -70,9 +70,10 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.load_stylesheet()
         
-        # تایمر بررسی وضعیت اتصال
+        # تایمر بررسی وضعیت اتصال و نوتیفیکیشن‌ها
         self.check_connection_timer = QTimer(self)
         self.check_connection_timer.timeout.connect(self._safe_check_connection)
+        self.check_connection_timer.timeout.connect(self._check_new_notifications)
         self.check_connection_timer.start(15000) # هر ۱۵ ثانیه
 
         # تایمر بک‌آپ خودکار (هر ۶ ساعت)
@@ -171,7 +172,13 @@ class MainWindow(QMainWindow):
         self.nav_group.setExclusive(True)
         self.nav_buttons = []
 
+        self.nav_indicators = {}
         for index, (text, icon) in self.PAGE_MAP.items():
+            btn_container = QWidget()
+            btn_lay = QHBoxLayout(btn_container)
+            btn_lay.setContentsMargins(0, 0, 0, 0)
+            btn_lay.setSpacing(0)
+
             btn = QPushButton(f"  {text}")
             btn.setIcon(qta.icon(icon, color="#94a1b2"))
             btn.setIconSize(QSize(20, 20))
@@ -180,10 +187,21 @@ class MainWindow(QMainWindow):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setProperty("original_text", f"  {text}")
             btn.setProperty("icon_name", icon)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+            # نقطه اعلان (Pulse Indicator)
+            indicator = QLabel()
+            indicator.setObjectName("pulse_dot")
+            indicator.setFixedSize(8, 8)
+            indicator.setVisible(False)
+            self.nav_indicators[index] = indicator
+
+            btn_lay.addWidget(btn)
+            btn_lay.addWidget(indicator)
             
             self.nav_group.addButton(btn, index)
             self.nav_buttons.append(btn)
-            sidebar_layout.addWidget(btn)
+            sidebar_layout.addWidget(btn_container)
 
         sidebar_layout.addStretch()
 
@@ -357,14 +375,30 @@ class MainWindow(QMainWindow):
         # وضعیت تلگرام
         tg_status = "online" if self.bot_application else "offline"
         self.tg_indicator.setProperty("status", tg_status)
-        self.tg_indicator.setStyleSheet("") # ریست استایل برای اعمال تغییرات
+        self.tg_indicator.setStyleSheet("/* force refresh */")
         self.tg_indicator.setToolTip("آنلاین" if self.bot_application else "آفلاین")
         
         # وضعیت روبیکا
         rb_status = "online" if self.rubika_client else "offline"
         self.rb_indicator.setProperty("status", rb_status)
-        self.rb_indicator.setStyleSheet("")
+        self.rb_indicator.setStyleSheet("/* force refresh */")
         self.rb_indicator.setToolTip("آنلاین" if self.rubika_client else "آفلاین")
+
+    def _check_new_notifications(self):
+        """بررسی وجود سفارشات یا تیکت‌های جدید برای نمایش نقطه قرمز"""
+        asyncio.create_task(self._async_check_notifications())
+
+    async def _async_check_notifications(self):
+        loop = asyncio.get_running_loop()
+        def check():
+            with next(get_db()) as db:
+                new_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
+                # فرض بر وجود مدل تیکت در آینده، فعلاً فقط سفارش
+                return {"orders": new_orders > 0}
+
+        res = await loop.run_in_executor(None, check)
+        # آپدیت ایندیکیتور سفارشات (ایندکس ۳ در PAGE_MAP)
+        self.nav_indicators[3].setVisible(res.get("orders", False))
 
     def _handle_restart_click(self):
         self.show_toast("درخواست ریستارت ارسال شد...")
