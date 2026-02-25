@@ -392,6 +392,28 @@ def get_all_products_raw(db: Session):
     """دریافت تمام محصولات برای خروجی اکسل"""
     return db.query(models.Product).options(joinedload(models.Product.category)).all()
 
+def bulk_update_products(db: Session, updates: List[Dict[str, Any]]):
+    """آپدیت گروهی محصولات (برای Bulk Edit)"""
+    try:
+        for item in updates:
+            pid = item.pop('id', None)
+            if not pid: continue
+
+            # ثبت لاگ موجودی اگر تغییر کرده باشد
+            if 'stock' in item:
+                old_prod = db.query(models.Product).filter_by(id=pid).first()
+                if old_prod and old_prod.stock != item['stock']:
+                    change = int(item['stock']) - old_prod.stock
+                    record_stock_log(db, pid, change, "ویرایش گروهی در پنل")
+
+            db.query(models.Product).filter_by(id=pid).update(item)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Bulk Update Error: {e}")
+        return False
+
 # ======================================================================
 # 4. سبد خرید
 # ======================================================================

@@ -104,6 +104,7 @@ class ProductVariant(Base):
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(100), nullable=False) # مثلا: قرمز، XL
+    color_code = Column(String(20), nullable=True) # کد هگز رنگ (اختیاری)
     price_adjustment = Column(Numeric(12, 0), default=0) # مبلغ اضافه یا کسر شده
     stock = Column(Integer, default=0)
 

@@ -18,7 +18,7 @@ class ZarinPal:
         """
         payload = {
             "merchant_id": self.merchant_id,
-            "amount": int(amount) * 10, # تبدیل تومان به ریال برای زرین پال
+            "amount": int(amount), # زرین پال v4 به تومان است
             "description": description,
             "callback_url": callback_url,
             "metadata": {}
@@ -50,7 +50,7 @@ class ZarinPal:
         """
         payload = {
             "merchant_id": self.merchant_id,
-            "amount": int(amount) * 10, # تبدیل تومان به ریال
+            "amount": int(amount), # تومان
             "authority": authority
         }
 

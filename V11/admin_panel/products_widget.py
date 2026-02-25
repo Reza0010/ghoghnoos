@@ -19,6 +19,7 @@ from PyQt6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QColor, QAction, Q
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent, QPropertyAnimation, QRect, QPoint, QEasingCurve
 from qasync import asyncSlot
 import qtawesome as qta
+from PIL import Image, ImageOps
 
 from db.database import get_db
 from db import crud
@@ -42,6 +43,50 @@ BORDER_COLOR = "#2e2e38"
 # ==============================================================================
 # Helper Widgets
 # ==============================================================================
+class ImageCropperDialog(QDialog):
+    def __init__(self, image_path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("برش تصویر (۱:۱)")
+        self.setFixedSize(600, 700)
+        self.image_path = image_path
+        self.final_path = None
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        self.lbl_img = QLabel()
+        self.lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pixmap = QPixmap(self.image_path)
+        self.lbl_img.setPixmap(self.pixmap.scaled(550, 550, Qt.AspectRatioMode.KeepAspectRatio))
+        layout.addWidget(self.lbl_img)
+
+        btn_crop = QPushButton("✅ تایید و برش خودکار مربع")
+        btn_crop.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px; border-radius: 8px; font-weight: bold;")
+        btn_crop.clicked.connect(self.do_crop)
+        layout.addWidget(btn_crop)
+
+    def do_crop(self):
+        try:
+            with Image.open(self.image_path) as img:
+                # برش مربع مرکزی
+                width, height = img.size
+                size = min(width, height)
+                left = (width - size) / 2
+                top = (height - size) / 2
+                right = (width + size) / 2
+                bottom = (height + size) / 2
+                img = img.crop((left, top, right, bottom))
+                img = img.resize((1080, 1080), Image.Resampling.LANCZOS)
+
+                # ذخیره موقت
+                ext = Path(self.image_path).suffix
+                temp_path = Path(self.image_path).parent / f"crop_{datetime.now().strftime('%f')}{ext}"
+                img.save(temp_path, quality=85, optimize=True)
+                self.final_path = str(temp_path)
+                self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در پردازش تصویر: {e}")
+
 class FormattedPriceInput(QLineEdit):
     def __init__(self, parent=None, placeholder="0"):
         super().__init__(parent)
@@ -81,12 +126,29 @@ class TagsInput(QLineEdit):
 class MultiImageManager(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAcceptDrops(True)
         self.image_paths = []
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(10)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.refresh_ui()
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls(): event.accept()
+        else: event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        files = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+        self.process_new_images(files)
+
+    def process_new_images(self, files):
+        for f in files:
+            if Path(f).suffix.lower() in ['.jpg', '.png', '.jpeg', '.webp']:
+                # باز کردن کراپ خودکار
+                crop = ImageCropperDialog(f, self)
+                if crop.exec():
+                    self.add_images([crop.final_path])
 
     def set_images(self, paths): self.image_paths = paths; self.refresh_ui()
     def get_images(self): return self.image_paths
@@ -129,41 +191,173 @@ class MultiImageManager(QWidget):
 
     def browse_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "انتخاب تصاویر", "", "Images (*.jpg *.png *.jpeg *.webp)")
-        if files: self.add_images(files)
+        if files: self.process_new_images(files)
 
 class VariantManager(QTableWidget):
     def __init__(self):
-        super().__init__(0, 4)
-        self.setHorizontalHeaderLabels(["نام متغیر", "تفاوت قیمت", "موجودی", "عملیات"])
+        super().__init__(0, 5)
+        self.setHorizontalHeaderLabels(["نام متغیر", "رنگ", "تفاوت قیمت", "موجودی", "عملیات"])
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setStyleSheet(f"QTableWidget {{ background: {BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; color: {TEXT_MAIN}; gridline-color: #333; }} QHeaderView::section {{ background: {PANEL_BG}; color: {TEXT_SUB}; padding: 8px; border: none; font-weight: bold; }}")
 
-    def add_row(self, name="", price_adj=0, stock=0):
+    def add_row(self, name="", price_adj=0, stock=0, color=None):
         row = self.rowCount()
         self.insertRow(row)
         inp_name = QLineEdit(name); inp_name.setPlaceholderText("مثال: قرمز")
         inp_name.setStyleSheet(f"background: {BG_COLOR}; color: {TEXT_MAIN}; border: none; padding: 5px;")
         self.setCellWidget(row, 0, inp_name)
+
+        btn_color = QPushButton()
+        btn_color.setFixedSize(30, 25)
+        curr_col = color if color else "#ffffff"
+        btn_color.setStyleSheet(f"background: {curr_col}; border: 1px solid {BORDER_COLOR}; border-radius: 4px;")
+        btn_color.setProperty("hex", curr_col)
+        btn_color.clicked.connect(lambda: self._pick_row_color(btn_color))
+        self.setCellWidget(row, 1, btn_color)
+
         inp_price = FormattedPriceInput(placeholder="0"); inp_price.setValue(price_adj)
-        self.setCellWidget(row, 1, inp_price)
+        self.setCellWidget(row, 2, inp_price)
         inp_stock = QSpinBox(); inp_stock.setRange(0, 100000); inp_stock.setValue(stock)
         inp_stock.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         inp_stock.setStyleSheet(f"background: {BG_COLOR}; color: {TEXT_MAIN}; border: none; padding: 5px;")
-        self.setCellWidget(row, 2, inp_stock)
+        self.setCellWidget(row, 3, inp_stock)
         btn_del = QPushButton(); btn_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
         btn_del.setStyleSheet("background: transparent; border: none;")
         btn_del.clicked.connect(lambda: self.removeRow(self.indexAt(btn_del.pos()).row()))
-        self.setCellWidget(row, 3, btn_del)
+        self.setCellWidget(row, 4, btn_del)
+
+    def _pick_row_color(self, btn):
+        from PyQt6.QtWidgets import QColorDialog
+        col = QColorDialog.getColor(QColor(btn.property("hex")))
+        if col.isValid():
+            btn.setStyleSheet(f"background: {col.name()}; border: 1px solid {BORDER_COLOR}; border-radius: 4px;")
+            btn.setProperty("hex", col.name())
 
     def get_data(self) -> List[dict]:
         variants = []
         for i in range(self.rowCount()):
-            name_w = self.cellWidget(i, 0); price_w = self.cellWidget(i, 1); stock_w = self.cellWidget(i, 2)
+            name_w = self.cellWidget(i, 0); color_w = self.cellWidget(i, 1)
+            price_w = self.cellWidget(i, 2); stock_w = self.cellWidget(i, 3)
             if name_w and name_w.text().strip():
-                variants.append({"name": name_w.text().strip(), "price_adjustment": price_w.value(), "stock": stock_w.value()})
+                variants.append({
+                    "name": name_w.text().strip(),
+                    "color_code": color_w.property("hex") if color_w else None,
+                    "price_adjustment": price_w.value(),
+                    "stock": stock_w.value()
+                })
         return variants
+
+# ==============================================================================
+# Dialog: Bulk Management
+# ==============================================================================
+class BulkEditDialog(QDialog):
+    saved = pyqtSignal()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("ویرایش گروهی محصولات")
+        self.resize(1000, 600)
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self.setStyleSheet(f"QDialog {{ background: {BG_COLOR}; }}")
+        self.setup_ui()
+        asyncio.create_task(self.load_data())
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self); layout.setContentsMargins(20, 20, 20, 20)
+
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["ID", "نام محصول", "قیمت (تومان)", "قیمت تخفیف", "موجودی"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setStyleSheet(f"QTableWidget {{ background: {PANEL_BG}; color: white; border: 1px solid {BORDER_COLOR}; }} QHeaderView::section {{ background: {BG_COLOR}; color: {TEXT_SUB}; padding: 10px; }}")
+        layout.addWidget(self.table)
+
+        btn_box = QHBoxLayout()
+        btn_save = QPushButton("💾 ذخیره تغییرات نهایی")
+        btn_save.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px 30px; border-radius: 8px; font-weight: bold;")
+        btn_save.clicked.connect(self.save_all)
+        btn_box.addStretch(); btn_box.addWidget(btn_save)
+        layout.addLayout(btn_box)
+
+    async def load_data(self):
+        loop = asyncio.get_running_loop()
+        prods = await loop.run_in_executor(None, lambda: crud.get_all_products_raw(next(get_db())))
+        self.table.setRowCount(len(prods))
+        for i, p in enumerate(prods):
+            self.table.setItem(i, 0, QTableWidgetItem(str(p.id)))
+            self.table.item(i, 0).setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self.table.setItem(i, 1, QTableWidgetItem(p.name))
+            self.table.setItem(i, 2, QTableWidgetItem(str(int(p.price))))
+            self.table.setItem(i, 3, QTableWidgetItem(str(int(p.discount_price or 0))))
+            self.table.setItem(i, 4, QTableWidgetItem(str(p.stock)))
+
+    @asyncSlot()
+    async def save_all(self):
+        updates = []
+        for i in range(self.table.rowCount()):
+            try:
+                updates.append({
+                    "id": int(self.table.item(i, 0).text()),
+                    "name": self.table.item(i, 1).text(),
+                    "price": int(self.table.item(i, 2).text().replace(",", "")),
+                    "discount_price": int(self.table.item(i, 3).text().replace(",", "")),
+                    "stock": int(self.table.item(i, 4).text())
+                })
+            except: continue
+
+        loop = asyncio.get_running_loop()
+        success = await loop.run_in_executor(None, lambda: crud.bulk_update_products(next(get_db()), updates))
+        if success:
+            self.saved.emit(); self.accept()
+
+class BatchPricingDialog(QDialog):
+    applied = pyqtSignal()
+    def __init__(self, parent, product_ids):
+        super().__init__(parent)
+        self.product_ids = product_ids
+        self.setWindowTitle("تغییر قیمت گروهی")
+        self.setFixedWidth(400)
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self.setStyleSheet(f"QDialog {{ background: {BG_COLOR}; }}")
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self); layout.setContentsMargins(20, 20, 20, 20); layout.setSpacing(15)
+        layout.addWidget(QLabel(f"تغییر قیمت برای {len(self.product_ids)} محصول منتخب:"))
+
+        self.cmb_type = QComboBox()
+        self.cmb_type.addItems(["افزایش درصدی (+%)", "کاهش درصدی (-%)", "افزایش مبلغ ثابت (+ تومان)", "کاهش مبلغ ثابت (- تومان)"])
+        self.cmb_type.setStyleSheet(f"background: {PANEL_BG}; color: white; padding: 10px; border-radius: 8px;")
+        layout.addWidget(self.cmb_type)
+
+        self.inp_val = QSpinBox(); self.inp_val.setRange(0, 1000000000); self.inp_val.setSingleStep(1000)
+        self.inp_val.setStyleSheet(f"background: {PANEL_BG}; color: white; padding: 10px; border-radius: 8px;")
+        layout.addWidget(self.inp_val)
+
+        btn_apply = QPushButton("اعمال تغییرات")
+        btn_apply.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 12px; border-radius: 8px; font-weight: bold;")
+        btn_apply.clicked.connect(self.apply_batch)
+        layout.addWidget(btn_apply)
+
+    @asyncSlot()
+    async def apply_batch(self):
+        mode = self.cmb_type.currentIndex()
+        val = self.inp_val.value()
+
+        def process():
+            with next(get_db()) as db:
+                prods = db.query(models.Product).filter(models.Product.id.in_(self.product_ids)).all()
+                for p in prods:
+                    old_price = float(p.price)
+                    if mode == 0: p.price = old_price * (1 + val/100)
+                    elif mode == 1: p.price = old_price * (1 - val/100)
+                    elif mode == 2: p.price = old_price + val
+                    elif mode == 3: p.price = max(0, old_price - val)
+                db.commit()
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, process)
+        self.applied.emit(); self.accept()
 
 # ==============================================================================
 # Dialog: Editor
@@ -206,7 +400,22 @@ class ProductEditorDialog(QDialog):
         grid.addWidget(QLabel("نام:"), 0, 0); grid.addWidget(self.inp_name, 0, 1)
         grid.addWidget(QLabel("دسته:"), 1, 0); grid.addWidget(self.inp_cat, 1, 1)
         grid.addWidget(QLabel("برند:"), 2, 0); grid.addWidget(self.inp_brand, 2, 1)
-        l_main.addLayout(grid); l_main.addWidget(QLabel("توضیحات:")); l_main.addWidget(self.inp_desc)
+        l_main.addLayout(grid); l_main.addWidget(QLabel("توضیحات:"));
+
+        # Toolbar for Rich Text
+        rt_tools = QHBoxLayout(); rt_tools.setSpacing(5)
+        btn_bold = QPushButton(); btn_bold.setIcon(qta.icon('fa5s.bold', color=TEXT_SUB)); btn_bold.setFixedSize(30,30)
+        btn_bold.clicked.connect(lambda: self.inp_desc.setFontWeight(QFont.Weight.Bold if self.inp_desc.fontWeight() != QFont.Weight.Bold else QFont.Weight.Normal))
+        btn_italic = QPushButton(); btn_italic.setIcon(qta.icon('fa5s.italic', color=TEXT_SUB)); btn_italic.setFixedSize(30,30)
+        btn_italic.clicked.connect(lambda: self.inp_desc.setFontItalic(not self.inp_desc.fontItalic()))
+        btn_list = QPushButton(); btn_list.setIcon(qta.icon('fa5s.list-ul', color=TEXT_SUB)); btn_list.setFixedSize(30,30)
+        btn_list.clicked.connect(lambda: self.inp_desc.insertHtml("<ul><li></li></ul>"))
+        for b in [btn_bold, btn_italic, btn_list]:
+            b.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-radius: 4px;")
+            rt_tools.addWidget(b)
+        rt_tools.addStretch()
+        l_main.addLayout(rt_tools)
+        l_main.addWidget(self.inp_desc)
         
         # Price Tab
         tab_price = QWidget(); l_price = QVBoxLayout(tab_price); l_price.setContentsMargins(20, 20, 20, 20); l_price.setSpacing(15)
@@ -235,7 +444,16 @@ class ProductEditorDialog(QDialog):
         l_extra.addWidget(QLabel("تگ‌ها:")); l_extra.addWidget(self.inp_tags)
         l_extra.addWidget(QLabel("مرتبط:")); l_extra.addWidget(self.inp_rel); l_extra.addStretch()
 
-        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع"); self.tabs.addTab(tab_extra, "سئو")
+        # Logs Tab
+        tab_logs = QWidget(); l_logs = QVBoxLayout(tab_logs); l_logs.setContentsMargins(15, 15, 15, 15)
+        self.log_table = QTableWidget(0, 3)
+        self.log_table.setHorizontalHeaderLabels(["زمان", "تغییر", "علت"])
+        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.log_table.setStyleSheet(f"QTableWidget {{ background: {BG_COLOR}; color: white; border: none; }}")
+        l_logs.addWidget(self.log_table)
+
+        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع");
+        self.tabs.addTab(tab_extra, "سئو"); self.tabs.addTab(tab_logs, "تاریخچه")
         layout.addWidget(self.tabs)
 
         btn_box = QHBoxLayout()
@@ -263,8 +481,11 @@ class ProductEditorDialog(QDialog):
                 p = crud.get_product(db, pid)
                 if not p: return None
                 images = [img.image_path for img in p.images] if hasattr(p, 'images') else ([p.image_path] if p.image_path else [])
-                variants = [{"name": v.name, "price_adjustment": v.price_adjustment, "stock": v.stock} for v in p.variants]
-                return {"obj": p, "images": images, "variants": variants}
+                variants = [{"name": v.name, "price_adjustment": v.price_adjustment, "stock": v.stock, "color": v.color_code} for v in p.variants]
+                from db.models import StockLog
+                logs = db.query(StockLog).filter_by(product_id=pid).order_by(StockLog.created_at.desc()).limit(50).all()
+                log_data = [{"time": l.created_at.strftime("%Y/%m/%d %H:%M"), "change": l.change_amount, "reason": l.reason} for l in logs]
+                return {"obj": p, "images": images, "variants": variants, "logs": log_data}
         data = await loop.run_in_executor(None, fetch)
         if not data: return
         p = data["obj"]
@@ -276,7 +497,14 @@ class ProductEditorDialog(QDialog):
         idx = self.inp_cat.findData(p.category_id)
         if idx >= 0: self.inp_cat.setCurrentIndex(idx)
         self.img_manager.set_images(data["images"])
-        for v in data["variants"]: self.variant_mgr.add_row(v["name"], v["price_adjustment"], v["stock"])
+        for v in data["variants"]: self.variant_mgr.add_row(v["name"], v["price_adjustment"], v["stock"], color=v.get("color"))
+
+        self.log_table.setRowCount(0)
+        for i, l in enumerate(data.get("logs", [])):
+            self.log_table.insertRow(i)
+            self.log_table.setItem(i, 0, QTableWidgetItem(l["time"]))
+            self.log_table.setItem(i, 1, QTableWidgetItem(f"{l['change']:+}"))
+            self.log_table.setItem(i, 2, QTableWidgetItem(l["reason"]))
 
     @asyncSlot()
     async def save_product(self):
@@ -285,7 +513,7 @@ class ProductEditorDialog(QDialog):
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
             "price": self.inp_price.value(), "discount_price": self.inp_discount.value(),
             "stock": self.inp_stock.value(), "brand": self.inp_brand.text(),
-            "description": self.inp_desc.toPlainText(), "tags": ",".join(self.inp_tags.get_tags_list()),
+            "description": self.inp_desc.toHtml(), "tags": ",".join(self.inp_tags.get_tags_list()),
             "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked()
         }
         raw_images = self.img_manager.get_images()
@@ -295,8 +523,17 @@ class ProductEditorDialog(QDialog):
                 ext = Path(img_path).suffix
                 fname = f"prod_{datetime.now().strftime('%Y%m%d%H%M%S_%f')}{ext}"
                 dest = MEDIA_PRODUCTS_DIR / fname
-                try: shutil.copy(img_path, dest); final_images.append(f"media/products/{fname}")
-                except: pass
+                try:
+                    # Compression & Resizing
+                    with Image.open(img_path) as img:
+                        img = img.convert("RGB") # Ensure compatible format
+                        img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+                        img.save(dest, "JPEG", quality=80, optimize=True)
+                    final_images.append(f"media/products/{fname}")
+                except Exception as e:
+                    logger.error(f"Compression error: {e}")
+                    try: shutil.copy(img_path, dest); final_images.append(f"media/products/{fname}")
+                    except: pass
             else:
                 if os.path.isabs(img_path): final_images.append(os.path.relpath(img_path, BASE_DIR).replace("\\", "/"))
                 else: final_images.append(img_path)
@@ -547,8 +784,13 @@ class ProductsWidget(QWidget):
         btn_add.clicked.connect(lambda: self.open_editor_dialog(None))
         btn_add.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; border-radius: 8px; padding: 10px; font-weight: bold;")
         
+        btn_bulk = QPushButton(); btn_bulk.setIcon(qta.icon('fa5s.th-list', color='white'))
+        btn_bulk.setToolTip("ویرایش گروهی سریع")
+        btn_bulk.setStyleSheet(f"background: {PANEL_BG}; color: white; border-radius: 8px; padding: 10px; border: 1px solid {BORDER_COLOR};")
+        btn_bulk.clicked.connect(self.open_bulk_edit)
+
         s_layout.addWidget(self.inp_search, 2); s_layout.addWidget(self.cmb_cat_filter, 1); s_layout.addWidget(self.cmb_sort, 1)
-        s_layout.addWidget(btn_search); s_layout.addWidget(btn_add)
+        s_layout.addWidget(btn_search); s_layout.addWidget(btn_bulk); s_layout.addWidget(btn_add)
         layout.addWidget(search_box)
 
         # گرید
@@ -560,6 +802,13 @@ class ProductsWidget(QWidget):
         scroll.setWidget(self.grid_container)
         layout.addWidget(scroll)
         
+        # Dashboard-style indicators (Low Stock)
+        self.stats_row = QHBoxLayout(); self.stats_row.setContentsMargins(5, 0, 5, 0)
+        self.lbl_low_stock_count = QLabel("⚠️ محصولات کم موجودی: 0"); self.lbl_low_stock_count.setVisible(False)
+        self.lbl_low_stock_count.setStyleSheet(f"color: {DANGER_COLOR}; font-weight: bold; background: rgba(239, 69, 101, 0.1); padding: 5px 15px; border-radius: 15px;")
+        self.stats_row.addWidget(self.lbl_low_stock_count); self.stats_row.addStretch()
+        layout.insertLayout(2, self.stats_row)
+
         # حالت خالی
         self.empty_state = QLabel()
         self.empty_state.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -589,8 +838,17 @@ class ProductsWidget(QWidget):
     async def refresh_data_slot(self): await self.refresh_data()
 
     async def refresh_data(self):
+        # Skeleton Loading State
         for i in reversed(range(self.grid_layout.count())): 
             if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+
+        # Show Skeletons
+        for i in range(6):
+            skel = QFrame()
+            skel.setFixedSize(260, 450)
+            skel.setStyleSheet(f"QFrame {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PANEL_BG}, stop:0.5 {CARD_BG}, stop:1 {PANEL_BG}); border-radius: 14px; }}")
+            self.grid_layout.addWidget(skel, i // 3, i % 3)
+
         self.selected_ids.clear(); self.update_bulk_toolbar()
         
         loop = asyncio.get_running_loop()
@@ -612,6 +870,10 @@ class ProductsWidget(QWidget):
                     
             cats, prods = await loop.run_in_executor(None, fetch)
             
+            # Remove Skeletons
+            for i in reversed(range(self.grid_layout.count())):
+                if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+
             current_cat = self.cmb_cat_filter.currentData()
             self.cmb_cat_filter.clear(); self.cmb_cat_filter.addItem("همه دسته‌ها", None)
             for c in cats: self.cmb_cat_filter.addItem(c.name, c.id)
@@ -632,6 +894,11 @@ class ProductsWidget(QWidget):
                     card.quickUpdateRequested.connect(self.handle_quick_update)
                     self.grid_layout.addWidget(card, i // cols, i % cols)
                     
+                    # بررسی موجودی کم برای آمار هدر
+                    low_stock_count = sum(1 for p in prods if 0 < p.stock < 5)
+                    self.lbl_low_stock_count.setText(f"⚠️ محصولات کم موجودی: {low_stock_count}")
+                    self.lbl_low_stock_count.setVisible(low_stock_count > 0)
+
                     # موقعیت اولیه برای انیمیشن
                     card.move(card.x(), card.y() + 20)
 
@@ -665,6 +932,17 @@ class ProductsWidget(QWidget):
         count = len(self.selected_ids)
         self.bulk_toolbar.setVisible(count > 0)
         self.lbl_sel_count.setText(f"{count} انتخاب شده")
+        # پاک کردن دکمه‌های قدیمی در تولبار برای اضافه کردن دکمه قیمت گروهی
+        for i in range(self.bulk_toolbar.layout().count()):
+            item = self.bulk_toolbar.layout().itemAt(i).widget()
+            if isinstance(item, QPushButton) and item.text() == "تغییر قیمت":
+                item.deleteLater()
+
+        if count > 0:
+            btn_price = QPushButton("تغییر قیمت")
+            btn_price.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 5px; border-radius: 6px;")
+            btn_price.clicked.connect(self.open_batch_pricing)
+            self.bulk_toolbar.layout().insertWidget(2, btn_price)
 
     @asyncSlot()
     async def delete_product_single(self, pid):
@@ -712,6 +990,17 @@ class ProductsWidget(QWidget):
             await loop.run_in_executor(None, lambda: pd.DataFrame([{"ID": p.id, "Name": p.name} for p in crud.get_all_products_raw(next(get_db()))]).to_excel(path, index=False))
             self.window().show_toast("اکسل ذخیره شد.")
         except: pass
+
+    def open_bulk_edit(self):
+        dialog = BulkEditDialog(self)
+        dialog.saved.connect(self.refresh_data_slot)
+        dialog.exec()
+
+    def open_batch_pricing(self):
+        if not self.selected_ids: return
+        dialog = BatchPricingDialog(self, list(self.selected_ids))
+        dialog.applied.connect(self.refresh_data_slot)
+        dialog.exec()
 
     def import_data_slot(self):
         path, _ = QFileDialog.getOpenFileName(self, "انتخاب فایل", "", "Excel (*.xlsx)")
