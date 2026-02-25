@@ -12,8 +12,9 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QTextEdit, QDialog, QLayout, QStyle, QSizePolicy,
     QComboBox, QApplication, QCheckBox, QInputDialog, QFileDialog, QMenu, QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget
 )
-from PyQt6.QtGui import QColor, QFont, QCursor, QPainter, QAction
-from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QPoint, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QCursor, QPainter, QAction, QLinearGradient, QBrush, QPen, QPixmap
+from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QPoint, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt6.QtWidgets import QGraphicsOpacityEffect
 from qasync import asyncSlot
 import qtawesome as qta
 from db.database import SessionLocal
@@ -147,10 +148,17 @@ class UserDetailsDialog(QDialog):
         stats_row.addWidget(self._stat_box(str(orders), "تعداد سفارش"))
         info_layout.addLayout(stats_row)
 
+        # Tags Management
+        info_layout.addWidget(QLabel("برچسب‌ها (سگمنتیشن):"))
+        self.inp_tags = QLineEdit()
+        self.inp_tags.setPlaceholderText("مثلاً: VIP, همکار (جدا شده با کاما)")
+        self.inp_tags.setText(getattr(self.user, 'tags', "") or "")
+        info_layout.addWidget(self.inp_tags)
+
         last_seen = getattr(self.user, 'last_seen', None)
         ls_text = last_seen.strftime("%Y/%m/%d %H:%M") if last_seen else "نامشخص"
         lbl_ls = QLabel(f"🕒 آخرین بازدید: {ls_text}")
-        lbl_ls.setStyleSheet(f"color: {TEXT_SUB}; margin: 10px 0;")
+        lbl_ls.setStyleSheet(f"color: {TEXT_SUB}; margin: 5px 0;")
         info_layout.addWidget(lbl_ls)
 
         info_layout.addWidget(QLabel("یادداشت خصوصی ادمین:"))
@@ -159,7 +167,7 @@ class UserDetailsDialog(QDialog):
         self.txt_note.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 8px;")
         info_layout.addWidget(self.txt_note)
 
-        btn_save = QPushButton("ذخیره تغییرات")
+        btn_save = QPushButton("💾 ذخیره تغییرات نهایی")
         btn_save.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px; border-radius: 8px; font-weight: bold;")
         btn_save.clicked.connect(self.save_note)
         info_layout.addWidget(btn_save)
@@ -222,20 +230,28 @@ class UserDetailsDialog(QDialog):
 
     def add_timeline_item(self, title, time, desc, icon, color):
         item = QFrame()
-        item.setStyleSheet(f"background: {PANEL_BG}; border-radius: 10px; border-right: 4px solid {color}; margin-bottom: 5px;")
+        item.setStyleSheet(f"background: rgba(255,255,255,0.02); border-radius: 12px; margin-bottom: 10px;")
         lay = QVBoxLayout(item)
 
-        h = QHBoxLayout()
-        ico = QLabel()
-        ico.setPixmap(qta.icon(icon, color=color).pixmap(16, 16))
-        ti = QLabel(title); ti.setStyleSheet("font-weight: bold; color: white;")
-        tm = QLabel(time); tm.setStyleSheet(f"color: {TEXT_SUB}; font-size: 10px;")
-        h.addWidget(ico); h.addWidget(ti); h.addStretch(); h.addWidget(tm)
+        header = QHBoxLayout()
+        # Graphical Dot
+        dot = QLabel(); dot.setFixedSize(12, 12); dot.setStyleSheet(f"background: {color}; border-radius: 6px; border: 2px solid white;")
 
+        ico = QLabel()
+        ico.setPixmap(qta.icon(icon, color=color).pixmap(18, 18))
+        ti = QLabel(title); ti.setStyleSheet("font-weight: 900; color: white; font-size: 13px;")
+        tm = QLabel(time); tm.setStyleSheet(f"color: {TEXT_SUB}; font-size: 10px;")
+
+        header.addWidget(dot); header.addWidget(ico); header.addWidget(ti); header.addStretch(); header.addWidget(tm)
+
+        content = QHBoxLayout()
+        content.addSpacing(25)
         de = QLabel(desc); de.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
         de.setWordWrap(True)
+        content.addWidget(de)
 
-        lay.addLayout(h); lay.addWidget(de)
+        lay.addLayout(header)
+        lay.addLayout(content)
         self.timeline_layout.insertWidget(0, item)
 
     def _stat_box(self, val, txt):
@@ -248,23 +264,61 @@ class UserDetailsDialog(QDialog):
         return f
 
     def save_note(self):
-        asyncio.create_task(self._save_db_note(self.txt_note.toPlainText()))
+        asyncio.create_task(self._save_db_note(self.txt_note.toPlainText(), self.inp_tags.text()))
         self.accept()
 
-    async def _save_db_note(self, txt):
+    async def _save_db_note(self, txt, tags):
         with SessionLocal() as db:
             u = db.query(models.User).filter(models.User.user_id == str(self.user.user_id)).first()
             if u:
                 u.private_note = txt
+                u.tags = tags
                 db.commit()
 
 # ==============================================================================
 # Component: User Card
 # ==============================================================================
+class AvatarGenerator:
+    COLORS = ["#7f5af0", "#2cb67d", "#3da9fc", "#ef4565", "#f39c12", "#72757e"]
+
+    @staticmethod
+    def get_initials(name):
+        if not name: return "?"
+        parts = name.split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[1][0]).upper()
+        return name[0].upper()
+
+    @staticmethod
+    def generate_pixmap(name, size=40):
+        initials = AvatarGenerator.get_initials(name)
+        # انتخاب رنگ بر اساس نام برای ثبات
+        color_idx = sum(ord(c) for c in initials) % len(AvatarGenerator.COLORS)
+        color = QColor(AvatarGenerator.COLORS[color_idx])
+
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw Circle
+        painter.setBrush(color)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(0, 0, size, size)
+
+        # Draw Text
+        painter.setPen(QColor("white"))
+        font = QFont("Vazirmatn", int(size * 0.4), QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, initials)
+        painter.end()
+        return pixmap
+
 class UserCard(QFrame):
     selectionChanged = pyqtSignal(str, bool)
 
-    def __init__(self, user_data, parent_widget):
+    def __init__(self, user_data, parent_widget, delay=0):
         super().__init__()
         self.user = user_data
         self.parent_widget = parent_widget
@@ -284,6 +338,15 @@ class UserCard(QFrame):
 
         self._apply_styles()
         self._setup_ui()
+
+        # Entrance Animation
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self.anim = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.anim.setDuration(400)
+        self.anim.setStartValue(0)
+        self.anim.setEndValue(1)
+        QTimer.singleShot(delay, self.anim.start)
 
     def _apply_styles(self):
         is_banned = getattr(self.user, 'is_banned', False)
@@ -311,8 +374,8 @@ class UserCard(QFrame):
 
         ico = QLabel()
         ico.setFixedSize(40, 40)
-        ico.setStyleSheet(f"background: {self.badge['col']}20; border-radius: 20px;")
-        ico.setPixmap(qta.icon(self.badge['icon'], color=self.badge['col']).pixmap(20, 20))
+        name_val = getattr(self.user, 'full_name', "") or getattr(self.user, 'username', "User")
+        ico.setPixmap(AvatarGenerator.generate_pixmap(name_val))
 
         v_info = QVBoxLayout()
         name = getattr(self.user, 'full_name', "Unknown") or "User"
@@ -361,6 +424,14 @@ class UserCard(QFrame):
         h_stats.addWidget(self._stat_box(f"{orders}", "سفارش"))
         h_stats.addWidget(self._stat_box(f"{spent:,}", "خرید"))
         layout.addLayout(h_stats)
+
+        # --- Last Message Snippet ---
+        last_msg = getattr(self.user, 'last_interaction_text', "") or ""
+        if last_msg:
+            snippet = last_msg[:45] + "..." if len(last_msg) > 45 else last_msg
+            lbl_msg = QLabel(f"💬 {snippet}")
+            lbl_msg.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px; font-style: italic; background: rgba(0,0,0,0.1); padding: 5px; border-radius: 5px;")
+            layout.addWidget(lbl_msg)
 
         # --- Actions ---
         h_btns = QHBoxLayout()
@@ -508,8 +579,10 @@ class UsersWidget(QWidget):
 
         self.cmb_platform = QComboBox(); self.cmb_platform.addItems(["همه پلتفرم‌ها", "تلگرام", "روبیکا"])
         self.cmb_status = QComboBox(); self.cmb_status.addItems(["همه وضعیت‌ها", "فعال", "مسدود"])
+        self.cmb_tags = QComboBox(); self.cmb_tags.addItems(["برچسب: همه"])
         self.cmb_platform.currentIndexChanged.connect(self._start_search)
         self.cmb_status.currentIndexChanged.connect(self._start_search)
+        self.cmb_tags.currentIndexChanged.connect(self._start_search)
 
         self.inp_search = QLineEdit(); self.inp_search.setPlaceholderText("🔍 جستجو نام، آیدی یا مبلغ (>500000)")
         self.inp_search.setFixedWidth(300)
@@ -530,6 +603,7 @@ class UsersWidget(QWidget):
         h_top.addLayout(h_quick)
         h_top.addWidget(QLabel("پلتفرم:")); h_top.addWidget(self.cmb_platform)
         h_top.addWidget(QLabel("وضعیت:")); h_top.addWidget(self.cmb_status)
+        h_top.addWidget(self.cmb_tags)
         h_top.addWidget(self.inp_search)
         h_top.addWidget(btn_ref); h_top.addWidget(btn_exp)
         layout.addLayout(h_top)
@@ -568,38 +642,67 @@ class UsersWidget(QWidget):
 
     @asyncSlot()
     async def refresh_data(self):
+        # --- Skeleton State ---
         while self.flow_layout.count():
             item = self.flow_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
+
+        for i in range(6):
+            skel = QFrame()
+            skel.setFixedSize(300, 240)
+            skel.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PANEL_BG}, stop:0.5 {CARD_BG}, stop:1 {PANEL_BG}); border-radius: 14px;")
+            self.flow_layout.addWidget(skel)
+
         self.selected_ids.clear(); self.update_bulk_ui()
 
         q = self.inp_search.text().lower().strip()
         p_f = self.cmb_platform.currentText()
         s_f = self.cmb_status.currentText()
+        tag_f = self.cmb_tags.currentText().replace("برچسب: ", "")
 
         loop = asyncio.get_running_loop()
         try:
-            users = await loop.run_in_executor(None, lambda: self._fetch_users(q, p_f, s_f))
+            data = await loop.run_in_executor(None, lambda: self._fetch_users(q, p_f, s_f, tag_f))
+            users = data['users']
+
+            # Update Tags List
+            current_tag = self.cmb_tags.currentText()
+            self.cmb_tags.blockSignals(True)
+            self.cmb_tags.clear(); self.cmb_tags.addItem("برچسب: همه")
+            for t in sorted(data['all_tags']): self.cmb_tags.addItem(f"برچسب: {t}")
+            self.cmb_tags.setCurrentText(current_tag)
+            self.cmb_tags.blockSignals(False)
+
+            # Remove Skeletons
+            while self.flow_layout.count():
+                item = self.flow_layout.takeAt(0)
+                if item.widget(): item.widget().deleteLater()
 
             if not users:
                 l = QLabel("هیچ کاربری یافت نشد."); l.setStyleSheet(f"color: {TEXT_SUB}; margin: 50px;"); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.flow_layout.addWidget(l)
             else:
-                for u in users:
-                    card = UserCard(u, self)
+                for i, u in enumerate(users):
+                    card = UserCard(u, self, delay=i*30) # Cascading animation
                     card.selectionChanged.connect(self._on_card_select)
                     self.flow_layout.addWidget(card)
         except Exception as e: logger.error(e)
 
-    def _fetch_users(self, q, p_f, s_f):
+    def _fetch_users(self, q, p_f, s_f, tag_f):
         with SessionLocal() as db:
             all_users = crud.get_all_users(db)
             res = []
+            all_tags = set()
             for u in all_users:
+                # Extract Tags
+                u_tags = [t.strip() for t in (u.tags or "").split(',') if t.strip()]
+                for t in u_tags: all_tags.add(t)
+
                 # Filters
                 if p_f != "همه پلتفرم‌ها" and u.platform != p_f.lower(): continue
                 if s_f == "فعال" and u.is_banned: continue
                 if s_f == "مسدود" and not u.is_banned: continue
+                if tag_f != "همه" and tag_f not in u_tags: continue
 
                 # Search
                 match = True
@@ -624,12 +727,13 @@ class UsersWidget(QWidget):
                     obj = type('U', (), {
                         "user_id": u.user_id, "full_name": u.full_name, "platform": u.platform,
                         "is_banned": u.is_banned, "private_note": u.private_note,
+                        "tags": u.tags, "last_interaction_text": u.last_interaction_text,
                         "order_count": len(u.orders), "total_spent": spent, "last_seen": u.last_seen
                     })
                     res.append(obj)
 
             res.sort(key=lambda x: x.total_spent, reverse=True)
-            return res
+            return {"users": res, "all_tags": list(all_tags)}
 
     def show_user_details_by_id(self, user_id):
         """نمایش جزئیات یک کاربر خاص (استفاده توسط Command Palette)"""
@@ -658,10 +762,16 @@ class UsersWidget(QWidget):
     @asyncSlot()
     async def broadcast(self):
         """ارسال پیام همگانی هوشمند با پلتفرم هدف"""
-        msg, ok = QInputDialog.getMultiLineText(self, "پیام همگانی", f"پیام برای {len(self.selected_ids)} کاربر انتخاب شده:")
+        target_ids = list(self.selected_ids)
+        if not target_ids:
+            # اگر کسی انتخاب نشده، تمام کاربران فیلتر شده فعلی را انتخاب کن
+            # این کار برای سادگی در اینجا پیاده نشده، اما ایده Targeted Broadcast است.
+            pass
+
+        msg, ok = QInputDialog.getMultiLineText(self, "پیام همگانی (هدفمند)", f"پیام برای {len(target_ids)} کاربر:")
         if ok and msg:
             self.window().show_toast("در حال ارسال پیام...")
-            asyncio.create_task(self._async_broadcast(msg, list(self.selected_ids)))
+            asyncio.create_task(self._async_broadcast(msg, target_ids))
 
     async def _async_broadcast(self, text, user_ids):
         success, fail = 0, 0
@@ -692,13 +802,30 @@ class UsersWidget(QWidget):
             asyncio.create_task(self._do_export(path))
 
     async def _do_export(self, path):
+        """خروجی اکسل پیشرفته (Export Pro)"""
         try:
+            q = self.inp_search.text().lower().strip()
+            p_f = self.cmb_platform.currentText()
+            s_f = self.cmb_status.currentText()
+            tag_f = self.cmb_tags.currentText().replace("برچسب: ", "")
+
             loop = asyncio.get_running_loop()
-            users = await loop.run_in_executor(None, lambda: self._fetch_users("", "همه پلتفرم‌ها", "همه وضعیت‌ها"))
+            data = await loop.run_in_executor(None, lambda: self._fetch_users(q, p_f, s_f, tag_f))
+            users = data['users']
+
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
                 w = csv.writer(f)
-                w.writerow(["شناسه", "نام", "پلتفرم", "مجموع خرید", "تعداد سفارش", "وضعیت"])
-                for u in users:
-                    w.writerow([u.user_id, u.full_name, u.platform, u.total_spent, u.order_count, "مسدود" if u.is_banned else "فعال"])
-            self.window().show_toast("فایل اکسل ذخیره شد.")
-        except Exception as e: logger.error(e)
+                w.writerow(["شناسه", "نام کامل", "نام کاربری", "پلتفرم", "تلفن", "مجموع خرید", "تعداد سفارش", "برچسب‌ها", "وضعیت", "آخرین بازدید"])
+
+                # دریافت اطلاعات کامل‌تر از دیتابیس برای اکسپورت
+                with SessionLocal() as db:
+                    for u_summary in users:
+                        u = db.query(models.User).get(u_summary.user_id)
+                        w.writerow([
+                            u.user_id, u.full_name, u.username, u.platform, u.phone_number,
+                            u_summary.total_spent, u_summary.order_count, u.tags,
+                            "مسدود" if u.is_banned else "فعال", u.last_seen
+                        ])
+
+            self.window().show_toast("خروجی Pro با موفقیت ذخیره شد.")
+        except Exception as e: logger.error(f"Export error: {e}")

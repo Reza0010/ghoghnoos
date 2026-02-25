@@ -24,6 +24,11 @@ async def _global_text_handler(update, context):
     if not update.message or not update.message.text: return
 
     text = update.message.text.strip()
+    user_id = update.effective_user.id
+
+    # ذخیره آخرین پیام در دیتابیس برای CRM
+    with next(get_db()) as db:
+        crud.update_user_info(db, user_id, last_interaction_text=text)
     # نادیده گرفتن دستورات
     if text.startswith('/'): return
 

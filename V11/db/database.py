@@ -170,14 +170,17 @@ def run_auto_migrations():
             "related_product_ids": "VARCHAR(255)",
             "tags": "TEXT",
             "is_top_seller": "BOOLEAN DEFAULT 0",
-            "image_path": "VARCHAR(512)" # بازگرداندن ستون قدیمی برای سازگاری
+            "purchase_price": "NUMERIC(12, 0) DEFAULT 0",
+            "image_path": "VARCHAR(512)"
         },
         "users": {
             "platform": "VARCHAR(20) DEFAULT 'telegram'",
             "saved_address": "TEXT",
             "saved_phone": "VARCHAR(20)",
             "private_note": "TEXT",
-            "is_banned": "BOOLEAN DEFAULT 0"
+            "is_banned": "BOOLEAN DEFAULT 0",
+            "tags": "VARCHAR(255)",
+            "last_interaction_text": "TEXT"
         },
         "orders": {
             "tracking_code": "VARCHAR(100)",
@@ -185,6 +188,9 @@ def run_auto_migrations():
             "postal_code": "VARCHAR(20)",
             "discount_amount": "NUMERIC(12, 0) DEFAULT 0",
             "coupon_id": "INTEGER"
+        },
+        "order_items": {
+            "purchase_price_at_purchase": "NUMERIC(12, 0) DEFAULT 0"
         }
     }
 

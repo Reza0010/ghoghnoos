@@ -365,13 +365,15 @@ class DashboardWidget(QWidget):
         
         self.card_rev_tg = StatCard("درآمد تلگرام", "fa5b.telegram", COLOR_BLUE)
         self.card_rev_rb = StatCard("درآمد روبیکا", "fa5s.rocket", COLOR_PURPLE)
+        self.card_profit = StatCard("سود خالص", "fa5s.hand-holding-usd", COLOR_YELLOW)
         self.card_orders = StatCard("سفارشات جدید", "fa5s.shopping-cart", COLOR_GREEN)
         self.card_users = StatCard("مشتریان کل", "fa5s.users", COLOR_BLUE)
         
         stats_layout.addWidget(self.card_rev_tg, 0, 0)
         stats_layout.addWidget(self.card_rev_rb, 0, 1)
-        stats_layout.addWidget(self.card_orders, 0, 2)
-        stats_layout.addWidget(self.card_users, 0, 3)
+        stats_layout.addWidget(self.card_profit, 0, 2)
+        stats_layout.addWidget(self.card_orders, 1, 0)
+        stats_layout.addWidget(self.card_users, 1, 1)
         self.main_layout.addLayout(stats_layout)
 
         # نمودارها
@@ -447,7 +449,7 @@ class DashboardWidget(QWidget):
             self._data_loaded = True
 
         # Trigger entrance animations for cards if data exists
-        for card in [self.card_rev_tg, self.card_rev_rb, self.card_orders, self.card_users]:
+        for card in [self.card_rev_tg, self.card_rev_rb, self.card_profit, self.card_orders, self.card_users]:
             card.fade_anim.start()
 
     @asyncSlot()
@@ -461,6 +463,12 @@ class DashboardWidget(QWidget):
                     # داده‌های آماری
                     rev_tg = crud.get_total_revenue_by_platform(db, "telegram")
                     rev_rb = crud.get_total_revenue_by_platform(db, "rubika")
+
+                    # محاسبه سود خالص (فروش منهای خرید)
+                    profit_data = db.query(
+                        func.sum(models.OrderItem.quantity * (models.OrderItem.price_at_purchase - models.OrderItem.purchase_price_at_purchase))
+                    ).join(models.Order).filter(models.Order.status.in_(['approved', 'shipped', 'paid'])).scalar() or 0
+
                     pending_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
                     total_users = db.query(models.User).count()
                     
@@ -492,7 +500,8 @@ class DashboardWidget(QWidget):
                     target_rate = min(100, (rev_tg + rev_rb) / 10000000 * 100) # هدف ۱۰ میلیون تومان
 
                     return {
-                        "rev_tg": rev_tg, "rev_rb": rev_rb, "pending": pending_orders, "users": total_users,
+                        "rev_tg": rev_tg, "rev_rb": rev_rb, "profit_data": profit_data,
+                        "pending": pending_orders, "users": total_users,
                         "dates": dates, "tg_sales": tg_sales, "rb_sales": rb_sales,
                         "low_stock": low_stock, "recent_orders": recent_orders, "is_open": is_open,
                         "conv": conv_rate, "target": target_rate
@@ -507,6 +516,7 @@ class DashboardWidget(QWidget):
             # آپدیت کارت‌ها
             self.card_rev_tg.set_data(int(data['rev_tg']))
             self.card_rev_rb.set_data(int(data['rev_rb']))
+            self.card_profit.set_data(int(data['profit_data']))
             self.card_orders.set_data(data['pending'])
             self.card_users.set_data(data['users'])
             

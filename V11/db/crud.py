@@ -113,7 +113,11 @@ def get_all_users(db: Session, limit: int = 10000) -> List[models.User]:
 def update_user_info(db: Session, user_id: Union[int, str], **kwargs) -> bool:
     try:
         user_id_str = str(user_id)
-        db.query(models.User).filter(models.User.user_id == user_id_str).update(kwargs)
+        # فیلتر کردن پارامترها برای اطمینان از وجود در مدل
+        valid_cols = {c.name for c in models.User.__table__.columns}
+        clean_kwargs = {k: v for k, v in kwargs.items() if k in valid_cols}
+
+        db.query(models.User).filter(models.User.user_id == user_id_str).update(clean_kwargs)
         db.commit()
         return True
     except SQLAlchemyError:
@@ -494,6 +498,7 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
                     variant_id=item.variant_id,
                     quantity=item.quantity,
                     price_at_purchase=price,
+                    purchase_price_at_purchase=prod.purchase_price or 0,
                     selected_attributes=item.selected_attributes
                 ))
 

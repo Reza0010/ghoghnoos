@@ -266,8 +266,8 @@ class BulkEditDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self); layout.setContentsMargins(20, 20, 20, 20)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["ID", "نام محصول", "قیمت (تومان)", "قیمت تخفیف", "موجودی"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["ID", "نام محصول", "قیمت فروش", "قیمت خرید", "قیمت تخفیف", "موجودی"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setStyleSheet(f"QTableWidget {{ background: {PANEL_BG}; color: white; border: 1px solid {BORDER_COLOR}; }} QHeaderView::section {{ background: {BG_COLOR}; color: {TEXT_SUB}; padding: 10px; }}")
         layout.addWidget(self.table)
@@ -288,8 +288,9 @@ class BulkEditDialog(QDialog):
             self.table.item(i, 0).setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.table.setItem(i, 1, QTableWidgetItem(p.name))
             self.table.setItem(i, 2, QTableWidgetItem(str(int(p.price))))
-            self.table.setItem(i, 3, QTableWidgetItem(str(int(p.discount_price or 0))))
-            self.table.setItem(i, 4, QTableWidgetItem(str(p.stock)))
+            self.table.setItem(i, 3, QTableWidgetItem(str(int(p.purchase_price or 0))))
+            self.table.setItem(i, 4, QTableWidgetItem(str(int(p.discount_price or 0))))
+            self.table.setItem(i, 5, QTableWidgetItem(str(p.stock)))
 
     @asyncSlot()
     async def save_all(self):
@@ -300,8 +301,9 @@ class BulkEditDialog(QDialog):
                     "id": int(self.table.item(i, 0).text()),
                     "name": self.table.item(i, 1).text(),
                     "price": int(self.table.item(i, 2).text().replace(",", "")),
-                    "discount_price": int(self.table.item(i, 3).text().replace(",", "")),
-                    "stock": int(self.table.item(i, 4).text())
+                    "purchase_price": int(self.table.item(i, 3).text().replace(",", "")),
+                    "discount_price": int(self.table.item(i, 4).text().replace(",", "")),
+                    "stock": int(self.table.item(i, 5).text())
                 })
             except: continue
 
@@ -419,12 +421,14 @@ class ProductEditorDialog(QDialog):
         
         # Price Tab
         tab_price = QWidget(); l_price = QVBoxLayout(tab_price); l_price.setContentsMargins(20, 20, 20, 20); l_price.setSpacing(15)
-        self.inp_price = FormattedPriceInput(placeholder="قیمت اصلی")
+        self.inp_price = FormattedPriceInput(placeholder="قیمت فروش")
+        self.inp_purchase_price = FormattedPriceInput(placeholder="قیمت خرید")
         self.inp_discount = FormattedPriceInput(placeholder="قیمت تخفیف (اختیاری)")
         self.inp_stock = QSpinBox(); self.inp_stock.setRange(0, 100000)
         self.inp_stock.setStyleSheet(f"background: {BG_COLOR}; color: {TEXT_MAIN}; border: 1px solid {BORDER_COLOR}; padding: 10px; border-radius: 8px;")
         self.chk_top = QCheckBox("پرفروش"); self.chk_top.setStyleSheet(f"color: {TEXT_MAIN}; font-weight: bold;")
-        l_price.addWidget(QLabel("قیمت:")); l_price.addWidget(self.inp_price)
+        l_price.addWidget(QLabel("قیمت فروش:")); l_price.addWidget(self.inp_price)
+        l_price.addWidget(QLabel("قیمت خرید:")); l_price.addWidget(self.inp_purchase_price)
         l_price.addWidget(QLabel("تخفیف:")); l_price.addWidget(self.inp_discount)
         l_price.addWidget(QLabel("موجودی:")); l_price.addWidget(self.inp_stock)
         l_price.addWidget(self.chk_top); l_price.addStretch()
@@ -490,6 +494,7 @@ class ProductEditorDialog(QDialog):
         if not data: return
         p = data["obj"]
         self.inp_name.setText(p.name); self.inp_price.setValue(float(p.price))
+        self.inp_purchase_price.setValue(float(p.purchase_price or 0))
         self.inp_discount.setValue(float(p.discount_price or 0)); self.inp_stock.setValue(p.stock)
         self.inp_brand.setText(p.brand or ""); self.inp_desc.setPlainText(p.description or "")
         self.inp_tags.set_tags(p.tags or ""); self.inp_rel.setText(p.related_product_ids or "")
@@ -511,7 +516,8 @@ class ProductEditorDialog(QDialog):
         if not self.inp_name.text(): return QMessageBox.warning(self, "خطا", "نام الزامی است.")
         data = {
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
-            "price": self.inp_price.value(), "discount_price": self.inp_discount.value(),
+            "price": self.inp_price.value(), "purchase_price": self.inp_purchase_price.value(),
+            "discount_price": self.inp_discount.value(),
             "stock": self.inp_stock.value(), "brand": self.inp_brand.text(),
             "description": self.inp_desc.toHtml(), "tags": ",".join(self.inp_tags.get_tags_list()),
             "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked()

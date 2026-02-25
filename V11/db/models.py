@@ -23,6 +23,8 @@ class User(Base):
     saved_address = Column(Text, nullable=True)
     saved_phone = Column(String(20), nullable=True)
     private_note = Column(Text, nullable=True)  # یادداشت ادمین برای کاربر
+    tags = Column(String(255), nullable=True)  # برچسب‌های کاربر (کاما جدا شده)
+    last_interaction_text = Column(Text, nullable=True) # آخرین پیام کاربر
     
     last_seen = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -67,6 +69,7 @@ class Product(Base):
     brand = Column(String(100), nullable=True)
     
     price = Column(Numeric(12, 0), nullable=False)
+    purchase_price = Column(Numeric(12, 0), default=0) # قیمت خرید (برای محاسبه سود)
     discount_price = Column(Numeric(12, 0), nullable=True)
     stock = Column(Integer, default=0, nullable=False)
     
@@ -176,6 +179,7 @@ class OrderItem(Base):
     
     quantity = Column(Integer, nullable=False)
     price_at_purchase = Column(Numeric(12, 0), nullable=False)
+    purchase_price_at_purchase = Column(Numeric(12, 0), default=0) # قیمت خرید در زمان ثبت سفارش
     selected_attributes = Column(Text, nullable=True)
 
     order = relationship("Order", back_populates="items")

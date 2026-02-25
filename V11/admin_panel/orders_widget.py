@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 try:
     import pandas as pd
@@ -799,9 +799,9 @@ class OrdersWidget(QWidget):
             if date_f == 1: # Today
                 if data['created_at'].date() != now.date(): continue
             elif date_f == 2: # Yesterday
-                if data['created_at'].date() != (now - asyncio.timedelta(days=1)).date(): continue
+                if data['created_at'].date() != (now - timedelta(days=1)).date(): continue
             elif date_f == 3: # Last Week
-                if data['created_at'] < (now - asyncio.timedelta(days=7)): continue
+                if data['created_at'] < (now - timedelta(days=7)): continue
 
             # Price Filter
             if data['total_amount'] < min_p:
