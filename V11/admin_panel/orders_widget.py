@@ -10,9 +10,10 @@ except ImportError:
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QFrame, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QLineEdit,
-    QComboBox, QDialog, QGridLayout, QSizePolicy, QApplication, QInputDialog
+    QComboBox, QDialog, QGridLayout, QSizePolicy, QApplication, QInputDialog,
+    QCheckBox, QTabWidget, QTextBrowser
 )
-from PyQt6.QtGui import QColor, QFont, QTextDocument, QPageSize, QDrag, QCursor
+from PyQt6.QtGui import QColor, QFont, QTextDocument, QPageSize, QDrag, QCursor, QPixmap
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PyQt6.QtCore import Qt, QTimer, QSize, QMimeData, pyqtSignal
 from qasync import asyncSlot
@@ -64,8 +65,8 @@ class OrderDetailDialog(QDialog):
         self.order_data = order_data
         self.parent_widget = parent_widget
         self.setWindowTitle(f"جزئیات سفارش #{order_data['id']}")
-        self.setFixedSize(550, 650)
-        self.setStyleSheet(f"background-color: {BG_COLOR}; color: {TEXT_MAIN}; border: 1px solid #333;")
+        self.setFixedSize(800, 750) # Made it wider for preview
+        self.setStyleSheet(f"background-color: {BG_COLOR}; color: {TEXT_MAIN};")
         self.setup_ui()
 
     def setup_ui(self):
@@ -95,7 +96,15 @@ class OrderDetailDialog(QDialog):
         header_layout.addWidget(btn_close)
         layout.addWidget(header)
 
-        # --- محتوا ---
+        # --- Tab Widget ---
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border: 1px solid #333; background: {BG_COLOR}; }}
+            QTabBar::tab {{ background: {PANEL_BG}; color: {TEXT_SUB}; padding: 10px 20px; }}
+            QTabBar::tab:selected {{ background: {ACCENT_COLOR}; color: white; }}
+        """)
+
+        # --- Tab 1: General Info ---
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -158,6 +167,35 @@ class OrderDetailDialog(QDialog):
         content_layout.addWidget(list_frame)
         content_layout.addStretch()
 
+        self.tabs.addTab(content, "اطلاعات کلی")
+
+        # --- Tab 2: Invoice Preview ---
+        preview_tab = QWidget()
+        p_lay = QVBoxLayout(preview_tab)
+        self.txt_preview = QTextBrowser()
+        self.txt_preview.setStyleSheet("background: white; color: black; border-radius: 8px;")
+        p_lay.addWidget(self.txt_preview)
+        self.tabs.addTab(preview_tab, "پیش‌نمایش فاکتور")
+
+        # Load Preview
+        self.update_invoice_preview()
+
+        # --- Tab 3: Audit Trail ---
+        audit_tab = QWidget()
+        a_lay = QVBoxLayout(audit_tab)
+        self.audit_list = QScrollArea()
+        self.audit_list.setWidgetResizable(True)
+        self.audit_container = QWidget()
+        self.audit_vbox = QVBoxLayout(self.audit_container)
+        self.audit_vbox.addStretch()
+        self.audit_list.setWidget(self.audit_container)
+        a_lay.addWidget(self.audit_list)
+        self.tabs.addTab(audit_tab, "تاریخچه تغییرات")
+
+        self.load_audit_trail()
+
+        layout.addWidget(self.tabs)
+
         # --- فوتر و اقدامات ---
         footer = QFrame()
         footer.setStyleSheet(f"background-color: {PANEL_BG}; border-top: 1px solid #333; padding: 10px;")
@@ -217,6 +255,42 @@ class OrderDetailDialog(QDialog):
         lay.addStretch()
         return w
 
+    def update_invoice_preview(self):
+        # Generate HTML
+        date_str = self.order_data['created_at'].strftime("%Y/%m/%d")
+        user_info = {
+            "name": self.order_data['user_name'],
+            "phone": self.order_data['phone'],
+            "address": self.order_data['address']
+        }
+        html = self.parent_widget._generate_invoice_html(
+            self.order_data['id'], date_str, user_info,
+            self.order_data['items'], self.order_data['total_amount']
+        )
+        self.txt_preview.setHtml(html)
+
+    def load_audit_trail(self):
+        with next(get_db()) as db:
+            from db.models import AuditLog
+            logs = db.query(AuditLog).filter(
+                AuditLog.target_type == 'order',
+                AuditLog.target_id == str(self.order_data['id'])
+            ).order_by(AuditLog.created_at.desc()).all()
+
+            for log in logs:
+                item = QFrame()
+                item.setStyleSheet(f"background: {PANEL_BG}; border-radius: 8px; margin-bottom: 5px; border-right: 4px solid {ACCENT_COLOR};")
+                l = QVBoxLayout(item)
+                header = QHBoxLayout()
+                action = QLabel(f"<b>{log.action}</b>")
+                time = QLabel(log.created_at.strftime("%Y/%m/%d %H:%M"))
+                time.setStyleSheet(f"color: {TEXT_SUB}; font-size: 10px;")
+                header.addWidget(action); header.addStretch(); header.addWidget(time)
+                desc = QLabel(log.description)
+                desc.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+                l.addLayout(header); l.addWidget(desc)
+                self.audit_vbox.insertWidget(0, item)
+
     def do_action(self, status):
         self.close()
         if status == "shipped":
@@ -227,6 +301,8 @@ class OrderDetailDialog(QDialog):
 # کارت سفارش (با Drag و زمان نسبی)
 # ==============================================================================
 class OrderCard(QFrame):
+    selectionChanged = pyqtSignal(int, bool)
+
     def __init__(self, order_data: Dict[str, Any], parent_widget):
         super().__init__()
         self.data = order_data
@@ -236,10 +312,18 @@ class OrderCard(QFrame):
 
         self.setObjectName("kanban_card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(180)
+        self.setFixedHeight(220) # Increased height for thumbnails
 
         col_conf = next((c for c in KANBAN_COLUMNS if c["id"] == self.data['status']), {"color": TEXT_SUB})
         status_color = col_conf["color"]
+
+        # Platform Contrast & Status Urgency
+        bg_tint = "rgba(41, 128, 185, 0.05)" if self.data['platform'] == 'telegram' else "rgba(142, 68, 173, 0.05)"
+
+        urgency_border = ""
+        now = datetime.now()
+        if self.data['status'] == "pending_payment" and (now - self.data['created_at']).total_seconds() > 86400:
+            urgency_border = f"border: 2px solid {DANGER_COLOR};"
 
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20); shadow.setColor(QColor(0, 0, 0, 60)); shadow.setOffset(0, 4)
@@ -248,8 +332,9 @@ class OrderCard(QFrame):
         self.setStyleSheet(f"""
             QFrame#kanban_card {{
                 background-color: {CARD_BG}; border-radius: 12px;
-                border-left: 4px solid {status_color}; border-top: 1px solid #333;
-                border-right: 1px solid #333; border-bottom: 1px solid #333;
+                border-left: 5px solid {status_color};
+                background: {bg_tint};
+                {urgency_border}
             }}
             QFrame#kanban_card:hover {{ background-color: #34363a; }}
             QLabel {{ border: none; background: transparent; color: {TEXT_MAIN}; }}
@@ -261,6 +346,11 @@ class OrderCard(QFrame):
 
         # هدر
         top_row = QHBoxLayout()
+        self.chk_select = QCheckBox()
+        self.chk_select.setFixedSize(20, 20)
+        self.chk_select.stateChanged.connect(lambda s: self.selectionChanged.emit(self.order_id, s == 2))
+        top_row.addWidget(self.chk_select)
+
         lbl_id = QLabel(f"#{self.order_id}")
         lbl_id.setStyleSheet("font-weight: bold; font-size: 12px; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px;")
         lbl_price = QLabel(f"{int(self.data['total_amount']):,} ت")
@@ -278,6 +368,24 @@ class OrderCard(QFrame):
         lbl_user.setStyleSheet("color: #d1d1d1; font-size: 13px;")
         user_row.addWidget(ico); user_row.addSpacing(5); user_row.addWidget(lbl_user); user_row.addStretch()
         layout.addLayout(user_row)
+
+        # --- Product Thumbnails ---
+        thumb_layout = QHBoxLayout()
+        thumb_layout.setSpacing(4)
+        for item in self.data.get('items', [])[:4]: # Show max 4 thumbs
+            img_lbl = QLabel()
+            img_lbl.setFixedSize(35, 35)
+            img_lbl.setStyleSheet("background: #111; border-radius: 4px; border: 1px solid #333;")
+            if item.get('image'):
+                pix = QPixmap(str(BASE_DIR / item['image']))
+                if not pix.isNull():
+                    img_lbl.setPixmap(pix.scaled(35, 35, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
+                else: img_lbl.setText("?")
+            else: img_lbl.setText("?")
+            img_lbl.setToolTip(item['name'])
+            thumb_layout.addWidget(img_lbl)
+        thumb_layout.addStretch()
+        layout.addLayout(thumb_layout)
 
         # زمان نسبی و کد رهگیری
         info_row = QHBoxLayout()
@@ -344,6 +452,7 @@ class KanbanColumn(QFrame):
         super().__init__(parent)
         self.status_id = status_id
         self.setAcceptDrops(True)
+        self.color = color
         
         self.setStyleSheet(f"QFrame {{ background-color: {PANEL_BG}; border-radius: 16px; border: 1px solid #2e2e38; }}")
         self.setFixedWidth(300)
@@ -353,7 +462,8 @@ class KanbanColumn(QFrame):
         main_layout.setSpacing(10)
 
         # هدر
-        header_layout = QHBoxLayout()
+        header_layout = QVBoxLayout()
+        top_h = QHBoxLayout()
         ico = qta.icon(icon_name, color=color)
         lbl_ico = QLabel(); lbl_ico.setPixmap(ico.pixmap(20, 20))
         header_lbl = QLabel(title)
@@ -364,10 +474,17 @@ class KanbanColumn(QFrame):
         self.count_badge.setFixedSize(25, 25)
         self.count_badge.setStyleSheet(f"background-color: rgba(255,255,255,0.05); color: {color}; border-radius: 12px; font-weight: bold;")
         
-        header_layout.addWidget(lbl_ico)
-        header_layout.addWidget(header_lbl)
-        header_layout.addStretch()
-        header_layout.addWidget(self.count_badge)
+        top_h.addWidget(lbl_ico)
+        top_h.addWidget(header_lbl)
+        top_h.addStretch()
+        top_h.addWidget(self.count_badge)
+        header_layout.addLayout(top_h)
+
+        # Summary Badge (Total Amount)
+        self.lbl_total_sum = QLabel("مجموع: 0 تومان")
+        self.lbl_total_sum.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+        header_layout.addWidget(self.lbl_total_sum)
+
         main_layout.addLayout(header_layout)
 
         # اسکرول
@@ -394,7 +511,7 @@ class KanbanColumn(QFrame):
     def add_card(self, card_widget):
         if self.cards_layout.count() == 2: self.empty_lbl.hide()
         self.cards_layout.insertWidget(0, card_widget)
-        self.update_count()
+        self.update_stats()
 
     def clear_all(self):
         while self.cards_layout.count() > 1:
@@ -403,9 +520,17 @@ class KanbanColumn(QFrame):
         self.empty_lbl.show()
         self.update_count()
 
-    def update_count(self):
+    def update_stats(self):
         count = self.cards_layout.count() - 1
         self.count_badge.setText(str(count))
+
+        total_sum = 0
+        for i in range(self.cards_layout.count()):
+            item = self.cards_layout.itemAt(i).widget()
+            if isinstance(item, OrderCard):
+                total_sum += item.data['total_amount']
+
+        self.lbl_total_sum.setText(f"مجموع: {int(total_sum):,} تومان")
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasText(): event.acceptProposedAction()
@@ -425,6 +550,12 @@ class OrdersWidget(QWidget):
         self.rubika_client = rubika_client
         self.columns_map = {}
         self.all_orders_cache = []
+        self.selected_order_ids = set()
+
+        # Auto refresh timer
+        self.auto_refresh_timer = QTimer(self)
+        self.auto_refresh_timer.timeout.connect(self.refresh_data)
+
         self.setup_ui()
         self._data_loaded = False
 
@@ -442,11 +573,18 @@ class OrdersWidget(QWidget):
         header_layout.addStretch()
 
         self.search_inp = QLineEdit()
-        self.search_inp.setPlaceholderText("🔍 جستجو...")
+        self.search_inp.setPlaceholderText("🔍 جستجو نام یا محصول...")
         self.search_inp.setFixedWidth(200)
         self.search_inp.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid #3a3a4e; border-radius: 8px; padding: 8px 12px; color: white;")
         self.search_inp.textChanged.connect(self.filter_cards)
         header_layout.addWidget(self.search_inp)
+
+        # Auto Refresh Toggle
+        self.btn_auto_refresh = QPushButton("بروزرسانی خودکار: خاموش")
+        self.btn_auto_refresh.setCheckable(True)
+        self.btn_auto_refresh.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid #3a3a4e; border-radius: 8px; padding: 8px; color: {TEXT_SUB};")
+        self.btn_auto_refresh.clicked.connect(self.toggle_auto_refresh)
+        header_layout.addWidget(self.btn_auto_refresh)
 
         self.btn_refresh = QPushButton()
         self.btn_refresh.setIcon(qta.icon('fa5s.sync-alt', color='white'))
@@ -461,6 +599,67 @@ class OrdersWidget(QWidget):
         header_layout.addWidget(btn_export)
 
         main_layout.addLayout(header_layout)
+
+        # --- Advanced Filter Panel ---
+        self.filter_panel = QFrame()
+        self.filter_panel.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px; border: 1px solid #2e2e38;")
+        self.filter_panel.setFixedHeight(60)
+        f_lay = QHBoxLayout(self.filter_panel)
+        f_lay.setContentsMargins(15, 0, 15, 0)
+
+        f_lay.addWidget(QLabel("پلتفرم:"))
+        self.cmb_plat = QComboBox()
+        self.cmb_plat.addItems(["همه", "تلگرام", "روبیکا"])
+        self.cmb_plat.currentIndexChanged.connect(self.filter_cards)
+        f_lay.addWidget(self.cmb_plat)
+
+        f_lay.addWidget(QLabel("زمان:"))
+        self.cmb_date = QComboBox()
+        self.cmb_date.addItems(["همه زمان‌ها", "امروز", "دیروز", "هفته اخیر"])
+        self.cmb_date.currentIndexChanged.connect(self.filter_cards)
+        f_lay.addWidget(self.cmb_date)
+
+        f_lay.addWidget(QLabel("مبلغ از:"))
+        self.inp_min_price = QLineEdit()
+        self.inp_min_price.setPlaceholderText("0")
+        self.inp_min_price.setFixedWidth(80)
+        self.inp_min_price.textChanged.connect(self.filter_cards)
+        f_lay.addWidget(self.inp_min_price)
+
+        f_lay.addStretch()
+
+        btn_clear_filters = QPushButton("پاکسازی فیلترها")
+        btn_clear_filters.setFlat(True)
+        btn_clear_filters.setStyleSheet(f"color: {ACCENT_COLOR}; font-weight: bold;")
+        btn_clear_filters.clicked.connect(self.clear_filters)
+        f_lay.addWidget(btn_clear_filters)
+
+        main_layout.addWidget(self.filter_panel)
+
+        # --- Bulk Actions Toolbar ---
+        self.bulk_toolbar = QFrame()
+        self.bulk_toolbar.setStyleSheet(f"background: {ACCENT_COLOR}; border-radius: 12px;")
+        self.bulk_toolbar.setFixedHeight(50)
+        self.bulk_toolbar.setVisible(False)
+        b_lay = QHBoxLayout(self.bulk_toolbar)
+
+        self.lbl_bulk_info = QLabel("0 مورد انتخاب شده")
+        self.lbl_bulk_info.setStyleSheet("color: white; font-weight: bold;")
+        b_lay.addWidget(self.lbl_bulk_info)
+        b_lay.addStretch()
+
+        btn_bulk_approve = QPushButton("تایید همگانی")
+        btn_bulk_approve.setStyleSheet("background: white; color: black; border-radius: 6px; padding: 4px 10px;")
+        btn_bulk_approve.clicked.connect(lambda: self.bulk_change_status("approved"))
+        b_lay.addWidget(btn_bulk_approve)
+
+        btn_bulk_cancel = QPushButton("لغو انتخاب")
+        btn_bulk_cancel.setFlat(True)
+        btn_bulk_cancel.setStyleSheet("color: white;")
+        btn_bulk_cancel.clicked.connect(self.clear_selection)
+        b_lay.addWidget(btn_bulk_cancel)
+
+        main_layout.addWidget(self.bulk_toolbar)
 
         # بورد
         scroll_container = QScrollArea()
@@ -492,6 +691,43 @@ class OrdersWidget(QWidget):
         elif ok:
             QMessageBox.warning(self, "هشدار", "کد رهگیری الزامی است.")
 
+    def toggle_auto_refresh(self, checked):
+        if checked:
+            self.auto_refresh_timer.start(30000) # 30 seconds
+            self.btn_auto_refresh.setText("بروزرسانی خودکار: روشن")
+            self.btn_auto_refresh.setStyleSheet(f"background: {SUCCESS_COLOR}20; border: 1px solid {SUCCESS_COLOR}; border-radius: 8px; padding: 8px; color: {SUCCESS_COLOR};")
+        else:
+            self.auto_refresh_timer.stop()
+            self.btn_auto_refresh.setText("بروزرسانی خودکار: خاموش")
+            self.btn_auto_refresh.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid #3a3a4e; border-radius: 8px; padding: 8px; color: {TEXT_SUB};")
+
+    def clear_filters(self):
+        self.search_inp.clear()
+        self.cmb_plat.setCurrentIndex(0)
+        self.cmb_date.setCurrentIndex(0)
+        self.inp_min_price.clear()
+        self.filter_cards()
+
+    def clear_selection(self):
+        self.selected_order_ids.clear()
+        self.refresh_data() # To uncheck all boxes
+
+    def on_order_selected(self, order_id, checked):
+        if checked: self.selected_order_ids.add(order_id)
+        else: self.selected_order_ids.discard(order_id)
+
+        count = len(self.selected_order_ids)
+        self.bulk_toolbar.setVisible(count > 0)
+        self.lbl_bulk_info.setText(f"{count} مورد انتخاب شده")
+
+    @asyncSlot()
+    async def bulk_change_status(self, new_status):
+        if not self.selected_order_ids: return
+        if QMessageBox.question(self, "تایید گروهی", f"آیا از تغییر وضعیت {len(self.selected_order_ids)} سفارش مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
+            for oid in list(self.selected_order_ids):
+                await self.update_order_status(oid, new_status)
+            self.clear_selection()
+
     @asyncSlot()
     async def refresh_data(self):
         self.btn_refresh.setEnabled(False)
@@ -515,7 +751,10 @@ class OrdersWidget(QWidget):
                             "tracking_code": o.tracking_code or "",
                             "phone": o.phone_number,
                             "address": o.shipping_address,
-                            "items": [{"name": i.product.name if i.product else "؟", "qty": i.quantity, "total": i.quantity * i.price_at_purchase} for i in o.items] if o.items else []
+                            "items": [{"name": i.product.name if i.product else "؟",
+                                       "qty": i.quantity,
+                                       "total": i.quantity * i.price_at_purchase,
+                                       "image": i.product.image_path if i.product else None} for i in o.items] if o.items else []
                         })
                     return res
 
@@ -530,14 +769,44 @@ class OrdersWidget(QWidget):
     def _add_card_to_column(self, data):
         status = data['status']
         if status in self.columns_map:
-            self.columns_map[status].add_card(OrderCard(data, self))
+            card = OrderCard(data, self)
+            card.selectionChanged.connect(self.on_order_selected)
+            self.columns_map[status].add_card(card)
 
-    def filter_cards(self, text):
-        text = text.lower().strip()
+    def filter_cards(self, *args):
+        text = self.search_inp.text().lower().strip()
+        plat = self.cmb_plat.currentText()
+        date_f = self.cmb_date.currentIndex()
+        min_p = 0
+        try: min_p = int(self.inp_min_price.text() or "0")
+        except: pass
+
         for col in self.columns_map.values(): col.clear_all()
+
+        now = datetime.now()
+
         for data in self.all_orders_cache:
-            if text and text not in str(data['id']) and text not in data['user_name'].lower():
+            # Search Filter
+            product_names = " ".join([i['name'] for i in data.get('items', [])]).lower()
+            if text and (text not in str(data['id']) and text not in data['user_name'].lower() and text not in product_names):
                 continue
+
+            # Platform Filter
+            if plat != "همه" and data['platform'] != plat.lower().replace('تلگرام', 'telegram').replace('روبیکا', 'rubika'):
+                continue
+
+            # Date Filter
+            if date_f == 1: # Today
+                if data['created_at'].date() != now.date(): continue
+            elif date_f == 2: # Yesterday
+                if data['created_at'].date() != (now - asyncio.timedelta(days=1)).date(): continue
+            elif date_f == 3: # Last Week
+                if data['created_at'] < (now - asyncio.timedelta(days=7)): continue
+
+            # Price Filter
+            if data['total_amount'] < min_p:
+                continue
+
             self._add_card_to_column(data)
 
     def filter_by_order_id(self, order_id):
