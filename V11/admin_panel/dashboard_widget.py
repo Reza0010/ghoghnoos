@@ -134,33 +134,36 @@ class CircularKPI(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        rect = self.rect().adjusted(10, 10, -10, -10)
+            rect = self.rect().adjusted(10, 10, -10, -10)
 
-        # Background Circle
-        pen = QPen(QColor("#2e2e38"), 8)
-        painter.setPen(pen)
-        painter.drawEllipse(rect)
+            # Background Circle
+            pen = QPen(QColor("#2e2e38"), 8)
+            painter.setPen(pen)
+            painter.drawEllipse(rect)
 
-        # Progress Arc
-        pen.setColor(self.color)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
+            # Progress Arc
+            pen.setColor(self.color)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
 
-        span_angle = int(-self.value * 3.6 * 16)
-        painter.drawArc(rect, 90 * 16, span_angle)
+            span_angle = int(-self.value * 3.6 * 16)
+            painter.drawArc(rect, 90 * 16, span_angle)
 
-        # Text
-        painter.setPen(QColor("white"))
-        font = QFont("Vazirmatn", 14, QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{int(self.value)}%")
+            # Text
+            painter.setPen(QColor("white"))
+            font = QFont("Vazirmatn", 14, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{int(self.value)}%")
 
-        font.setPointSize(8)
-        painter.setFont(font)
-        painter.setPen(QColor(COLOR_GRAY))
-        painter.drawText(self.rect().adjusted(0, 80, 0, 0), Qt.AlignmentFlag.AlignHCenter, self.label)
+            font.setPointSize(8)
+            painter.setFont(font)
+            painter.setPen(QColor(COLOR_GRAY))
+            painter.drawText(self.rect().adjusted(0, 80, 0, 0), Qt.AlignmentFlag.AlignHCenter, self.label)
+        finally:
+            painter.end()
 
 # ==============================================================================
 # Stat Card (Animated & Glassmorphism)

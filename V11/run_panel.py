@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import json
 import socket
+from datetime import datetime, timedelta
 # --- تنظیمات محیطی ---
 os.environ["QT_FONT_DPI"] = "96"
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.screen=false"

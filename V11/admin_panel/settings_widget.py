@@ -12,8 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QProgressBar, QListWidget, QListWidgetItem,
     QStackedWidget, QFrame, QScrollArea, QTimeEdit, QFileDialog, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout,
-    QInputDialog, QAbstractSpinBox, QGraphicsOpacityEffect
+    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox
 )
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QFont, QPen, QBrush, QIcon
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize
