@@ -518,7 +518,7 @@ class KanbanColumn(QFrame):
             item = self.cards_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
         self.empty_lbl.show()
-        self.update_count()
+        self.update_stats()
 
     def update_stats(self):
         count = self.cards_layout.count() - 1

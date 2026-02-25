@@ -19,7 +19,7 @@ import qtawesome as qta
 
 from config import BASE_DIR
 from db.database import create_backup, get_db
-from db import crud
+from db import crud, models
 
 # ایمپورت ویجت‌ها
 from .dashboard_widget import DashboardWidget
