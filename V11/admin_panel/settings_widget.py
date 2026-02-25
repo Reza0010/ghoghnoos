@@ -12,7 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QProgressBar, QListWidget, QListWidgetItem,
     QStackedWidget, QFrame, QScrollArea, QTimeEdit, QFileDialog, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox
+    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox,
+    QGraphicsOpacityEffect
 )
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QFont, QPen, QBrush, QIcon
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize
@@ -124,16 +125,18 @@ class ToggleSwitch(QCheckBox):
     def paintEvent(self, event):
         if not self.isVisible():
             return
-        p = QPainter(self)
-        if not p.isActive():
+        p = QPainter()
+        if not p.begin(self):
             return
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setBrush(QBrush(QColor(SUCCESS_COLOR if self.isChecked() else "#4a4a62")))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(0, 0, self.width(), self.height(), 13, 13)
-        p.setBrush(QBrush(QColor("#ffffff")))
-        p.drawEllipse(self._circle_position, 3, 20, 20)
-        p.end()
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setBrush(QBrush(QColor(SUCCESS_COLOR if self.isChecked() else "#4a4a62")))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(0, 0, self.width(), self.height(), 13, 13)
+            p.setBrush(QBrush(QColor("#ffffff")))
+            p.drawEllipse(self._circle_position, 3, 20, 20)
+        finally:
+            p.end()
 
 class SkeletonFrame(QFrame):
     def __init__(self, parent=None):
@@ -284,6 +287,8 @@ class SettingsWidget(QWidget):
         self.fade_anim.setStartValue(0.0)
         self.fade_anim.setEndValue(1.0)
         self.fade_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
+        self.fade_anim.finished.connect(lambda: current_widget.setGraphicsEffect(None))
 
         self.pages_stack.setCurrentIndex(index)
         self.fade_anim.start()
@@ -573,7 +578,7 @@ class SettingsWidget(QWidget):
         self.chk_notif_order = ToggleSwitch(); self.chk_notif_order.setText("سفارش جدید")
         self.chk_notif_stock = ToggleSwitch(); self.chk_notif_stock.setText("اتمام موجودی کالا")
         self.chk_notif_ticket = ToggleSwitch(); self.chk_notif_ticket.setText("تیکت پشتیبانی جدید")
-        
+
         card_notif.add_widget(self.chk_notif_order)
         card_notif.add_widget(self.chk_notif_stock)
         card_notif.add_widget(self.chk_notif_ticket)

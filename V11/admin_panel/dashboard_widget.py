@@ -136,8 +136,8 @@ class CircularKPI(QWidget):
         if not self.isVisible():
             return
 
-        painter = QPainter(self)
-        if not painter.isActive():
+        painter = QPainter()
+        if not painter.begin(self):
             return
 
         try:
@@ -224,9 +224,6 @@ class StatCard(QFrame):
         layout.addWidget(self.icon_lbl)
 
         # Animations
-        self.opacity_effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self.opacity_effect)
-
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._update_count)
 
@@ -256,7 +253,7 @@ class StatCard(QFrame):
         self.target_value = value
         self.current_value = 0
         self.step = max(1, int(value / 30))
-        self.anim_timer.start(15)
+        self.anim_timer.start(30)
         
         color = COLOR_GREEN if trend_val >= 0 else COLOR_RED
         sign = "↑" if trend_val >= 0 else "↓"

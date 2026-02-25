@@ -421,6 +421,9 @@ class MainWindow(QMainWindow):
         self.page_anim.setEndValue(1.0)
         self.page_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
 
+        # پاکسازی افکت بعد از اتمام انیمیشن برای پایداری ترسیم
+        self.page_anim.finished.connect(lambda: current_page.setGraphicsEffect(None))
+
         self.content_area.setCurrentWidget(current_page)
         self.page_anim.start()
         
