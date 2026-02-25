@@ -236,10 +236,10 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
                     # در آلبوم نمیتوان ریپلای مارک‌آپ (دکمه) فرستاد، پس دکمه‌ها را در پیام جداگانه میفرستیم
                     await context.bot.send_media_group(msg_obj.chat_id, media=media_group)
                     await context.bot.send_message(msg_obj.chat_id, "👆 برای خرید یا ثبت نظر از دکمه‌های زیر استفاده کنید:", reply_markup=kbd)
+                else:
+                    await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
             finally:
                 for f in opened_files: f.close()
-            else:
-                await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
 
         elif all_images or prod.image_file_id:
             # ارسال تک عکس
@@ -265,10 +265,10 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
                             def save_fid(db, pid, fid):
                                 p = db.query(models.Product).get(pid); p.image_file_id = fid; db.commit()
                             await run_db(save_fid, prod.id, sent.photo[-1].file_id)
+                else:
+                    await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
             finally:
                 if opened_file: opened_file.close()
-            else:
-                await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
         else:
             # ارسال متنی اگر هیچ عکسی یافت نشد
             if query: await msg_obj.edit_text(text, reply_markup=kbd, parse_mode='HTML')

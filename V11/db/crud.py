@@ -756,3 +756,63 @@ def get_auto_reply(db: Session, text: str) -> Optional[str]:
         if r.keyword.lower() in text:
             return r.response
     return None
+
+# ======================================================================
+# 11. تحلیل داده‌های داشبورد (Dashboard Advanced Analytics)
+# ======================================================================
+def get_top_selling_products(db: Session, limit: int = 5, days: int = 30) -> List[Dict[str, Any]]:
+    """دریافت لیست محصولات پرفروش با آمار فروش"""
+    start_date = datetime.now() - timedelta(days=days)
+
+    res = db.query(
+        models.Product,
+        func.sum(models.OrderItem.quantity).label('total_qty')
+    ).join(models.OrderItem, models.Product.id == models.OrderItem.product_id)\
+     .join(models.Order, models.Order.id == models.OrderItem.order_id)\
+     .filter(models.Order.created_at >= start_date)\
+     .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+     .group_by(models.Product.id)\
+     .order_by(desc('total_qty'))\
+     .limit(limit).all()
+
+    return [{"product": r[0], "total_qty": r[1]} for r in res]
+
+def get_dashboard_stats_advanced(db: Session, days: int = 30) -> Dict[str, Any]:
+    """دریافت آمار پیشرفته داشبورد شامل مقایسه با دوره قبل (Trend)"""
+    now = datetime.now()
+    start_current = now - timedelta(days=days)
+    start_previous = now - timedelta(days=days * 2)
+
+    def fetch_period_stats(start, end):
+        stats = db.query(
+            func.coalesce(func.sum(models.Order.total_amount), 0).label('rev'),
+            func.count(models.Order.id).label('orders')
+        ).filter(models.Order.created_at >= start, models.Order.created_at < end)\
+         .filter(models.Order.status.in_(['approved', 'shipped', 'paid'])).first()
+
+        profit = db.query(
+            func.coalesce(func.sum(models.OrderItem.quantity * (models.OrderItem.price_at_purchase - models.OrderItem.purchase_price_at_purchase)), 0)
+        ).join(models.Order).filter(models.Order.created_at >= start, models.Order.created_at < end)\
+         .filter(models.Order.status.in_(['approved', 'shipped', 'paid'])).scalar() or 0
+
+        users = db.query(func.count(models.User.user_id))\
+            .filter(models.User.created_at >= start, models.User.created_at < end).scalar() or 0
+
+        return {"rev": float(stats.rev), "orders": stats.orders, "profit": float(profit), "users": users}
+
+    current = fetch_period_stats(start_current, now)
+    previous = fetch_period_stats(start_previous, start_current)
+
+    def calc_trend(curr, prev):
+        if prev == 0: return 100 if curr > 0 else 0
+        return round(((curr - prev) / prev) * 100, 1)
+
+    return {
+        "current": current,
+        "trends": {
+            "rev": calc_trend(current['rev'], previous['rev']),
+            "orders": calc_trend(current['orders'], previous['orders']),
+            "profit": calc_trend(current['profit'], previous['profit']),
+            "users": calc_trend(current['users'], previous['users'])
+        }
+    }
