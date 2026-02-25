@@ -272,11 +272,9 @@ class ModernLoginDialog(QWidget):
 def run_telegram_bot(token, proxy=None):
     """اجرای ربات تلگرام در پروسس مجزا"""
     if not token: return
+
     try:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
         from telegram.ext import Application
         from telegram import Update
@@ -290,8 +288,8 @@ def run_telegram_bot(token, proxy=None):
         setup_application_handlers(app)
         logging.info(f"🚀 Telegram Bot Process Started (Proxy: {'Yes' if proxy else 'No'})")
 
-        # استفاده از close_loop=False برای جلوگیری از تداخل در بستن پروسس
-        app.run_polling(allowed_updates=Update.ALL_TYPES, close_loop=False)
+        # استفاده از stop_signals=None برای پایداری در subprocess ویندوز
+        app.run_polling(allowed_updates=Update.ALL_TYPES, stop_signals=None, close_loop=False)
     except Exception as e:
         logging.error(f"Telegram Process Error: {e}")
 

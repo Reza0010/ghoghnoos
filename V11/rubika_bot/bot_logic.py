@@ -98,7 +98,7 @@ class RubikaWorker:
         with SessionLocal() as db:
             user = crud.get_or_create_user(db, user_id, "کاربر روبیکا", None, "rubika")
             # آپدیت آخرین پیام کاربر
-            crud.update_user_info(db, user_id, {"last_interaction_text": text[:100]})
+            crud.update_user_info(db, user_id, last_interaction_text=text[:100])
             shop_name = crud.get_setting(db, "shop_name", "فروشگاه ما")
 
         text = text.strip()
