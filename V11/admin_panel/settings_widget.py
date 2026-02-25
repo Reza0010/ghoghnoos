@@ -22,6 +22,7 @@ import qtawesome as qta
 from db.database import get_db
 from db import crud
 from config import BASE_DIR
+from bot import proxy_utils
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,64 @@ BORDER_COLOR = "#2e2e38"
 # ==============================================================================
 # ویجت‌های کمکی
 # ==============================================================================
+class BotMonitorCard(QFrame):
+    def __init__(self, name, icon, parent=None):
+        super().__init__(parent)
+        self.setObjectName("BotMonitorCard")
+        self.setFixedWidth(320)
+        self.setStyleSheet(f"""
+            QFrame#BotMonitorCard {{ background: rgba(30, 30, 35, 0.8); border-radius: 20px; border: 1px solid {BORDER_COLOR}; }}
+            QLabel {{ color: {TEXT_MAIN}; background: transparent; }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        header = QHBoxLayout()
+        lbl_icon = QLabel(); lbl_icon.setPixmap(qta.icon(icon, color=ACCENT_COLOR).pixmap(40, 40))
+        lbl_name = QLabel(name); lbl_name.setStyleSheet("font-weight: 900; font-size: 18px;")
+        header.addWidget(lbl_icon); header.addWidget(lbl_name); header.addStretch()
+        layout.addLayout(header)
+
+        grid = QGridLayout()
+        grid.setSpacing(10)
+
+        self.lbl_status = QLabel("⚪ آفلاین")
+        self.lbl_status.setStyleSheet(f"color: {TEXT_SUB}; font-weight: bold;")
+
+        self.lbl_cpu = QLabel("CPU: 0%")
+        self.lbl_ram = QLabel("RAM: 0 MB")
+        self.lbl_uptime = QLabel("Uptime: --")
+
+        style_sub = f"color: {TEXT_SUB}; font-size: 13px;"
+        self.lbl_cpu.setStyleSheet(style_sub); self.lbl_ram.setStyleSheet(style_sub); self.lbl_uptime.setStyleSheet(style_sub)
+
+        grid.addWidget(QLabel("وضعیت:"), 0, 0); grid.addWidget(self.lbl_status, 0, 1)
+        grid.addWidget(QLabel("پردازش:"), 1, 0); grid.addWidget(self.lbl_cpu, 1, 1)
+        grid.addWidget(QLabel("حافظه:"), 2, 0); grid.addWidget(self.lbl_ram, 2, 1)
+        grid.addWidget(QLabel("پایداری:"), 3, 0); grid.addWidget(self.lbl_uptime, 3, 1)
+        layout.addLayout(grid)
+
+        self.btn_restart = QPushButton("🔄 ریستارت")
+        self.btn_restart.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_restart.setStyleSheet(f"background: rgba(255,255,255,0.05); color: white; border-radius: 10px; padding: 10px; border: 1px solid {BORDER_COLOR};")
+        layout.addWidget(self.btn_restart)
+
+    def update_stats(self, data):
+        if data.get("alive"):
+            self.lbl_status.setText("🟢 آنلاین")
+            self.lbl_status.setStyleSheet(f"color: {SUCCESS_COLOR}; font-weight: bold;")
+            self.lbl_cpu.setText(f"CPU: {data['cpu']:.1f}%")
+            self.lbl_ram.setText(f"RAM: {data['ram']:.1f} MB")
+            self.lbl_uptime.setText(f"Uptime: {data['uptime']}")
+        else:
+            self.lbl_status.setText("🔴 آفلاین")
+            self.lbl_status.setStyleSheet(f"color: {DANGER_COLOR}; font-weight: bold;")
+            self.lbl_cpu.setText("CPU: 0%")
+            self.lbl_ram.setText("RAM: 0 MB")
+            self.lbl_uptime.setText("Uptime: --")
+
 class ToggleSwitch(QCheckBox):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -71,6 +130,18 @@ class ToggleSwitch(QCheckBox):
         p.setBrush(QBrush(QColor("#ffffff")))
         p.drawEllipse(self._circle_position, 3, 20, 20)
         p.end()
+
+class SkeletonFrame(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 rgba(255,255,255,0.05), stop:0.5 rgba(255,255,255,0.1), stop:1 rgba(255,255,255,0.05));
+                border-radius: 15px;
+            }}
+        """)
+        self.anim = QPropertyAnimation(self, b"pos") # Just a placeholder for style
 
 class SettingCard(QFrame):
     def __init__(self, title, parent=None):
@@ -112,16 +183,29 @@ class SettingsWidget(QWidget):
         self._data_loaded = False
 
     def setup_ui(self):
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
         # --- Sidebar Navigation ---
+        sidebar_frame = QFrame()
+        sidebar_frame.setFixedWidth(240)
+        sidebar_frame.setStyleSheet(f"background: rgba(22, 22, 26, 0.4); border-left: 1px solid rgba(255, 255, 255, 0.05);")
+        sidebar_layout = QVBoxLayout(sidebar_frame)
+        sidebar_layout.setContentsMargins(10, 15, 10, 15)
+        sidebar_layout.setSpacing(10)
+
+        # Settings Search
+        self.search_settings = QLineEdit()
+        self.search_settings.setPlaceholderText("🔍 جستجو تنظیمات...")
+        self.search_settings.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 10px; color: white;")
+        self.search_settings.textChanged.connect(self.filter_settings_ui)
+        sidebar_layout.addWidget(self.search_settings)
+
         self.nav_list = QListWidget()
-        self.nav_list.setFixedWidth(240)
         self.nav_list.setObjectName("SettingsNav")
         self.nav_list.setStyleSheet(f"""
-            QListWidget#SettingsNav {{ background: rgba(22, 22, 26, 0.4); border-left: 1px solid rgba(255, 255, 255, 0.05); padding: 10px; outline: none; }}
+            QListWidget#SettingsNav {{ background: transparent; border: none; outline: none; }}
             QListWidget#SettingsNav::item {{ height: 55px; color: {TEXT_SUB}; padding-right: 20px; border-radius: 12px; margin-bottom: 5px; }}
             QListWidget#SettingsNav::item:selected {{ color: white; background: {ACCENT_COLOR}; font-weight: bold; }}
             QListWidget#SettingsNav::item:hover:!selected {{ background: rgba(255, 255, 255, 0.05); }}
@@ -129,13 +213,15 @@ class SettingsWidget(QWidget):
 
         nav_items = [
             ("⚙️ تنظیمات اصلی", 0),
-            ("💬 محتوای متنی (Template)", 1),
-            ("🎟 کدهای تخفیف", 2),
-            ("🤖 پاسخگوی خودکار", 3),
-            ("💳 مالی و درگاه", 4),
-            ("🎨 شخصی‌سازی (Branding)", 5),
-            ("🔔 اطلاع‌رسانی", 6),
-            ("🛠 ابزارها و بک‌آپ", 7)
+            ("⚡ وضعیت سرور و ربات", 1),
+            ("🌐 مدیریت پروکسی", 2),
+            ("💬 محتوای متنی (Template)", 3),
+            ("🎟 کدهای تخفیف", 4),
+            ("🤖 پاسخگوی خودکار", 5),
+            ("💳 مالی و درگاه", 6),
+            ("🎨 شخصی‌سازی (Branding)", 7),
+            ("🔔 اطلاع‌رسانی", 8),
+            ("🛠 ابزارها و بک‌آپ", 9)
         ]
 
         for t, i in nav_items:
@@ -143,23 +229,41 @@ class SettingsWidget(QWidget):
             self.nav_list.addItem(item)
 
         self.nav_list.currentRowChanged.connect(self.change_page)
-        main_layout.addWidget(self.nav_list)
+        sidebar_layout.addWidget(self.nav_list)
+        self.main_layout.addWidget(sidebar_frame)
 
         # --- Content Stack ---
         self.pages_stack = QStackedWidget()
-        self.pages_stack.addWidget(self._ui_core_settings())
-        self.pages_stack.addWidget(self._ui_template_settings())
-        self.pages_stack.addWidget(self._ui_coupon_settings())
-        self.pages_stack.addWidget(self._ui_autoreply_settings())
-        self.pages_stack.addWidget(self._ui_payment_settings())
-        self.pages_stack.addWidget(self._ui_branding_settings())
-        self.pages_stack.addWidget(self._ui_notification_settings())
-        self.pages_stack.addWidget(self._ui_tools_settings())
+        self._all_pages = [
+            self._ui_core_settings(),
+            self._ui_bot_monitoring(),
+            self._ui_proxy_settings(),
+            self._ui_template_settings(),
+            self._ui_coupon_settings(),
+            self._ui_autoreply_settings(),
+            self._ui_payment_settings(),
+            self._ui_branding_settings(),
+            self._ui_notification_settings(),
+            self._ui_tools_settings()
+        ]
+        for p in self._all_pages: self.pages_stack.addWidget(p)
 
-        main_layout.addWidget(self.pages_stack)
+        self.main_layout.addWidget(self.pages_stack)
         self.nav_list.setCurrentRow(0)
 
+    def filter_settings_ui(self, text):
+        """فیلتر کردن آیتم‌های منوی تنظیمات"""
+        query = text.lower().strip()
+        for i in range(self.nav_list.count()):
+            item = self.nav_list.item(i)
+            item.setHidden(query not in item.text().lower())
+
     def change_page(self, index):
+        # مدیریت تایمر مانیتورینگ
+        if hasattr(self, 'monitor_timer'):
+            if index == 1: self.monitor_timer.start(3000)
+            else: self.monitor_timer.stop()
+
         current_widget = self.pages_stack.widget(index)
 
         # انیمیشن تعویض تب (Fade In)
@@ -174,6 +278,82 @@ class SettingsWidget(QWidget):
         self.pages_stack.setCurrentIndex(index)
         self.fade_anim.start()
 
+    def _ui_bot_monitoring(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30); layout.setSpacing(20)
+
+        title = QLabel("🤖 مرکز پایش و کنترل ربات‌ها")
+        title.setStyleSheet("font-size: 24px; font-weight: 900; color: white;")
+        layout.addWidget(title)
+
+        h_cards = QHBoxLayout()
+        self.tg_monitor = BotMonitorCard("Telegram Bot", "fa5b.telegram")
+        self.rb_monitor = BotMonitorCard("Rubika Bot", "fa5s.rocket")
+
+        # اتصال دکمه‌های ریستارت
+        self.tg_monitor.btn_restart.clicked.connect(self.restart_all_bots)
+        self.rb_monitor.btn_restart.clicked.connect(self.restart_all_bots)
+
+        h_cards.addWidget(self.tg_monitor)
+        h_cards.addWidget(self.rb_monitor)
+        h_cards.addStretch()
+        layout.addLayout(h_cards)
+
+        # Log Snippet Viewer
+        card_log = SettingCard("📜 آخرین رویدادهای سیستم")
+        self.log_snippet = QTextEdit()
+        self.log_snippet.setReadOnly(True)
+        self.log_snippet.setStyleSheet("background: #0d1117; color: #c9d1d9; font-family: 'Consolas'; font-size: 12px; border-radius: 10px; padding: 10px;")
+        self.log_snippet.setFixedHeight(350)
+        card_log.add_widget(self.log_snippet)
+        layout.addWidget(card_log)
+
+        # تایمر آپدیت مانیتورینگ
+        self.monitor_timer = QTimer(self)
+        self.monitor_timer.timeout.connect(self.update_monitoring_data)
+
+        layout.addStretch()
+        return page
+
+    def _ui_proxy_settings(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("مدیریت اتصالات (Proxy & V2Ray)")
+
+        self.proxy_table = QTableWidget(0, 5)
+        self.proxy_table.setHorizontalHeaderLabels(["نام", "نوع", "آدرس/لینک", "پینگ", "عملیات"])
+        self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.proxy_table.setStyleSheet("QTableWidget { background: rgba(0,0,0,0.2); }")
+
+        btn_add = QPushButton("➕ افزودن پروکسی جدید")
+        btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.clicked.connect(self.add_proxy_dialog)
+
+        btn_test_all = QPushButton("⚡ تست پینگ تمام موارد")
+        btn_test_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_test_all.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_test_all.clicked.connect(self.test_all_proxies)
+
+        h_btns = QHBoxLayout()
+        h_btns.addWidget(btn_add); h_btns.addWidget(btn_test_all)
+
+        card.add_widget(self.proxy_table)
+        card.add_layout(h_btns)
+        layout.addWidget(card)
+
+        # بخش Xray Bridge
+        bridge_card = SettingCard("وضعیت پل Xray (V2Ray Bridge)")
+        self.lbl_bridge_status = QLabel("⚪ وضعیت: نامشخص")
+        self.lbl_bridge_port = QLabel("🔌 پورت محلی: 2080 (SOCKS5)")
+        bridge_card.add_widget(self.lbl_bridge_status)
+        bridge_card.add_widget(self.lbl_bridge_port)
+        layout.addWidget(bridge_card)
+
+        layout.addStretch()
+        return page
+
     def _ui_core_settings(self):
         page = QScrollArea(); page.setWidgetResizable(True); page.setStyleSheet("background: transparent; border: none;")
         container = QWidget(); layout = QVBoxLayout(container); layout.setSpacing(20); layout.setContentsMargins(30, 30, 30, 30)
@@ -182,6 +362,8 @@ class SettingsWidget(QWidget):
         card_tg = SettingCard("پیکربندی ربات تلگرام")
         self.inp_tg_token = QLineEdit(); self.inp_tg_token.setPlaceholderText("Telegram Bot Token (600000000:AA...)")
         self.inp_tg_token.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+        self.inp_tg_token.setToolTip("توکنی که از BotFather@ دریافت کرده‌اید را اینجا وارد کنید.")
+
         card_tg.add_widget(QLabel("توکن ربات:"))
         card_tg.add_widget(self.inp_tg_token)
         layout.addWidget(card_tg)
@@ -189,6 +371,8 @@ class SettingsWidget(QWidget):
         # Rubika Core
         card_rb = SettingCard("پیکربندی ربات روبیکا")
         self.inp_rb_token = QLineEdit(); self.inp_rb_token.setPlaceholderText("Rubika Bot Token")
+        self.inp_rb_token.setToolTip("توکن اختصاصی ربات روبیکا (Auth) را اینجا قرار دهید.")
+
         card_rb.add_widget(QLabel("توکن ربات:"))
         card_rb.add_widget(self.inp_rb_token)
         layout.addWidget(card_rb)
@@ -308,10 +492,10 @@ class SettingsWidget(QWidget):
         card_methods = SettingCard("روش‌های پرداخت فعال")
         self.chk_pay_online = ToggleSwitch(); self.chk_pay_online.setText("پرداخت آنلاین (زرین‌پال)")
         self.chk_pay_card = ToggleSwitch(); self.chk_pay_card.setText("کارت به کارت (ارسال فیش)")
-        
+
         row1 = QHBoxLayout(); row1.addWidget(QLabel("درگاه آنلاین:")); row1.addStretch(); row1.addWidget(self.chk_pay_online)
         row2 = QHBoxLayout(); row2.addWidget(QLabel("کارت به کارت:")); row2.addStretch(); row2.addWidget(self.chk_pay_card)
-        
+
         card_methods.add_layout(row1); card_methods.add_layout(row2)
         layout.addWidget(card_methods)
 
@@ -401,17 +585,40 @@ class SettingsWidget(QWidget):
         return page
 
     def _ui_tools_settings(self):
-        # این متد قبلاTools بود، فقط استایلش را هماهنگ میکنیم
         page = QScrollArea(); page.setWidgetResizable(True); page.setStyleSheet("background: transparent; border: none;")
         container = QWidget(); layout = QVBoxLayout(container); layout.setSpacing(20); layout.setContentsMargins(30, 30, 30, 30)
 
-        card_bk = SettingCard("مدیریت بک‌آپ و فایل‌ها")
-        btn_bk = QPushButton("📦 ایجاد نسخه پشتیبان آنی"); btn_bk.clicked.connect(self.create_manual_backup)
-        btn_bk.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px;")
+        # System Doctor
+        doctor_card = SettingCard("🩺 دکتر سیستم (System Doctor)")
+        self.btn_run_doctor = QPushButton("🚀 شروع عیب‌یابی هوشمند")
+        self.btn_run_doctor.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_run_doctor.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 12px; font-weight: bold; border-radius: 10px;")
+        self.btn_run_doctor.clicked.connect(self.run_system_doctor)
+
+        self.doctor_results = QLabel("در انتظار شروع عیب‌یابی...")
+        self.doctor_results.setStyleSheet(f"color: {TEXT_SUB}; font-size: 13px; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 8px;")
+        self.doctor_results.setWordWrap(True)
+
+        doctor_card.add_widget(self.btn_run_doctor)
+        doctor_card.add_widget(self.doctor_results)
+        layout.addWidget(doctor_card)
+
+        # Export/Import Settings
+        config_card = SettingCard("💾 مدیریت پیکربندی (Config)")
+        h_cfg = QHBoxLayout()
+        btn_exp = QPushButton("📥 خروجی کل تنظیمات (JSON)"); btn_exp.clicked.connect(self.export_settings)
+        btn_imp = QPushButton("📤 بارگذاری تنظیمات"); btn_imp.clicked.connect(self.import_settings)
+        h_cfg.addWidget(btn_exp); h_cfg.addWidget(btn_imp)
+        config_card.add_layout(h_cfg)
+        layout.addWidget(config_card)
+
+        card_bk = SettingCard("📦 مدیریت بک‌آپ دیتابیس")
+        btn_bk = QPushButton("ایجاد نسخه پشتیبان دیتابیس (Instant)"); btn_bk.clicked.connect(self.create_manual_backup)
+        btn_bk.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px; border-radius: 8px;")
         card_bk.add_widget(btn_bk)
         layout.addWidget(card_bk)
 
-        card_log = SettingCard("Audit Logs (تاریخچه تغییرات پنل)")
+        card_log = SettingCard("📜 Audit Logs (تاریخچه تغییرات پنل)")
         self.audit_table = QTableWidget(0, 4)
         self.audit_table.setHorizontalHeaderLabels(["زمان", "ادمین", "عملیات", "توضیح"])
         self.audit_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -431,8 +638,22 @@ class SettingsWidget(QWidget):
             QTimer.singleShot(200, self.refresh_data)
             self._data_loaded = True
 
+    def show_loading_state(self, show=True):
+        """نمایش حالت در حال بارگذاری با استفاده از Skeleton"""
+        if show:
+            if not hasattr(self, '_skeleton'):
+                self._skeleton = QWidget()
+                lay = QVBoxLayout(self._skeleton)
+                for _ in range(3):
+                    lay.addWidget(SkeletonFrame())
+                self.pages_stack.addWidget(self._skeleton)
+            self.pages_stack.setCurrentWidget(self._skeleton)
+        else:
+            self.pages_stack.setCurrentIndex(self.nav_list.currentRow())
+
     @asyncSlot()
     async def refresh_data(self):
+        self.show_loading_state(True)
         loop = asyncio.get_running_loop()
         try:
             data = await loop.run_in_executor(None, self._fetch_all_settings)
@@ -474,10 +695,56 @@ class SettingsWidget(QWidget):
             # Auto Replies
             await self.load_auto_replies()
 
+            # Proxies
+            await self.load_proxies()
+
             # Audit Logs
             await self.load_audit_logs()
 
         except Exception as e: logger.error(f"Settings refresh error: {e}")
+        finally:
+            self.show_loading_state(False)
+
+    async def load_proxies(self):
+        loop = asyncio.get_running_loop()
+        proxies = await loop.run_in_executor(None, lambda: crud.get_all_proxies(next(get_db())))
+        self.proxy_table.setRowCount(0)
+        for i, p in enumerate(proxies):
+            self.proxy_table.insertRow(i)
+
+            name_text = f"⭐ {p.name}" if p.is_active else p.name
+            self.proxy_table.setItem(i, 0, QTableWidgetItem(name_text))
+            self.proxy_table.setItem(i, 1, QTableWidgetItem(p.type.upper()))
+
+            url_item = QTableWidgetItem(p.url[:50] + "..." if len(p.url) > 50 else p.url)
+            url_item.setToolTip(p.url)
+            self.proxy_table.setItem(i, 2, QTableWidgetItem(url_item))
+
+            ping_text = f"{p.last_ping}ms" if p.last_ping and p.last_ping > 0 else "--"
+            if p.last_ping == -1: ping_text = "Timeout"
+            if p.last_ping == -2: ping_text = "Error"
+
+            ping_item = QTableWidgetItem(ping_text)
+            if p.last_ping and p.last_ping > 0:
+                color = SUCCESS_COLOR if p.last_ping < 300 else WARNING_COLOR
+                ping_item.setForeground(QColor(color))
+            self.proxy_table.setItem(i, 3, ping_item)
+
+            # Actions
+            actions = QWidget()
+            lay = QHBoxLayout(actions); lay.setContentsMargins(0,0,0,0); lay.setSpacing(5)
+
+            btn_act = QPushButton("فعال‌سازی")
+            btn_act.setEnabled(not p.is_active)
+            btn_act.setStyleSheet(f"background: {SUCCESS_COLOR if not p.is_active else '#444'}; font-size: 10px;")
+            btn_act.clicked.connect(lambda _, pid=p.id: self.activate_proxy(pid))
+
+            btn_del = QPushButton("حذف")
+            btn_del.setStyleSheet(f"background: {DANGER_COLOR}; font-size: 10px;")
+            btn_del.clicked.connect(lambda _, pid=p.id: self.delete_proxy_entry(pid))
+
+            lay.addWidget(btn_act); lay.addWidget(btn_del)
+            self.proxy_table.setCellWidget(i, 4, actions)
 
     async def load_coupons(self):
         loop = asyncio.get_running_loop()
@@ -544,6 +811,90 @@ class SettingsWidget(QWidget):
                 db.query(AutoReply).filter_by(id=kid).delete()
                 db.commit()
             asyncio.create_task(self.load_auto_replies())
+
+    def add_proxy_dialog(self):
+        """دیالوگ افزودن پروکسی جدید با قابلیت تشخیص خودکار V2Ray"""
+        link, ok = QInputDialog.getMultiLineText(self, "افزودن پروکسی", "لینک V2Ray یا آدرس SOCKS5/HTTP را وارد کنید:")
+        if not ok or not link: return
+
+        name, ok2 = QInputDialog.getText(self, "نام پروکسی", "یک نام برای این اتصال انتخاب کنید:")
+        if not ok2: name = "Unnamed"
+
+        p_type = "http"
+        if link.startswith("socks5://"): p_type = "socks5"
+        elif any(link.startswith(s) for s in ["vless://", "vmess://", "trojan://", "ss://"]):
+            p_type = "v2ray"
+
+        with next(get_db()) as db:
+            crud.add_proxy(db, {"name": name, "url": link.strip(), "type": p_type})
+
+        self.window().show_toast("پروکسی جدید اضافه شد.")
+        asyncio.create_task(self.load_proxies())
+
+    def restart_all_bots(self):
+        """درخواست ریستارت از MainWindow"""
+        win = self.window()
+        if hasattr(win, 'btn_restart_bots'):
+            win.btn_restart_bots.click()
+
+    def update_monitoring_data(self):
+        """دریافت و نمایش دیتای مانیتورینگ از ApplicationManager"""
+        win = self.window()
+        if hasattr(win, 'app_manager') and win.app_manager:
+            stats = win.app_manager.get_bot_stats()
+            self.tg_monitor.update_stats(stats["telegram"])
+            self.rb_monitor.update_stats(stats["rubika"])
+
+            # آپدیت وضعیت پل Xray
+            if win.app_manager.xray and win.app_manager.xray.process:
+                if win.app_manager.xray.process.poll() is None:
+                    self.lbl_bridge_status.setText("🟢 وضعیت پل Xray: در حال اجرا")
+                    self.lbl_bridge_status.setStyleSheet("color: #2cb67d; font-weight: bold;")
+                else:
+                    self.lbl_bridge_status.setText("🔴 وضعیت پل Xray: متوقف شده")
+                    self.lbl_bridge_status.setStyleSheet("color: #ef4565; font-weight: bold;")
+            else:
+                self.lbl_bridge_status.setText("⚪ وضعیت پل Xray: غیرفعال")
+                self.lbl_bridge_status.setStyleSheet("color: #94a1b2;")
+
+            # آپدیت لاگ اسنیپت (۳۰ خط آخر)
+            try:
+                from config import LOG_DIR
+                log_file = LOG_DIR / 'app.log'
+                if log_file.exists():
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        self.log_snippet.setPlainText("".join(lines[-30:]))
+                        self.log_snippet.moveCursor(self.log_snippet.textCursor().MoveOperation.End)
+            except: pass
+
+    @asyncSlot()
+    async def activate_proxy(self, pid):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, lambda: crud.set_active_proxy(next(get_db()), pid))
+        self.window().show_toast("پروکسی فعال شد. برای اعمال کامل نیاز به ریستارت سرویس‌ها است.")
+        await self.load_proxies()
+
+    @asyncSlot()
+    async def delete_proxy_entry(self, pid):
+        if QMessageBox.question(self, "حذف", "آیا این پروکسی حذف شود؟") == QMessageBox.StandardButton.Yes:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: crud.delete_proxy(next(get_db()), pid))
+            await self.load_proxies()
+
+    @asyncSlot()
+    async def test_all_proxies(self):
+        self.window().show_toast("در حال تست پینگ تمام پروکسی‌ها...")
+        with next(get_db()) as db:
+            proxies = crud.get_all_proxies(db)
+            for p in proxies:
+                # تست غیرمسدودساز در پس‌زمینه
+                latency = await asyncio.get_running_loop().run_in_executor(
+                    None, proxy_utils.test_proxy_connectivity, p.url, p.type
+                )
+                p.last_ping = latency
+            db.commit()
+        await self.load_proxies()
 
     def _fetch_all_settings(self):
         with next(get_db()) as db:
@@ -642,7 +993,7 @@ class SettingsWidget(QWidget):
             with next(get_db()) as db:
                 from db.models import AuditLog
                 return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(50).all()
-        
+
         logs = await loop.run_in_executor(None, fetch)
         self.audit_table.setRowCount(0)
         for i, l in enumerate(logs):
@@ -651,6 +1002,85 @@ class SettingsWidget(QWidget):
             self.audit_table.setItem(i, 1, QTableWidgetItem(str(l.admin_id)))
             self.audit_table.setItem(i, 2, QTableWidgetItem(str(l.action)))
             self.audit_table.setItem(i, 3, QTableWidgetItem(str(l.description)))
+
+    @asyncSlot()
+    async def run_system_doctor(self):
+        """اجرای ابزار عیب‌یابی هوشمند سیستم"""
+        self.doctor_results.setText("⏳ در حال بررسی بخش‌های مختلف سیستم... لطفا صبور باشید.")
+        self.btn_run_doctor.setEnabled(False)
+
+        results = []
+
+        # ۱. بررسی دیتابیس
+        try:
+            from sqlalchemy import text
+            with next(get_db()) as db:
+                db.execute(text("SELECT 1"))
+                results.append("✅ اتصال به پایگاه داده: سالم و فعال")
+        except Exception as e:
+            results.append(f"❌ پایگاه داده: خطا در اتصال! ({str(e)})")
+
+        # ۲. بررسی شبکه و اینترنت
+        try:
+            import socket
+            socket.create_connection(("google.com", 80), timeout=3)
+            results.append("✅ دسترسی به شبکه جهانی: برقرار")
+        except:
+            results.append("⚠️ شبکه: اینترنت مستقیم قطع است (ممکن است پروکسی نیاز باشد)")
+
+        # ۳. بررسی توکن تلگرام (غیرمسدودساز)
+        with next(get_db()) as db:
+            tg_token = crud.get_setting(db, "tg_bot_token")
+            if tg_token:
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(f"https://api.telegram.org/bot{tg_token}/getMe", timeout=5)
+                        if resp.status_code == 200: results.append("✅ توکن تلگرام: معتبر و آنلاین")
+                        else: results.append(f"❌ توکن تلگرام: نامعتبر (کد {resp.status_code})")
+                except:
+                    results.append("⚠️ وضعیت تلگرام: عدم امکان بررسی (احتمالا به دلیل فیلترینگ)")
+            else:
+                results.append("⚪ تلگرام: توکن تنظیم نشده است.")
+
+        self.doctor_results.setText("\n".join(results))
+        self.btn_run_doctor.setEnabled(True)
+
+    def export_settings(self):
+        """خروجی گرفتن از تمام تنظیمات در قالب فایل JSON"""
+        path, _ = QFileDialog.getSaveFileName(self, "ذخیره تنظیمات", "shop_config_backup.json", "JSON Files (*.json)")
+        if not path: return
+
+        try:
+            with next(get_db()) as db:
+                from db.models import Setting
+                settings = db.query(Setting).all()
+                data = {s.key: s.value for s in settings}
+
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+
+            self.window().show_toast("تنظیمات با موفقیت صادر شد.")
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در صادرات: {e}")
+
+    def import_settings(self):
+        """وارد کردن تنظیمات از فایل JSON"""
+        path, _ = QFileDialog.getOpenFileName(self, "انتخاب فایل تنظیمات", "", "JSON Files (*.json)")
+        if not path: return
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            if QMessageBox.question(self, "تایید", f"آیا مطمئن هستید؟ {len(data)} مورد جایگزین خواهد شد.") == QMessageBox.StandardButton.Yes:
+                with next(get_db()) as db:
+                    for k, v in data.items():
+                        crud.set_setting(db, k, v)
+                self.window().show_toast("تنظیمات با موفقیت بازنشانی شد.")
+                asyncio.create_task(self.refresh_data())
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"فایل نامعتبر است: {e}")
 
     def create_manual_backup(self):
         from db.database import create_backup

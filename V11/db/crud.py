@@ -758,6 +758,52 @@ def get_auto_reply(db: Session, text: str) -> Optional[str]:
     return None
 
 # ======================================================================
+# 11. مدیریت پروکسی‌ها (Proxy Management)
+# ======================================================================
+def get_all_proxies(db: Session) -> List[models.Proxy]:
+    return db.query(models.Proxy).all()
+
+def add_proxy(db: Session, data: dict) -> models.Proxy:
+    # اگر اولین پروکسی است، فعالش کن
+    count = db.query(func.count(models.Proxy.id)).scalar()
+    if count == 0:
+        data['is_active'] = True
+
+    # فیلتر کردن فیلدهای معتبر
+    valid_cols = {c.name for c in models.Proxy.__table__.columns}
+    clean_data = {k: v for k, v in data.items() if k in valid_cols}
+
+    proxy = models.Proxy(**clean_data)
+    db.add(proxy)
+    db.commit()
+    db.refresh(proxy)
+    return proxy
+
+def delete_proxy(db: Session, proxy_id: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if proxy:
+        was_active = proxy.is_active
+        db.delete(proxy)
+        db.commit()
+
+        # اگر فعال بود، یکی دیگر را فعال کن
+        if was_active:
+            next_p = db.query(models.Proxy).first()
+            if next_p:
+                next_p.is_active = True
+                db.commit()
+
+def set_active_proxy(db: Session, proxy_id: int):
+    # غیرفعال کردن بقیه
+    db.query(models.Proxy).update({models.Proxy.is_active: False})
+    # فعال کردن مورد نظر
+    db.query(models.Proxy).filter_by(id=proxy_id).update({models.Proxy.is_active: True})
+    db.commit()
+
+def get_active_proxy(db: Session) -> Optional[models.Proxy]:
+    return db.query(models.Proxy).filter_by(is_active=True).first()
+
+# ======================================================================
 # 11. تحلیل داده‌های داشبورد (Dashboard Advanced Analytics)
 # ======================================================================
 def get_top_selling_products(db: Session, limit: int = 5, days: int = 30) -> List[Dict[str, Any]]:

@@ -62,23 +62,34 @@ class XrayManager:
         self.process = None
 
     def generate_config(self, v2ray_link, local_port):
-        """تولید کانفیگ JSON برای Xray بر اساس لینک (ساده شده)"""
-        # در دنیای واقعی نیاز به پارسر حرفه‌ای لینک است
-        # اینجا یک ساختار پیش‌فرض برای تست قرار می‌دهیم
-        # نکته: برای محصول نهایی باید از کتابخانه‌هایی مثل v2ray-url-decoder استفاده کرد
+        """تولید کانفیگ JSON واقعی برای Xray بر اساس لینک دریافتی"""
+        from bot.proxy_utils import parse_v2ray_link
+        data = parse_v2ray_link(v2ray_link)
+        if not data: return False
+
         config = {
             "inbounds": [{
-                "port": local_port, "protocol": "socks",
+                "port": local_port, "listen": "127.0.0.1", "protocol": "socks",
                 "settings": {"auth": "noauth", "udp": True}
             }],
             "outbounds": [{
-                "protocol": "vless", # پیش‌فرض VLESS
-                "settings": {"vnext": [{"address": "server.com", "port": 443, "users": [{"id": "uuid"}]}]}
+                "protocol": data['protocol'],
+                "settings": {
+                    "vnext": [{
+                        "address": data['address'], "port": data['port'],
+                        "users": [{"id": data['id'], "encryption": "none"}]
+                    }]
+                },
+                "streamSettings": {
+                    "network": data['type'], "security": data['security'],
+                    "tlsSettings": {"serverName": data.get('sni', data['address']), "fingerprint": data.get('fp', 'chrome')}
+                }
             }]
         }
-        # اگر لینک واقعی بود، مقادیر بالا را جایگزین می‌کنیم
+
         with open(self.cfg, 'w') as f:
-            json.dump(config, f)
+            json.dump(config, f, indent=4)
+        return True
 
     def start(self, v2ray_link, local_port=2080):
         if not os.path.exists(self.bin):
@@ -306,13 +317,24 @@ def run_rubika_bot(token, proxy=None):
 # مدیریت برنامه (Application Life Cycle & Watchdog)
 # ==============================================================================
 class ApplicationManager:
-    def __init__(self, loop):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ApplicationManager, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, loop=None):
+        if hasattr(self, '_initialized'): return
+        self._initialized = True
         self.loop = loop
         self.window = None
         self.splash = None
         self.tg_process = None
         self.rb_process = None
         self.xray = None
+        self.tg_start_time = None
+        self.rb_start_time = None
 
         # تنظیمات سیستم واچ‌داگ
         self.watchdog_timer = QTimer()
@@ -336,10 +358,10 @@ class ApplicationManager:
         from db.database import get_db
         from config import XRAY_BIN_PATH, XRAY_CONFIG_PATH, DEFAULT_LOCAL_PROXY_PORT
         with next(get_db()) as db:
-            proxy_url = crud.get_setting(db, "proxy_url", "")
-            if proxy_url.startswith("vless://") or proxy_url.startswith("vmess://"):
+            active_p = crud.get_active_proxy(db)
+            if active_p and active_p.type == 'v2ray':
                 self.xray = XrayManager(XRAY_BIN_PATH, XRAY_CONFIG_PATH)
-                self.xray.start(proxy_url, DEFAULT_LOCAL_PROXY_PORT)
+                self.xray.start(active_p.url, DEFAULT_LOCAL_PROXY_PORT)
 
         # ۳. نمایش دیالوگ لاگین
         self.splash.set_message("در انتظار تایید هویت...", 90)
@@ -353,6 +375,7 @@ class ApplicationManager:
 
         # ۴. ایجاد پنجره اصلی
         self.window = MainWindow(bot_application=None, rubika_client=None)
+        self.window.app_manager = self
 
         # ریستارت سرویس‌ها
         try: self.window.btn_restart_bots.clicked.disconnect()
@@ -379,18 +402,24 @@ class ApplicationManager:
         with next(get_db()) as db:
             tg_token = crud.get_setting(db, "tg_bot_token", TELEGRAM_BOT_TOKEN)
             rb_token = crud.get_setting(db, "rb_bot_token", RUBIKA_BOT_TOKEN)
-            # اگر Xray فعال است، پروکسی ربات‌ها را به لوکال هاست تغییر بده
+
+            # سلسله مراتب پروکسی: ۱. پروکسی فعال جدید ۲. پروکسی قدیمی ۳. هیچ‌کدام
             proxy = None
             if self.xray:
                  proxy = f"socks5://127.0.0.1:2080"
             else:
-                 proxy = crud.get_setting(db, "proxy_url", "")
+                 active_p = crud.get_active_proxy(db)
+                 if active_p:
+                     proxy = active_p.url
+                 else:
+                     proxy = crud.get_setting(db, "proxy_url", "")
 
         if tg_token and (not self.tg_process or not self.tg_process.is_alive()):
             self.tg_process = multiprocessing.Process(
                 target=run_telegram_bot, args=(tg_token, proxy), name="TG_Bot", daemon=True
             )
             self.tg_process.start()
+            self.tg_start_time = datetime.now()
             logger.info("✅ Telegram Watchdog: Process started")
 
         if rb_token and (not self.rb_process or not self.rb_process.is_alive()):
@@ -398,6 +427,7 @@ class ApplicationManager:
                 target=run_rubika_bot, args=(rb_token, proxy), name="RB_Bot", daemon=True
             )
             self.rb_process.start()
+            self.rb_start_time = datetime.now()
             logger.info("✅ Rubika Watchdog: Process started")
 
     def _check_processes_health(self):
@@ -410,6 +440,29 @@ class ApplicationManager:
             logger.warning("⚠️ Rubika Bot crashed! Restarting...")
             self.start_background_bots()
 
+    def get_bot_stats(self):
+        """دریافت آمار مصرف منابع ربات‌ها"""
+        import psutil
+        res = {"telegram": {"alive": False}, "rubika": {"alive": False}}
+
+        def fill_stats(proc, start_time):
+            if proc and proc.is_alive():
+                try:
+                    p = psutil.Process(proc.pid)
+                    uptime = datetime.now() - start_time if start_time else timedelta(0)
+                    return {
+                        "alive": True,
+                        "cpu": p.cpu_percent(interval=0.1),
+                        "ram": p.memory_info().rss / (1024 * 1024), # MB
+                        "uptime": str(uptime).split('.')[0]
+                    }
+                except: pass
+            return {"alive": False}
+
+        res["telegram"] = fill_stats(self.tg_process, self.tg_start_time)
+        res["rubika"] = fill_stats(self.rb_process, self.rb_start_time)
+        return res
+
     def restart_services(self):
         logger.info("Manual Restart triggered...")
         if self.tg_process: self.tg_process.terminate()
@@ -417,13 +470,16 @@ class ApplicationManager:
 
         if self.xray:
              self.xray.stop()
-             # استارت مجدد Xray با تنظیمات جدید
-             from db.database import get_db
-             from config import XRAY_BIN_PATH, XRAY_CONFIG_PATH, DEFAULT_LOCAL_PROXY_PORT
-             with next(get_db()) as db:
-                 proxy_url = crud.get_setting(db, "proxy_url", "")
-                 if proxy_url.startswith("vless://") or proxy_url.startswith("vmess://"):
-                     self.xray.start(proxy_url, DEFAULT_LOCAL_PROXY_PORT)
+             self.xray = None
+
+        # استارت مجدد Xray اگر پروکسی فعال جدید V2Ray است
+        from db.database import get_db
+        from config import XRAY_BIN_PATH, XRAY_CONFIG_PATH, DEFAULT_LOCAL_PROXY_PORT
+        with next(get_db()) as db:
+            active_p = crud.get_active_proxy(db)
+            if active_p and active_p.type == 'v2ray':
+                self.xray = XrayManager(XRAY_BIN_PATH, XRAY_CONFIG_PATH)
+                self.xray.start(active_p.url, DEFAULT_LOCAL_PROXY_PORT)
 
         QTimer.singleShot(2000, self.start_background_bots)
         self.window.show_toast("تمام سرویس‌ها بازنشانی شدند.")
@@ -436,7 +492,12 @@ class ApplicationManager:
             rb_token = crud.get_setting(db, "rb_bot_token", RUBIKA_BOT_TOKEN)
 
             # تنظیم پروکسی برای کلاینت‌های داخلی پنل
-            proxy_url = "socks5://127.0.0.1:2080" if self.xray else crud.get_setting(db, "proxy_url", None)
+            proxy_url = None
+            if self.xray:
+                proxy_url = "socks5://127.0.0.1:2080"
+            else:
+                active_p = crud.get_active_proxy(db)
+                proxy_url = active_p.url if active_p else crud.get_setting(db, "proxy_url", None)
 
         if tg_token:
             try:

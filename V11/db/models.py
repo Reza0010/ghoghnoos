@@ -272,3 +272,13 @@ class AutoReply(Base):
     response = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Proxy(Base):
+    __tablename__ = "proxies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=True)
+    url = Column(Text, nullable=False)
+    type = Column(String(20), nullable=False) # 'v2ray', 'http', 'socks5'
+    is_active = Column(Boolean, default=False)
+    last_ping = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
