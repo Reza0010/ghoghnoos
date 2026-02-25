@@ -44,20 +44,23 @@ def get_progress_bar(current_step: int, total_steps: int = 4) -> str:
     return f"<b>✨ مرحله {current_step} از {total_steps}</b>\n{bar}\n"
 
 def get_tracking_timeline(status: str) -> str:
-    """نمودار وضعیت سفارش (Timeline) با ایموجی‌های مرتبط"""
-    steps = {
-        "pending_payment": ("⏳", "◽️", "◽️", "◽️"), # در انتظار پرداخت
-        "approved":        ("✅", "⚙️", "◽️", "◽️"), # تایید شده/در حال آماده‌سازی
-        "paid":            ("✅", "✅", "📦", "◽️"), # پرداخت شده/بسته‌بندی
-        "shipped":         ("✅", "✅", "✅", "🚚"), # تحویل پست شده
-        "rejected":        ("❌", "─", "─", "─"),    # لغو شده
+    """نمودار وضعیت سفارش (Timeline) با ایموجی‌های مرتبط و نوار گرافیکی"""
+    config = {
+        "pending_payment": (1, "⏳ در انتظار پرداخت", "⚪️⚪️⚪️⚪️"),
+        "approved":        (2, "✅ تایید شده / در حال آماده‌سازی", "🟢🟠⚪️⚪️"),
+        "paid":            (3, "💰 پرداخت موفق / در حال بسته‌بندی", "🟢🟢🟠⚪️"),
+        "shipped":         (4, "🚚 تحویل مأمور پست گردید", "🟢🟢🟢🟢"),
+        "rejected":        (0, "❌ متاسفانه لغو گردید", "🔴🔴🔴🔴"),
     }
-    s = steps.get(status, ("◽️", "◽️", "◽️", "◽️"))
+    step_num, step_desc, bar = config.get(status, (0, "نامشخص", "◽️◽️◽️◽️"))
+
     timeline = (
-        f"{s[0]} ثبت سفارش اولیه\n"
-        f"  └ {s[1]} تایید مدیریت\n"
-        f"    └ {s[2]} بسته‌بندی کالا\n"
-        f"      └ {s[3]} تحویل به پست"
+        f"📊 <b>وضعیت فعلی: {step_desc}</b>\n"
+        f"<code>{bar}</code>\n\n"
+        f"{'✅' if step_num >= 1 else '◽️'} ثبت سفارش\n"
+        f"{'✅' if step_num >= 2 else '◽️'} تایید مدیریت\n"
+        f"{'✅' if step_num >= 3 else '◽️'} بسته‌بندی\n"
+        f"{'✅' if step_num >= 4 else '🚚'} تحویل پست"
     )
     return timeline
 
@@ -208,7 +211,7 @@ def get_checkout_payment(total: Any, shipping_cost: str, final_total: Any, card_
 
 ORDER_CONFIRMATION = """
 🎉 <b>سفارش شما با موفقیت ثبت گردید!</b> 😍
-🆔 شماره پیگیری: <code>#{order_id}</code>
+🆔 شناسه سفارش: <code>#{order_id}</code>
 {divider}
 {timeline}
 {divider}

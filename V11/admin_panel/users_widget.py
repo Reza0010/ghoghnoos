@@ -657,12 +657,34 @@ class UsersWidget(QWidget):
 
     @asyncSlot()
     async def broadcast(self):
-        text, ok = QInputDialog.getText(self, "پیام همگانی", "متن پیام:")
-        if ok and text:
-            self.window().show_toast(f"در حال ارسال به {len(self.selected_ids)} کاربر...")
-            # Logic sending...
-            await asyncio.sleep(1) # Simulate
-            self.window().show_toast("پیام ارسال شد.")
+        """ارسال پیام همگانی هوشمند با پلتفرم هدف"""
+        msg, ok = QInputDialog.getMultiLineText(self, "پیام همگانی", f"پیام برای {len(self.selected_ids)} کاربر انتخاب شده:")
+        if ok and msg:
+            self.window().show_toast("در حال ارسال پیام...")
+            asyncio.create_task(self._async_broadcast(msg, list(self.selected_ids)))
+
+    async def _async_broadcast(self, text, user_ids):
+        success, fail = 0, 0
+        with SessionLocal() as db:
+            for uid in user_ids:
+                user = db.query(models.User).filter_by(user_id=uid).first()
+                if not user: continue
+
+                try:
+                    if user.platform == 'telegram' and self.bot_app:
+                        await self.bot_app.bot.send_message(chat_id=uid, text=text)
+                        success += 1
+                    elif user.platform == 'rubika' and self.rubika_client:
+                        await self.rubika_client.send_message(chat_id=uid, text=text)
+                        success += 1
+                    else: fail += 1
+                except Exception as e:
+                    logger.error(f"Broadcast error for {uid}: {e}")
+                    fail += 1
+
+                await asyncio.sleep(0.05) # جلوگیری از فلود
+
+        self.window().show_toast(f"پایان ارسال. موفق: {success} | ناموفق: {fail}")
 
     def export_csv(self):
         path, _ = QFileDialog.getSaveFileName(self, "خروجی اکسل", "users.csv", "CSV (*.csv)")

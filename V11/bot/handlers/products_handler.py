@@ -156,6 +156,9 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     user_id = update.effective_user.id
     
+    # نمایش وضعیت در حال پردازش
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
     # مدیریت ورود از طریق کلیک یا لینک مستقیم (Deep Linking)
     if query:
         await query.answer()
@@ -212,7 +215,10 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         if len(all_images) > 1:
             # ارسال به صورت آلبوم (Media Group)
-            if query: await msg_obj.delete()
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_photo")
+            if query:
+                try: await msg_obj.delete()
+                except: pass
 
             media_group = []
             for i, img_path in enumerate(all_images[:10]): # حداکثر ۱۰ عکس

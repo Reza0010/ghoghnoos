@@ -73,14 +73,19 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """افزودن مستقیم به سبد (بدون متغیر)"""
     query = update.callback_query
-    prod_id = int(query.data.split(':')[2])
+    parts = query.data.split(':')
+    prod_id = int(parts[2])
     
     try:
         await run_db(crud.add_to_cart, query.from_user.id, prod_id, 1)
         await query.answer(responses.ADDED_TO_CART)
-        # رفرش صفحه محصول
-        from bot.handlers.products_handler import show_product_details
-        await show_product_details(update, context)
+
+        # رفرش صفحه محصول یا سبد خرید
+        if len(parts) > 3 and parts[3] == "details":
+            from bot.handlers.products_handler import show_product_details
+            await show_product_details(update, context)
+        else:
+            await view_cart(update, context)
     except ValueError as e:
         await query.answer(f"⚠️ {str(e)}", show_alert=True)
 
@@ -108,7 +113,12 @@ async def update_cart_item_handler(update: Update, context: ContextTypes.DEFAULT
     try:
         await run_db(_logic, query.from_user.id, prod_id, change)
         await query.answer()
-        await view_cart(update, context)
+
+        if len(parts) > 4 and parts[4] == "details":
+             from bot.handlers.products_handler import show_product_details
+             await show_product_details(update, context)
+        else:
+            await view_cart(update, context)
     except ValueError as e:
         await query.answer(str(e), show_alert=True)
 

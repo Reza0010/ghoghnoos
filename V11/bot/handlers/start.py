@@ -84,6 +84,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # آماده‌سازی کیبورد و تصویر بنر
     kbd = keyboards.get_main_menu_keyboard(channel_url=channel_url)
+    persistent_kbd = keyboards.get_persistent_menu()
+
     banner_full_path = (Path(BASE_DIR) / banner_rel) if banner_rel else None
     has_valid_banner = banner_full_path and banner_full_path.exists()
 
@@ -106,6 +108,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     reply_markup=kbd,
                     parse_mode=constants.ParseMode.HTML
                 )
+                # ارسال منوی ثابت در صورت نیاز
+                if not query:
+                    await context.bot.send_message(chat_id=chat_id, text="👇 از منوی زیر برای دسترسی سریع استفاده کنید:", reply_markup=persistent_kbd)
         else:
             # اگر بنر نداریم (فقط متن):
             if query and query.message:
@@ -119,6 +124,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 # پیام جدید
                 await context.bot.send_message(chat_id=chat_id, text=welcome_text, reply_markup=kbd, parse_mode=constants.ParseMode.HTML)
+                if not query:
+                     await context.bot.send_message(chat_id=chat_id, text="👇 از منوی زیر برای دسترسی سریع استفاده کنید:", reply_markup=persistent_kbd)
 
     except BadRequest as e:
         if "Message is not modified" not in str(e):

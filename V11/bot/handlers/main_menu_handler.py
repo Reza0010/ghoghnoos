@@ -106,27 +106,30 @@ async def handle_order_history(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_track_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پیگیری وضعیت آخرین سفارش به صورت سریع"""
     query = update.callback_query
-    await query.answer()
+    if query: await query.answer()
     
     orders = await run_db(crud.get_user_orders, update.effective_user.id)
     last_order = orders[0] if orders else None
 
     if last_order:
         timeline = responses.get_tracking_timeline(last_order.status)
-        trk = f"\n📬 <b>کد رهگیری پستی:</b> <code>{last_order.tracking_code}</code>" if last_order.tracking_code else ""
+        trk = f"\n📬 <b>کد رهگیری پستی:</b>\n<code>{last_order.tracking_code}</code>" if last_order.tracking_code else ""
         
         text = (
-            f"📋 <b>وضعیت آخرین سفارش شما:</b>\n"
-            f"🆔 شناسه: <code>{last_order.id}</code>\n"
-            f"💰 مبلغ: {responses.format_price(last_order.total_amount)}\n"
-            f"📅 تاریخ ثبت: {last_order.created_at.strftime('%Y-%m-%d')}\n\n"
+            f"📋 <b>جزئیات سفارش #{last_order.id}:</b>\n\n"
+            f"💰 مبلغ کل: {responses.format_price(last_order.total_amount)}\n"
+            f"📅 تاریخ: {last_order.created_at.strftime('%Y/%m/%d')}\n\n"
             f"{timeline}{trk}\n\n"
-            f"<i>برای مشاهده لیست تمام سفارشات به بخش پروفایل بروید.</i>"
+            f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
+            f"<i>برای مشاهده سوابق کامل به بخش «حساب من» بروید.</i>"
         )
     else:
-        text = "❌ شما سفارشی برای پیگیری ندارید."
+        text = "❌ شما هنوز سفارشی ثبت نکرده‌اید."
 
-    await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    if query:
+        await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    else:
+        await update.effective_chat.send_message(text, reply_markup=keyboards.get_main_menu_keyboard(), parse_mode='HTML')
 
 # ==============================================================================
 # مدیریت آدرس‌ها

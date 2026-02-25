@@ -20,16 +20,36 @@ from db import crud
 logger = logging.getLogger(__name__)
 
 async def _global_text_handler(update, context):
-    """بررسی کلمات کلیدی برای پاسخ خودکار"""
+    """بررسی کلمات کلیدی برای پاسخ خودکار و منوی اصلی"""
     if not update.message or not update.message.text: return
 
     text = update.message.text.strip()
     # نادیده گرفتن دستورات
     if text.startswith('/'): return
 
+    # ۱. مسیریابی دکمه‌های منوی ثابت (Persistent Menu)
+    if text == responses.PRODUCTS_BUTTON:
+        return await products_handler.list_categories(update, context)
+    elif text == responses.CART_BUTTON:
+        return await cart_handler.view_cart(update, context)
+    elif text == responses.SEARCH_BUTTON:
+        # هندلر گفتگو (ConversationHandler) در search_handler این مورد را مدیریت می‌کند.
+        # اما برای اطمینان و جلوگیری از تداخل با بقیه متون:
+        return
+    elif text == responses.USER_PROFILE_BUTTON:
+        return await main_menu_handler.handle_user_profile(update, context)
+    elif text == responses.SUPPORT_BUTTON:
+        return await main_menu_handler.handle_support(update, context)
+    elif text == responses.ABOUT_US_BUTTON:
+        return await main_menu_handler.handle_about_us(update, context)
+
+    # ۲. پاسخگوی خودکار هوشمند
     with next(get_db()) as db:
         response = crud.get_auto_reply(db, text)
         if response:
+            # نمایش حالت Typing برای واقعی‌تر شدن
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+            await asyncio.sleep(0.5)
             await update.message.reply_text(response, parse_mode='HTML')
 
 async def _unknown_callback(update, context):

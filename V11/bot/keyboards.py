@@ -13,6 +13,14 @@ def _build_grid(buttons: List[InlineKeyboardButton], n_cols: int) -> List[List[I
 # ==============================================================================
 # بخش ۱: منوی اصلی (Main Menu)
 # ==============================================================================
+def get_persistent_menu() -> ReplyKeyboardMarkup:
+    """منوی اصلی ثابت در پایین صفحه"""
+    return ReplyKeyboardMarkup([
+        [responses.PRODUCTS_BUTTON, responses.CART_BUTTON],
+        [responses.SEARCH_BUTTON, responses.USER_PROFILE_BUTTON],
+        [responses.SUPPORT_BUTTON, responses.ABOUT_US_BUTTON]
+    ], resize_keyboard=True)
+
 def get_main_menu_keyboard(channel_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
     منوی شبکه‌ای مدرن و کاربرپسند
@@ -90,13 +98,20 @@ def get_product_detail_keyboard(product: models.Product, is_favorite: bool, cart
     
     # 1. بخش خرید یا اطلاع‌رسانی
     if product.stock > 0:
-        label = f"🛒 افزودن به سبد ({cart_qty} عدد)" if cart_qty > 0 else "🛒 افزودن به سبد خرید"
-        # اگر محصول متغیر (رنگ/سایز) داشته باشد، ابتدا باید انتخاب کند
-        if product.variants:
-            cb_data = f"attr:start:{product.id}"
+        if cart_qty > 0:
+            # کنترلر تعداد مستقیم در صفحه محصول
+            keyboard.append([
+                InlineKeyboardButton("➖", callback_data=f"cart:upd:{product.id}:-1:details"),
+                InlineKeyboardButton(f"🛒 {cart_qty} عدد در سبد", callback_data="cart:view"),
+                InlineKeyboardButton("➕", callback_data=f"cart:upd:{product.id}:1:details"),
+            ])
         else:
-            cb_data = f"cart:add:{product.id}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=cb_data)])
+            label = "🛒 افزودن به سبد خرید"
+            if product.variants:
+                cb_data = f"attr:start:{product.id}"
+            else:
+                cb_data = f"cart:add:{product.id}:details"
+            keyboard.append([InlineKeyboardButton(label, callback_data=cb_data)])
     else:
         keyboard.append([InlineKeyboardButton("🔔 موجود شد خبرم کن", callback_data=f"notify:{product.id}")])
 
