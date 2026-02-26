@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 from typing import Optional, Dict, Any, List
 
 # واردات نسبتی به ساختار پروژه
@@ -100,6 +101,10 @@ class RubikaWorker:
             # آپدیت آخرین پیام کاربر
             crud.update_user_info(db, user_id, last_interaction_text=text[:100])
             shop_name = crud.get_setting(db, "shop_name", "فروشگاه ما")
+            maintenance = crud.get_setting(db, "shop_maintenance_mode", "false")
+
+        if maintenance == "true":
+            return await self.api.send_message(chat_id, "🛠 **ربات در حال حاضر در حالت تعمیرات است.**\n\nما به زودی باز خواهیم گشت. از شکیبایی شما سپاسگزاریم.")
 
         text = text.strip()
 
@@ -147,6 +152,10 @@ class RubikaWorker:
         with SessionLocal() as db:
             shop_name = crud.get_setting(db, "shop_name", "فروشگاه ما")
             welcome_tpl = crud.get_setting(db, "tmpl_welcome", "")
+            maintenance = crud.get_setting(db, "shop_maintenance_mode", "false")
+
+        if maintenance == "true":
+            return await self.api.send_message(chat_id, "🛠 **ربات در حال حاضر در حالت تعمیرات است.**")
 
         if welcome_tpl:
             from bot.responses import format_dynamic_text
@@ -286,18 +295,40 @@ class RubikaWorker:
         """ثبت سفارش نهایی"""
         try:
             with SessionLocal() as db:
+                # چک کردن حداقل مبلغ
+                min_order = crud.get_setting(db, "min_order_amount", "0")
+                items = crud.get_cart_items(db, user_id)
+                items_total = sum(float(item.product.price) * item.quantity for item in items)
+
+                if items_total < float(min_order):
+                    return await self.api.send_message(chat_id, f"⚠️ حداقل مبلغ سفارش {int(float(min_order)):,} تومان است. مجموع سبد شما: {int(items_total):,} تومان")
+
                 order = crud.create_order_from_cart(db, user_id, {
-                    "address": "نیاز به هماهنگی تلفنی",
+                    "address": "نیاز به هماهنگی تلفنی (روبیکا)",
                     "phone": "ثبت نشده",
                     "postal_code": ""
                 })
 
+                # دریافت اطلاعات کارت بانکی
+                raw_cards = crud.get_setting(db, "bank_cards", "[]")
+                try:
+                    cards = json.loads(raw_cards)
+                except:
+                    cards = []
+
+            card_text = ""
+            if cards:
+                card_text = "\n💳 **شماره کارت جهت واریز:**\n"
+                for c in cards[:2]: # حداکثر ۲ کارت
+                    card_text += f"`{c['number']}` - {c['owner']}\n"
+
             msg = (
-                f"🎉 **سفارش شما با موفقیت در سیستم ثبت شد!**\n\n"
+                f"🎉 **سفارش شما با موفقیت ثبت شد!**\n\n"
                 f"🆔 شماره سفارش: `#{order.id}`\n"
-                f"💰 مبلغ قابل پرداخت: `{int(order.total_amount):,}` تومان\n\n"
-                f"📞 کارشناسان ما به زودی جهت هماهنگی نهایی با شما تماس خواهند گرفت.\n"
-                f"از اعتماد شما سپاسگزاریم. ❤️"
+                f"💰 مبلغ قابل پرداخت: `{int(order.total_amount):,}` تومان\n"
+                f"{card_text}\n"
+                f"📞 کارشناسان ما جهت هماهنگی نهایی با شما تماس خواهند گرفت.\n"
+                f"لطفاً پس از واریز، شماره پیگیری را به پشتیبانی ارسال کنید. ❤️"
             )
             await self.api.send_message(chat_id, msg)
 
@@ -307,15 +338,24 @@ class RubikaWorker:
 
     async def send_support(self, chat_id: str):
         with SessionLocal() as db:
-            msg = crud.get_setting(db, "tmpl_support", "")
+            raw_support = crud.get_setting(db, "support_contacts", "[]")
+            try:
+                contacts = json.loads(raw_support)
+            except:
+                contacts = []
 
-        if not msg:
-            div = "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯"
-            msg = (
-                "📞 **مرکز پشتیبانی مشتریان**\n"
-                f"{div}\n"
-                "در صورت داشتن هرگونه سوال یا مشکل در فرآیند خرید، از طریق آیدی زیر با ما در ارتباط باشید:\n\n"
-                "🆔 @YourSupportID\n\n"
-                "⏰ ساعت پاسخگویی: ۱۰ صبح الی ۲۲"
-            )
+        if not contacts:
+            contacts = [{"title": "پشتیبانی", "phone": "ثبت نشده", "hours": ""}]
+
+        contact_lines = ""
+        for c in contacts:
+            hours = f" ({c.get('hours')})" if c.get('hours') else ""
+            contact_lines += f"👤 {c['title']}\n📞 `{c['phone']}`{hours}\n\n"
+
+        msg = (
+            f"🎧 **مرکز پشتیبانی مشتریان**\n\n"
+            f"از راه‌های زیر با ما در ارتباط باشید:\n\n"
+            f"{contact_lines}"
+            f"⏰ پاسخگوی شما هستیم."
+        )
         await self.api.send_message(chat_id, msg)

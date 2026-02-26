@@ -604,7 +604,8 @@ class DashboardWidget(QWidget):
                     rb_sales = get_plat_chart_data('rubika')
                     
                     # ۴. موجودی کم و فعالیت‌ها
-                    low_stock = db.query(models.Product).filter(models.Product.stock < 10).limit(5).all()
+                    threshold = int(crud.get_setting(db, "low_stock_threshold", "5"))
+                    low_stock = db.query(models.Product).filter(models.Product.stock < threshold).limit(5).all()
                     recent_orders = db.query(models.Order).order_by(models.Order.created_at.desc()).limit(8).all()
                     is_open = crud.get_setting(db, "tg_is_open", "true") == "true"
                     

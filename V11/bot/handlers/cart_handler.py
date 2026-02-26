@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from telegram import Update, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ContextTypes, ConversationHandler, CallbackQueryHandler, 
@@ -136,13 +137,30 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     query = update.callback_query
     await query.answer()
     
-    # چک کردن وضعیت فروشگاه
-    is_open = await run_db(crud.get_setting, "tg_is_open", "true")
+    # چک کردن وضعیت فروشگاه و تعمیرات
+    tasks = [
+        run_db(crud.get_setting, "tg_is_open", "true"),
+        run_db(crud.get_setting, "shop_maintenance_mode", "false"),
+        run_db(crud.get_setting, "min_order_amount", "0")
+    ]
+    is_open, maintenance, min_order = await asyncio.gather(*tasks)
+
+    if maintenance == "true":
+        await query.message.reply_text("🛠 ربات در حال حاضر در حالت تعمیرات است. ثبت سفارش مقدور نیست.")
+        return ConversationHandler.END
+
     if is_open == "false":
         await query.message.reply_text("⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر سفارش جدید نمی‌پذیرد.")
         return ConversationHandler.END
 
     user_id = query.from_user.id
+    items = await run_db(crud.get_cart_items, user_id)
+    items_total = sum(float(item.product.price) * item.quantity for item in items)
+
+    if items_total < float(min_order):
+        await query.message.reply_text(f"⚠️ حداقل مبلغ سفارش {int(float(min_order)):,} تومان است. سبد شما: {int(items_total):,} تومان.")
+        return ConversationHandler.END
+
     addresses = await run_db(crud.get_user_addresses, user_id)
     
     if addresses:
@@ -359,17 +377,27 @@ async def start_offline_payment(message, context):
     raw_cards = await run_db(crud.get_setting, "bank_cards", "[]")
     try:
         cards = json.loads(raw_cards)
-        card = cards[0] if cards else {"number": "در حال بروزرسانی", "owner": "مدیریت"}
     except:
-        card = {"number": "----", "owner": "مدیریت"}
+        cards = []
 
-    text = responses.get_checkout_payment(
-        total=context.user_data.get('final_total', 0),
-        shipping_cost="--",
-        final_total=context.user_data.get('final_total', 0),
-        card_number=card['number'],
-        card_owner=card['owner']
+    if not cards:
+        cards = [{"number": "در حال بروزرسانی", "owner": "مدیریت", "bank": ""}]
+
+    cards_text = ""
+    for c in cards:
+        bank_name = f" ({c.get('bank')})" if c.get('bank') else ""
+        cards_text += f"💳 <code>{c['number']}</code>\n👤 {c['owner']}{bank_name}\n\n"
+
+    total = context.user_data.get('final_total', 0)
+
+    text = (
+        f"💳 <b>اطلاعات پرداخت کارت به کارت</b>\n\n"
+        f"💰 مبلغ نهایی: <b>{int(total):,} تومان</b>\n\n"
+        f"لطفاً مبلغ فوق را به یکی از شماره کارت‌های زیر واریز نمایید:\n\n"
+        f"{cards_text}"
+        f"📸 پس از واریز، <b>تصویر فیش</b> خود را همین‌جا ارسال کنید."
     )
+
     await message.reply_text(text, reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
     return GET_RECEIPT
 

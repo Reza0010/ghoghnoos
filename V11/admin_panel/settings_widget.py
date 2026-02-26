@@ -13,10 +13,10 @@ from PyQt6.QtWidgets import (
     QPushButton, QComboBox, QProgressBar, QListWidget, QListWidgetItem,
     QStackedWidget, QFrame, QScrollArea, QTimeEdit, QFileDialog, QTableWidget,
     QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox,
-    QGraphicsOpacityEffect
+    QGraphicsOpacityEffect, QSpinBox
 )
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QFont, QPen, QBrush, QIcon
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize, pyqtSignal, QPoint
 from qasync import asyncSlot
 import qtawesome as qta
 
@@ -24,6 +24,7 @@ from db.database import get_db
 from db import crud
 from config import BASE_DIR
 from bot import proxy_utils
+from .products_widget import FormattedPriceInput
 
 logger = logging.getLogger(__name__)
 
@@ -344,7 +345,8 @@ class SettingsWidget(QWidget):
             ("💳 مالی و درگاه", 6),
             ("🎨 شخصی‌سازی (Branding)", 7),
             ("🔔 اطلاع‌رسانی", 8),
-            ("🛠 ابزارها و بک‌آپ", 9)
+            ("💳 حساب‌ها و تماس", 9),
+            ("🛠 ابزارها و بک‌آپ", 10)
         ]
 
         for t, i in nav_items:
@@ -367,6 +369,7 @@ class SettingsWidget(QWidget):
             self._ui_payment_settings(),
             self._ui_branding_settings(),
             self._ui_notification_settings(),
+            self._ui_accounts_settings(),
             self._ui_tools_settings()
         ]
         for p in self._all_pages: self.pages_stack.addWidget(p)
@@ -699,6 +702,84 @@ class SettingsWidget(QWidget):
         page.setWidget(container)
         return page
 
+    def _ui_accounts_settings(self):
+        page = QScrollArea(); page.setWidgetResizable(True); page.setStyleSheet("background: transparent; border: none;")
+        container = QWidget(); layout = QVBoxLayout(container); layout.setSpacing(20); layout.setContentsMargins(30, 30, 30, 30)
+
+        # 1. Bank Cards Management
+        card_bank = SettingCard("💳 مدیریت حساب‌های بانکی")
+        self.bank_table = QTableWidget(0, 4)
+        self.bank_table.setHorizontalHeaderLabels(["نام بانک", "شماره کارت", "صاحب حساب", "عملیات"])
+        self.bank_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.bank_table.setFixedHeight(200)
+
+        btn_add_card = QPushButton("➕ افزودن حساب جدید")
+        btn_add_card.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add_card.clicked.connect(self.add_bank_card_row)
+
+        card_bank.add_widget(self.bank_table)
+        card_bank.add_widget(btn_add_card)
+        layout.addWidget(card_bank)
+
+        # 2. Support Phones Management
+        card_phones = SettingCard("📞 شماره‌های تماس و پشتیبانی")
+        self.phone_table = QTableWidget(0, 4)
+        self.phone_table.setHorizontalHeaderLabels(["برچسب (مثلا فروش)", "شماره تماس", "ساعت کاری", "عملیات"])
+        self.phone_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.phone_table.setFixedHeight(200)
+
+        btn_add_phone = QPushButton("➕ افزودن شماره تماس")
+        btn_add_phone.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add_phone.clicked.connect(self.add_phone_row)
+
+        card_phones.add_widget(self.phone_table)
+        card_phones.add_widget(btn_add_phone)
+        layout.addWidget(card_phones)
+
+        # 3. Shop Rules & Maintenance
+        card_rules = SettingCard("⚙️ قوانین و وضعیت فروشگاه")
+        self.chk_maintenance = ToggleSwitch(); self.chk_maintenance.setText("حالت تعمیرات (غیرفعال‌سازی موقت خرید)")
+        self.inp_min_order = FormattedPriceInput(placeholder="حداقل مبلغ سفارش")
+        self.inp_stock_threshold = QSpinBox(); self.inp_stock_threshold.setRange(0, 100); self.inp_stock_threshold.setSuffix(" عدد")
+
+        card_rules.add_widget(self.chk_maintenance)
+        card_rules.add_widget(QLabel("حداقل مبلغ مجاز برای ثبت سفارش:"))
+        card_rules.add_widget(self.inp_min_order)
+        card_rules.add_widget(QLabel("آستانه هشدار موجودی کم (در داشبورد):"))
+        card_rules.add_widget(self.inp_stock_threshold)
+        layout.addWidget(card_rules)
+
+        btn_save = QPushButton("💾 ذخیره تمامی تنظیمات این بخش")
+        btn_save.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 15px; font-weight: bold; border-radius: 12px;")
+        btn_save.clicked.connect(self.save_accounts_settings)
+        layout.addWidget(btn_save)
+
+        layout.addStretch()
+        page.setWidget(container)
+        return page
+
+    def add_bank_card_row(self, bank="", number="", owner=""):
+        row = self.bank_table.rowCount()
+        self.bank_table.insertRow(row)
+        self.bank_table.setItem(row, 0, QTableWidgetItem(bank))
+        self.bank_table.setItem(row, 1, QTableWidgetItem(number))
+        self.bank_table.setItem(row, 2, QTableWidgetItem(owner))
+
+        btn_del = QPushButton(qta.icon("fa5s.trash-alt", color=DANGER_COLOR), "")
+        btn_del.clicked.connect(lambda: self.bank_table.removeRow(self.bank_table.indexAt(btn_del.pos()).row()))
+        self.bank_table.setCellWidget(row, 3, btn_del)
+
+    def add_phone_row(self, label="", phone="", hours=""):
+        row = self.phone_table.rowCount()
+        self.phone_table.insertRow(row)
+        self.phone_table.setItem(row, 0, QTableWidgetItem(label))
+        self.phone_table.setItem(row, 1, QTableWidgetItem(phone))
+        self.phone_table.setItem(row, 2, QTableWidgetItem(hours))
+
+        btn_del = QPushButton(qta.icon("fa5s.trash-alt", color=DANGER_COLOR), "")
+        btn_del.clicked.connect(lambda: self.phone_table.removeRow(self.phone_table.indexAt(btn_del.pos()).row()))
+        self.phone_table.setCellWidget(row, 3, btn_del)
+
     def _ui_notification_settings(self):
         page = QScrollArea(); page.setWidgetResizable(True); page.setStyleSheet("background: transparent; border: none;")
         container = QWidget(); layout = QVBoxLayout(container); layout.setSpacing(20); layout.setContentsMargins(30, 30, 30, 30)
@@ -832,6 +913,21 @@ class SettingsWidget(QWidget):
             self.chk_notif_stock.setChecked(data.get("notif_stock", "true") == "true")
             self.chk_notif_ticket.setChecked(data.get("notif_ticket", "true") == "true")
             self.chk_dest_bot.setChecked(data.get("notif_dest_bot", "false") == "true")
+
+            # Accounts & Rules
+            self.chk_maintenance.setChecked(data.get("shop_maintenance_mode", "false") == "true")
+            self.inp_min_order.setValue(int(data.get("min_order_amount", 0)))
+            self.inp_stock_threshold.setValue(int(data.get("low_stock_threshold", 5)))
+
+            # Load Banks
+            self.bank_table.setRowCount(0)
+            banks = json.loads(data.get("bank_accounts", "[]"))
+            for b in banks: self.add_bank_card_row(b['bank'], b['number'], b['owner'])
+
+            # Load Phones
+            self.phone_table.setRowCount(0)
+            phones = json.loads(data.get("support_phones", "[]"))
+            for p in phones: self.add_phone_row(p['label'], p['phone'], p['hours'])
 
             # Coupons
             await self.load_coupons()
@@ -1024,7 +1120,8 @@ class SettingsWidget(QWidget):
                 "tmpl_welcome", "tmpl_order", "tmpl_support",
                 "zp_merchant", "zp_callback", "pay_online_active", "pay_card_active", "currency",
                 "shop_name", "shop_logo", "accent_color",
-                "notif_order", "notif_stock", "notif_ticket", "notif_dest_bot"
+                "notif_order", "notif_stock", "notif_ticket", "notif_dest_bot",
+                "bank_accounts", "support_phones", "shop_maintenance_mode", "min_order_amount", "low_stock_threshold"
             ]
             return {k: crud.get_setting(db, k, "") for k in keys}
 
@@ -1124,6 +1221,36 @@ class SettingsWidget(QWidget):
         }
         await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_all_settings(data))
         self.window().show_toast("تنظیمات اطلاع‌رسانی ذخیره شد.")
+
+    @asyncSlot()
+    async def save_accounts_settings(self):
+        # Gather bank accounts
+        banks = []
+        for i in range(self.bank_table.rowCount()):
+            banks.append({
+                "bank": self.bank_table.item(i, 0).text(),
+                "number": self.bank_table.item(i, 1).text(),
+                "owner": self.bank_table.item(i, 2).text()
+            })
+
+        # Gather phones
+        phones = []
+        for i in range(self.phone_table.rowCount()):
+            phones.append({
+                "label": self.phone_table.item(i, 0).text(),
+                "phone": self.phone_table.item(i, 1).text(),
+                "hours": self.phone_table.item(i, 2).text()
+            })
+
+        data = {
+            "bank_accounts": json.dumps(banks, ensure_ascii=False),
+            "support_phones": json.dumps(phones, ensure_ascii=False),
+            "shop_maintenance_mode": "true" if self.chk_maintenance.isChecked() else "false",
+            "min_order_amount": self.inp_min_order.value(),
+            "low_stock_threshold": self.inp_stock_threshold.value()
+        }
+        await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_all_settings(data))
+        self.window().show_toast("تنظیمات حساب‌ها و تماس با موفقیت ذخیره شد.")
 
     def select_logo(self):
         f, _ = QFileDialog.getOpenFileName(self, "انتخاب لوگو", "", "Images (*.png *.jpg *.ico)")
