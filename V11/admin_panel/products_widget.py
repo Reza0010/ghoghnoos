@@ -22,7 +22,7 @@ import qtawesome as qta
 from PIL import Image, ImageOps
 
 from db.database import get_db
-from db import crud
+from db import crud, models
 from config import BASE_DIR, MEDIA_PRODUCTS_DIR
 
 logger = logging.getLogger(__name__)
@@ -687,16 +687,13 @@ class ProductCard(QFrame):
         self._entrance_anim(delay)
 
     def _entrance_anim(self, delay):
-        self.anim = QPropertyAnimation(self, b"pos")
-        self.anim.setDuration(400)
-        self.anim.setEasingCurve(QEasingCurve.Type.OutQuad)
-
         self.fade = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade.setDuration(400)
+        self.fade.setDuration(500)
         self.fade.setStartValue(0)
         self.fade.setEndValue(1)
+        self.fade.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        QTimer.singleShot(delay, lambda: (self.anim.start(), self.fade.start()))
+        QTimer.singleShot(delay, lambda: self.fade.start() if not self.parent() or self.isVisible() else None)
 
     def _add_badge(self, text, color, parent, right=False):
         lbl = QLabel(text, parent)

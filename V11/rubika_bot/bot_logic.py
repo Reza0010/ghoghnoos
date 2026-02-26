@@ -300,8 +300,13 @@ class RubikaWorker:
                 items = crud.get_cart_items(db, user_id)
                 items_total = sum(float(item.product.price) * item.quantity for item in items)
 
-                if items_total < float(min_order):
-                    return await self.api.send_message(chat_id, f"⚠️ حداقل مبلغ سفارش {int(float(min_order)):,} تومان است. مجموع سبد شما: {int(items_total):,} تومان")
+                try:
+                    min_order_val = float(min_order) if min_order else 0
+                except:
+                    min_order_val = 0
+
+                if items_total < min_order_val:
+                    return await self.api.send_message(chat_id, f"⚠️ حداقل مبلغ سفارش {int(min_order_val):,} تومان است. مجموع سبد شما: {int(items_total):,} تومان")
 
                 order = crud.create_order_from_cart(db, user_id, {
                     "address": "نیاز به هماهنگی تلفنی (روبیکا)",

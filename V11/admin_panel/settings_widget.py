@@ -149,7 +149,6 @@ class SkeletonFrame(QFrame):
                 border-radius: 15px;
             }}
         """)
-        self.anim = QPropertyAnimation(self, b"pos") # Just a placeholder for style
 
 class ProxyCard(QFrame):
     activate_requested = pyqtSignal(int)
@@ -916,8 +915,13 @@ class SettingsWidget(QWidget):
 
             # Accounts & Rules
             self.chk_maintenance.setChecked(data.get("shop_maintenance_mode", "false") == "true")
-            self.inp_min_order.setValue(int(data.get("min_order_amount", 0)))
-            self.inp_stock_threshold.setValue(int(data.get("low_stock_threshold", 5)))
+
+            # Guards for empty values in DB
+            min_order = data.get("min_order_amount")
+            self.inp_min_order.setValue(int(min_order) if min_order and str(min_order).isdigit() else 0)
+
+            stock_th = data.get("low_stock_threshold")
+            self.inp_stock_threshold.setValue(int(stock_th) if stock_th and str(stock_th).isdigit() else 5)
 
             # Load Banks
             self.bank_table.setRowCount(0)

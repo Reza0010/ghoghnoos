@@ -157,8 +157,13 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     items = await run_db(crud.get_cart_items, user_id)
     items_total = sum(float(item.product.price) * item.quantity for item in items)
 
-    if items_total < float(min_order):
-        await query.message.reply_text(f"⚠️ حداقل مبلغ سفارش {int(float(min_order)):,} تومان است. سبد شما: {int(items_total):,} تومان.")
+    try:
+        min_order_val = float(min_order) if min_order else 0
+    except:
+        min_order_val = 0
+
+    if items_total < min_order_val:
+        await query.message.reply_text(f"⚠️ حداقل مبلغ سفارش {int(min_order_val):,} تومان است. سبد شما: {int(items_total):,} تومان.")
         return ConversationHandler.END
 
     addresses = await run_db(crud.get_user_addresses, user_id)

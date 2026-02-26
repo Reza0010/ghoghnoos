@@ -333,12 +333,12 @@ class ActivityItem(QFrame):
         self.pulse.setFixedSize(10, 10)
         self.pulse.setStyleSheet(f"background: {SUCCESS_COLOR}; border-radius: 5px;")
 
-        self.pulse_anim = QPropertyAnimation(self.pulse, b"geometry") # Simulated pulse
         # Actually better to just animate opacity
         self.pulse_eff = QGraphicsOpacityEffect(self.pulse)
         self.pulse.setGraphicsEffect(self.pulse_eff)
         self.pa = QPropertyAnimation(self.pulse_eff, b"opacity")
-        self.pa.setDuration(1000); self.pa.setStartValue(1.0); self.pa.setEndValue(0.2); self.pa.setLoopCount(-1); self.pa.start()
+        self.pa.setDuration(1000); self.pa.setStartValue(1.0); self.pa.setEndValue(0.2); self.pa.setLoopCount(-1)
+        self.pa.start()
         
         ico = QLabel()
         ico.setPixmap(qta.icon(icon, color=color).pixmap(24, 24))
@@ -583,7 +583,7 @@ class DashboardWidget(QWidget):
                 with next(get_db()) as db:
                     # ۱. آمار پیشرفته
                     stats = crud.get_dashboard_stats_advanced(db, days)
-                    
+
                     # ۲. محصولات پرفروش
                     top_prods = crud.get_top_selling_products(db, limit=8, days=days)
 
@@ -604,7 +604,9 @@ class DashboardWidget(QWidget):
                     rb_sales = get_plat_chart_data('rubika')
                     
                     # ۴. موجودی کم و فعالیت‌ها
-                    threshold = int(crud.get_setting(db, "low_stock_threshold", "5"))
+                    th_val = crud.get_setting(db, "low_stock_threshold", "5")
+                    threshold = int(th_val) if th_val and str(th_val).isdigit() else 5
+
                     low_stock = db.query(models.Product).filter(models.Product.stock < threshold).limit(5).all()
                     recent_orders = db.query(models.Order).order_by(models.Order.created_at.desc()).limit(8).all()
                     is_open = crud.get_setting(db, "tg_is_open", "true") == "true"

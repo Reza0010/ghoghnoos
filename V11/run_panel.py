@@ -302,9 +302,7 @@ def run_telegram_bot(token, proxy=None):
     """اجرای ربات تلگرام در پروسس مجزا"""
     if not token: return
 
-    try:
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
+    async def _run():
         from telegram.ext import Application
         from telegram import Update
         from bot.loader import setup_application_handlers
@@ -315,16 +313,38 @@ def run_telegram_bot(token, proxy=None):
 
         app = builder.build()
         setup_application_handlers(app)
-        logging.info(f"🚀 Telegram Bot Process Started (Proxy: {'Yes' if proxy else 'No'})")
 
-        # استفاده از stop_signals=None برای پایداری در subprocess ویندوز
-        app.run_polling(allowed_updates=Update.ALL_TYPES, stop_signals=None, close_loop=False)
+        async with app:
+            # تلاش مجدد برای مقداردهی اولیه در صورت وصل نبودن پروکسی
+            max_retries = 5
+            for i in range(max_retries):
+                try:
+                    await app.initialize()
+                    break
+                except Exception as e:
+                    if i == max_retries - 1: raise e
+                    logging.warning(f"Telegram initialization failed (attempt {i+1}/{max_retries}). Retrying in 5s...")
+                    await asyncio.sleep(5)
+
+            await app.start()
+            logging.info(f"🚀 Telegram Bot Process Started (Proxy: {'Yes' if proxy else 'No'})")
+            # استفاده از stop_signals=None برای پایداری در subprocess ویندوز
+            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True, stop_signals=None)
+
+            # نگه داشتن لوپ
+            while True:
+                await asyncio.sleep(3600)
+
+    try:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        asyncio.run(_run())
     except Exception as e:
         logging.error(f"Telegram Process Error: {e}")
 
 def run_rubika_bot(token, proxy=None):
     """اجرای ربات روبیکا در پروسس مجزا"""
     if not token: return
+    bot = None
     try:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -340,6 +360,9 @@ def run_rubika_bot(token, proxy=None):
         loop.run_until_complete(bot.start_polling())
     except Exception as e:
         logging.error(f"Rubika Process Error: {e}")
+    finally:
+        if bot and loop.is_running():
+            loop.run_until_complete(bot.stop())
 
 # ==============================================================================
 # مدیریت برنامه (Application Life Cycle & Watchdog)
@@ -456,8 +479,10 @@ class ApplicationManager:
             logger.info("✅ Telegram Watchdog: Process started")
 
         if rb_token and (not self.rb_process or not self.rb_process.is_alive()):
+            # روبیکا معمولا نیازی به پروکسی ندارد مگر اینکه سرور خارج باشد
+            rb_proxy = proxy if proxy and "127.0.0.1" not in proxy else None
             self.rb_process = multiprocessing.Process(
-                target=run_rubika_bot, args=(rb_token, proxy), name="RB_Bot", daemon=True
+                target=run_rubika_bot, args=(rb_token, rb_proxy), name="RB_Bot", daemon=True
             )
             self.rb_process.start()
             self.rb_start_time = datetime.now()
