@@ -480,10 +480,18 @@ class SettingsWidget(QWidget):
         card_support.add_widget(self.tmpl_support)
         layout.addWidget(card_support)
 
+        h_btns = QHBoxLayout()
+        btn_reset = QPushButton("🔄 بازنشانی به قالب‌های پیش‌فرض")
+        btn_reset.setStyleSheet(f"background: {PANEL_BG}; color: {TEXT_SUB}; padding: 12px; border-radius: 10px; border: 1px solid {BORDER_COLOR};")
+        btn_reset.clicked.connect(self.reset_templates_to_default)
+
         btn_save = QPushButton("💾 بروزرسانی متون ربات")
         btn_save.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 15px; font-weight: bold; border-radius: 12px;")
         btn_save.clicked.connect(self.save_templates)
-        layout.addWidget(btn_save)
+
+        h_btns.addWidget(btn_reset)
+        h_btns.addWidget(btn_save, 1)
+        layout.addLayout(h_btns)
         layout.addStretch()
 
         page.setWidget(container)
@@ -950,6 +958,43 @@ class SettingsWidget(QWidget):
         }
         await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_all_settings(data))
         self.window().show_toast("قالب‌های متنی بروزرسانی شدند.")
+
+    @asyncSlot()
+    async def reset_templates_to_default(self):
+        if QMessageBox.question(self, "تایید", "آیا تمام قالب‌ها به متن‌های پیش‌فرض بازنشانی شوند؟") == QMessageBox.StandardButton.Yes:
+            from db.database import seed_default_settings
+            # برای بازنشانی اجباری، ابتدا باید مقادیر قدیمی پاک شوند (اختیاری) یا seed_default_settings اصلاح شود
+            # در اینجا مستقیماً مقادیر را در UI ست می‌کنیم
+            defaults = {
+                "tmpl_welcome": (
+                    "💎 **به فروشگاه {shop_name} خوش آمدید** 👋\n\n"
+                    "ما مفتخریم که بهترین محصولات را با تضمین کیفیت و قیمت به شما ارائه می‌دهیم. \n\n"
+                    "✨ **مزایای خرید از ما:**\n"
+                    "✅ ارسال سریع به سراسر کشور\n"
+                    "✅ ضمانت بازگشت وجه\n"
+                    "✅ پشتیبانی آنلاین\n\n"
+                    "👇 برای شروع خرید، از منوی زیر استفاده کنید:"
+                ),
+                "tmpl_order": (
+                    "✅ **سفارش شما با موفقیت ثبت شد!**\n\n"
+                    "🆔 شماره سفارش: `#{order_id}`\n"
+                    "💰 مبلغ نهایی: `{total_amount}` تومان\n\n"
+                    "📦 سفارش شما در وضعیت 'در حال پردازش' قرار گرفت. \n"
+                    "🚀 به محض ارسال کالا، کد رهگیری پستی برای شما ارسال خواهد شد.\n\n"
+                    "ممنون از اعتماد و خرید شما! ❤️"
+                ),
+                "tmpl_support": (
+                    "📞 **مرکز پشتیبانی و هماهنگی**\n\n"
+                    "در صورت داشتن هرگونه سوال، پیگیری سفارش یا نیاز به مشاوره قبل از خرید، از طریق روش‌های زیر با ما در ارتباط باشید:\n\n"
+                    "🆔 **آیدی پشتیبانی:** @Support_Admin\n"
+                    "⏰ **ساعات پاسخگویی:** ۱۰ صبح الی ۲۲\n\n"
+                    "🔹 لطفاً شماره سفارش خود را برای پیگیری سریع‌تر همراه داشته باشید."
+                )
+            }
+            self.tmpl_welcome.setPlainText(defaults["tmpl_welcome"])
+            self.tmpl_order.setPlainText(defaults["tmpl_order"])
+            self.tmpl_support.setPlainText(defaults["tmpl_support"])
+            self.window().show_toast("قالب‌ها در پنل جایگذاری شدند. برای ثبت نهایی روی 'ذخیره' کلیک کنید.")
 
     @asyncSlot()
     async def save_payment_settings(self):

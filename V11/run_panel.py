@@ -93,8 +93,8 @@ class XrayManager:
         return True
 
     def start(self, v2ray_link, local_port=2080):
-        if not os.path.exists(self.bin):
-            logger.error(f"Xray binary not found at {self.bin}")
+        if not self.bin or not os.path.exists(self.bin):
+            logger.warning(f"⚠️ Xray binary not found at {self.bin}. Proxy Bridge disabled.")
             return False
 
         self.generate_config(v2ray_link, local_port)

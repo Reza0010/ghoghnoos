@@ -106,12 +106,57 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 SessionLocal = scoped_session(session_factory)
 
+def seed_default_settings():
+    """مقداردهی اولیه تنظیمات و قالب‌های متنی در صورت خالی بودن"""
+    from . import models
+    defaults = {
+        "shop_name": "فروشگاه ققنوس",
+        "tmpl_welcome": (
+            "💎 **به فروشگاه {shop_name} خوش آمدید** 👋\n\n"
+            "ما مفتخریم که بهترین محصولات را با تضمین کیفیت و قیمت به شما ارائه می‌دهیم. \n\n"
+            "✨ **مزایای خرید از ما:**\n"
+            "✅ ارسال سریع به سراسر کشور\n"
+            "✅ ضمانت بازگشت وجه\n"
+            "✅ پشتیبانی آنلاین\n\n"
+            "👇 برای شروع خرید، از منوی زیر استفاده کنید:"
+        ),
+        "tmpl_order": (
+            "✅ **سفارش شما با موفقیت ثبت شد!**\n\n"
+            "🆔 شماره سفارش: `#{order_id}`\n"
+            "💰 مبلغ نهایی: `{total_amount}` تومان\n\n"
+            "📦 سفارش شما در وضعیت 'در حال پردازش' قرار گرفت. \n"
+            "🚀 به محض ارسال کالا، کد رهگیری پستی برای شما ارسال خواهد شد.\n\n"
+            "ممنون از اعتماد و خرید شما! ❤️"
+        ),
+        "tmpl_support": (
+            "📞 **مرکز پشتیبانی و هماهنگی**\n\n"
+            "در صورت داشتن هرگونه سوال، پیگیری سفارش یا نیاز به مشاوره قبل از خرید، از طریق روش‌های زیر با ما در ارتباط باشید:\n\n"
+            "🆔 **آیدی پشتیبانی:** @Support_Admin\n"
+            "⏰ **ساعات پاسخگویی:** ۱۰ صبح الی ۲۲\n\n"
+            "🔹 لطفاً شماره سفارش خود را برای پیگیری سریع‌تر همراه داشته باشید."
+        ),
+        "currency": "تومان",
+        "pay_online_active": "true",
+        "pay_card_active": "true",
+        "notif_order": "true",
+        "notif_stock": "true",
+        "notif_ticket": "true"
+    }
+
+    with SessionLocal() as db:
+        for key, value in defaults.items():
+            exists = db.query(models.Setting).filter_by(key=key).first()
+            if not exists:
+                db.add(models.Setting(key=key, value=value))
+        db.commit()
+
 def init_db():
     """ساخت جداول و اجرای مایگریشن‌های خودکار"""
     from .models import Base
     try:
         Base.metadata.create_all(bind=engine)
         run_auto_migrations()
+        seed_default_settings()
         logger.info("Database initialized successfully.")
     except Exception as e:
         logger.critical(f"DB Init Failed: {e}")
