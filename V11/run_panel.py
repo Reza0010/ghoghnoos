@@ -70,22 +70,51 @@ class XrayManager:
 
         config = {
             "inbounds": [{
+                "tag": "socks-in",
                 "port": local_port, "listen": "127.0.0.1", "protocol": "socks",
                 "settings": {"auth": "noauth", "udp": True}
             }],
-            "outbounds": [{
-                "protocol": data['protocol'],
-                "settings": {
-                    "vnext": [{
-                        "address": data['address'], "port": data['port'],
-                        "users": [{"id": data['id'], "encryption": "none"}]
-                    }]
+            "outbounds": [
+                {
+                    "tag": "proxy",
+                    "protocol": data['protocol'],
+                    "settings": {
+                        "vnext": [{
+                            "address": data['address'], "port": data['port'],
+                            "users": [{"id": data['id'], "encryption": "none"}]
+                        }]
+                    },
+                    "streamSettings": {
+                        "network": data['type'], "security": data['security'],
+                        "tlsSettings": {"serverName": data.get('sni', data['address']), "fingerprint": data.get('fp', 'chrome')}
+                    }
                 },
-                "streamSettings": {
-                    "network": data['type'], "security": data['security'],
-                    "tlsSettings": {"serverName": data.get('sni', data['address']), "fingerprint": data.get('fp', 'chrome')}
+                {
+                    "tag": "direct",
+                    "protocol": "freedom",
+                    "settings": {}
+                },
+                {
+                    "tag": "block",
+                    "protocol": "blackhole",
+                    "settings": {}
                 }
-            }]
+            ],
+            "routing": {
+                "domainStrategy": "AsIs",
+                "rules": [
+                    {
+                        "type": "field",
+                        "outboundTag": "direct",
+                        "domain": ["domain:rubika.ir", "domain:ir", "geosite:ir"]
+                    },
+                    {
+                        "type": "field",
+                        "outboundTag": "proxy",
+                        "domain": ["domain:telegram.org", "domain:t.me", "geosite:telegram"]
+                    }
+                ]
+            }
         }
 
         with open(self.cfg, 'w') as f:
@@ -339,6 +368,10 @@ class ApplicationManager:
         self.watchdog_timer = QTimer()
         self.watchdog_timer.timeout.connect(self._check_processes_health)
 
+        # سیستم Failover هوشمند
+        self.failover_timer = QTimer()
+        self.failover_timer.timeout.connect(self._smart_failover_check)
+
     async def launch(self):
         """اجرای گام‌به‌گام با اسپلش اسکرین"""
         self.splash = ModernSplashScreen()
@@ -389,8 +422,9 @@ class ApplicationManager:
         # ۵. استارت ربات‌های پس‌زمینه
         self.start_background_bots()
 
-        # ۶. فعال‌سازی واچ‌داگ
+        # ۶. فعال‌سازی واچ‌داگ و Failover
         self.watchdog_timer.start(10000) # هر ۱۰ ثانیه بررسی سلامت
+        self.failover_timer.start(60000) # هر ۱ دقیقه بررسی کیفیت اتصال
 
         # ۷. اتصال کلاینت‌های پنل
         QTimer.singleShot(500, lambda: asyncio.create_task(self.connect_light_clients()))
@@ -438,6 +472,39 @@ class ApplicationManager:
         if self.rb_process and not self.rb_process.is_alive():
             logger.warning("⚠️ Rubika Bot crashed! Restarting...")
             self.start_background_bots()
+
+    def _smart_failover_check(self):
+        """سیستم خودکار تعویض پروکسی در صورت قطعی"""
+        from db.database import get_db
+        from bot.proxy_utils import test_proxy_connectivity
+
+        def run_check():
+            with next(get_db()) as db:
+                active_p = crud.get_active_proxy(db)
+                if not active_p: return
+
+                # تست اتصال فعلی
+                latency, _ = test_proxy_connectivity(active_p.url, active_p.type)
+                crud.update_proxy_health(db, active_p.id, latency)
+
+                # اگر ۳ بار متوالی خطا داشت
+                if active_p.fail_count >= 3:
+                    logger.warning(f"🚨 Proxy '{active_p.name}' is DOWN. Finding alternative...")
+                    best = crud.get_best_available_proxy(db)
+                    if best and best.id != active_p.id:
+                        logger.info(f"✅ Switching to best alternative: {best.name} ({best.last_ping}ms)")
+                        crud.set_active_proxy(db, best.id)
+                        return True # نیاز به ریستارت
+            return False
+
+        # اجرای چک در ترد جداگانه برای جلوگیری از فریز شدن UI
+        async def do_failover():
+            needs_restart = await self.loop.run_in_executor(None, run_check)
+            if needs_restart:
+                self.restart_services()
+                self.window.show_toast("اتصال به دلیل کیفیت پایین به‌طور خودکار تعویض شد.", is_error=True)
+
+        asyncio.create_task(do_failover())
 
     def get_bot_stats(self):
         """دریافت آمار مصرف منابع ربات‌ها"""

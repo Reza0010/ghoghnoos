@@ -28,9 +28,13 @@ async def _global_text_handler(update, context):
     text = update.message.text.strip()
     user_id = update.effective_user.id
 
-    # ذخیره آخرین پیام در دیتابیس برای CRM
-    with next(get_db()) as db:
-        crud.update_user_info(db, user_id, last_interaction_text=text)
+    # ذخیره آخرین پیام در دیتابیس برای CRM (اجرا در ترد جداگانه برای جلوگیری از بلاک شدن)
+    def update_crm():
+        with next(get_db()) as db:
+            crud.update_user_info(db, user_id, last_interaction_text=text)
+
+    asyncio.create_task(asyncio.to_thread(update_crm))
+
     # نادیده گرفتن دستورات
     if text.startswith('/'): return
 
@@ -40,8 +44,6 @@ async def _global_text_handler(update, context):
     elif text == responses.CART_BUTTON:
         return await cart_handler.view_cart(update, context)
     elif text == responses.SEARCH_BUTTON:
-        # هندلر گفتگو (ConversationHandler) در search_handler این مورد را مدیریت می‌کند.
-        # اما برای اطمینان و جلوگیری از تداخل با بقیه متون:
         return
     elif text == responses.USER_PROFILE_BUTTON:
         return await main_menu_handler.handle_user_profile(update, context)
@@ -51,13 +53,16 @@ async def _global_text_handler(update, context):
         return await main_menu_handler.handle_about_us(update, context)
 
     # ۲. پاسخگوی خودکار هوشمند
-    with next(get_db()) as db:
-        response = crud.get_auto_reply(db, text)
-        if response:
-            # نمایش حالت Typing برای واقعی‌تر شدن
-            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-            await asyncio.sleep(0.5)
-            await update.message.reply_text(response, parse_mode='HTML')
+    def get_reply():
+        with next(get_db()) as db:
+            return crud.get_auto_reply(db, text)
+
+    response = await asyncio.to_thread(get_reply)
+    if response:
+        # نمایش حالت Typing برای واقعی‌تر شدن
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        await asyncio.sleep(0.5)
+        await update.message.reply_text(response, parse_mode='HTML')
 
 async def _unknown_callback(update, context):
     """جلوگیری از نمایش آیکون لودینگ روی دکمه‌هایی که هندلر ندارند"""

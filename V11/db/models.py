@@ -281,4 +281,10 @@ class Proxy(Base):
     type = Column(String(20), nullable=False) # 'v2ray', 'http', 'socks5'
     is_active = Column(Boolean, default=False)
     last_ping = Column(Integer, nullable=True)
+
+    country_code = Column(String(5), nullable=True) # برای نمایش پرچم
+    fail_count = Column(Integer, default=0) # تعداد خطاهای متوالی
+    latency_history = Column(Text, nullable=True) # تاریخچه پینگ به صورت JSON
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

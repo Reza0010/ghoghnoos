@@ -243,6 +243,12 @@ def run_auto_migrations():
         },
         "order_items": {
             "purchase_price_at_purchase": "NUMERIC(12, 0) DEFAULT 0"
+        },
+        "proxies": {
+            "country_code": "VARCHAR(5)",
+            "fail_count": "INTEGER DEFAULT 0",
+            "latency_history": "TEXT",
+            "last_success_at": "DATETIME"
         }
     }
 

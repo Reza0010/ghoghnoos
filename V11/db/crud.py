@@ -803,6 +803,32 @@ def set_active_proxy(db: Session, proxy_id: int):
 def get_active_proxy(db: Session) -> Optional[models.Proxy]:
     return db.query(models.Proxy).filter_by(is_active=True).first()
 
+def update_proxy_health(db: Session, proxy_id: int, latency: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if not proxy: return
+
+    proxy.last_ping = latency
+    if latency > 0:
+        proxy.fail_count = 0
+        proxy.last_success_at = datetime.now()
+    else:
+        proxy.fail_count += 1
+
+    # مدیریت تاریخچه پینگ (۱۰ مورد آخر)
+    history = json.loads(proxy.latency_history or "[]")
+    history.append(latency)
+    if len(history) > 10: history.pop(0)
+    proxy.latency_history = json.dumps(history)
+
+    db.commit()
+
+def get_best_available_proxy(db: Session) -> Optional[models.Proxy]:
+    """یافتن بهترین پروکسی بر اساس پینگ و عدم خطا"""
+    return db.query(models.Proxy).filter(
+        models.Proxy.last_ping > 0,
+        models.Proxy.fail_count < 3
+    ).order_by(models.Proxy.last_ping.asc()).first()
+
 # ======================================================================
 # 11. تحلیل داده‌های داشبورد (Dashboard Advanced Analytics)
 # ======================================================================

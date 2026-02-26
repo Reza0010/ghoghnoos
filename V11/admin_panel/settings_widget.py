@@ -150,6 +150,122 @@ class SkeletonFrame(QFrame):
         """)
         self.anim = QPropertyAnimation(self, b"pos") # Just a placeholder for style
 
+class ProxyCard(QFrame):
+    activate_requested = pyqtSignal(int)
+    delete_requested = pyqtSignal(int)
+    test_requested = pyqtSignal(int)
+
+    def __init__(self, proxy, parent=None):
+        super().__init__(parent)
+        self.proxy_id = proxy.id
+        self.setObjectName("ProxyCard")
+        self.setFixedSize(280, 180)
+
+        status_color = SUCCESS_COLOR if proxy.is_active else BORDER_COLOR
+        self.setStyleSheet(f"""
+            QFrame#ProxyCard {{
+                background: {PANEL_BG}; border-radius: 15px;
+                border: 2px solid {status_color};
+            }}
+            QLabel {{ color: {TEXT_MAIN}; background: transparent; }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # Header: Name & Flag
+        header = QHBoxLayout()
+        name_lbl = QLabel(proxy.name or "Unnamed")
+        name_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+        flag_lbl = QLabel()
+        if proxy.country_code:
+            # استفاده از ایموجی پرچم یا متن
+            flag_lbl.setText(self._get_flag_emoji(proxy.country_code))
+
+        header.addWidget(name_lbl)
+        header.addStretch()
+        header.addWidget(flag_lbl)
+        layout.addLayout(header)
+
+        # Protocol & Ping
+        info = QHBoxLayout()
+        type_lbl = QLabel(proxy.type.upper())
+        type_lbl.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px;")
+
+        ping_val = proxy.last_ping or 0
+        ping_text = f"⚡ {ping_val}ms" if ping_val > 0 else "⚡ --"
+        if ping_val == -1: ping_text = "⚠️ Timeout"
+        if ping_val == -2: ping_text = "❌ Error"
+
+        ping_lbl = QLabel(ping_text)
+        p_color = SUCCESS_COLOR if ping_val > 0 and ping_val < 300 else (WARNING_COLOR if ping_val > 0 else DANGER_COLOR)
+        ping_lbl.setStyleSheet(f"color: {p_color}; font-weight: bold;")
+
+        info.addWidget(type_lbl)
+        info.addStretch()
+        info.addWidget(ping_lbl)
+        layout.addLayout(info)
+
+        # Latency Sparkline (Simple Drawing)
+        self.sparkline = QFrame()
+        self.sparkline.setFixedHeight(40)
+        self.sparkline.setStyleSheet("background: rgba(0,0,0,0.2); border-radius: 5px;")
+        self.sparkline.paintEvent = lambda e: self._draw_sparkline(proxy.latency_history)
+        layout.addWidget(self.sparkline)
+
+        layout.addStretch()
+
+        # Actions
+        actions = QHBoxLayout()
+        btn_act = QPushButton("فعال‌سازی" if not proxy.is_active else "فعال است")
+        btn_act.setEnabled(not proxy.is_active)
+        btn_act.setCursor(Qt.CursorShape.PointingHandCursor)
+        act_style = f"background: {SUCCESS_COLOR}; color: white; border-radius: 8px; padding: 5px;" if not proxy.is_active else "background: #444; color: #888; border-radius: 8px;"
+        btn_act.setStyleSheet(act_style)
+        btn_act.clicked.connect(lambda: self.activate_requested.emit(self.proxy_id))
+
+        btn_del = QPushButton(qta.icon("fa5s.trash-alt", color=DANGER_COLOR), "")
+        btn_del.setFixedSize(30, 30)
+        btn_del.setStyleSheet(f"background: rgba(255,255,255,0.05); border-radius: 8px;")
+        btn_del.clicked.connect(lambda: self.delete_requested.emit(self.proxy_id))
+
+        actions.addWidget(btn_act, 1)
+        actions.addWidget(btn_del)
+        layout.addLayout(actions)
+
+    def _get_flag_emoji(self, country_code):
+        if not country_code or len(country_code) != 2: return ""
+        return "".join(chr(127397 + ord(c)) for c in country_code.upper())
+
+    def _draw_sparkline(self, history_json):
+        if not history_json: return
+        try:
+            history = json.loads(history_json)
+            if not history: return
+
+            p = QPainter(self.sparkline)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            w = self.sparkline.width()
+            h = self.sparkline.height()
+
+            points = []
+            max_p = max([x for x in history if x > 0] or [1000])
+            for i, val in enumerate(history):
+                x = (i / (len(history)-1)) * (w-10) + 5 if len(history)>1 else w/2
+                # اگر پینگ منفی بود (خطا)، در پایین نمودار نشان بده
+                norm_val = val if val > 0 else max_p * 1.2
+                y = h - (min(norm_val, max_p) / max_p) * (h-10) - 5
+                points.append(QPoint(int(x), int(y)))
+
+            pen = QPen(QColor(ACCENT_COLOR), 2)
+            p.setPen(pen)
+            for i in range(len(points)-1):
+                p.drawLine(points[i], points[i+1])
+            p.end()
+        except: pass
+
 class SettingCard(QFrame):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -334,29 +450,34 @@ class SettingsWidget(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
 
-        card = SettingCard("مدیریت اتصالات (Proxy & V2Ray)")
+        header = QHBoxLayout()
+        title = QLabel("🌐 مدیریت هوشمند اتصالات")
+        title.setStyleSheet("font-size: 20px; font-weight: 900; color: white;")
+        header.addWidget(title); header.addStretch()
 
-        self.proxy_table = QTableWidget(0, 5)
-        self.proxy_table.setHorizontalHeaderLabels(["نام", "نوع", "آدرس/لینک", "پینگ", "عملیات"])
-        self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.proxy_table.setStyleSheet("QTableWidget { background: rgba(0,0,0,0.2); }")
-
-        btn_add = QPushButton("➕ افزودن پروکسی جدید")
+        btn_add = QPushButton("➕ افزودن پروکسی")
         btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 8px 15px; border-radius: 10px; font-weight: bold;")
         btn_add.clicked.connect(self.add_proxy_dialog)
 
-        btn_test_all = QPushButton("⚡ تست پینگ تمام موارد")
+        btn_test_all = QPushButton("⚡ تست پینگ")
         btn_test_all.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_test_all.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_test_all.setStyleSheet(f"background: rgba(255,255,255,0.05); color: white; padding: 8px 15px; border-radius: 10px; border: 1px solid {BORDER_COLOR};")
         btn_test_all.clicked.connect(self.test_all_proxies)
 
-        h_btns = QHBoxLayout()
-        h_btns.addWidget(btn_add); h_btns.addWidget(btn_test_all)
+        header.addWidget(btn_test_all); header.addWidget(btn_add)
+        layout.addLayout(header)
 
-        card.add_widget(self.proxy_table)
-        card.add_layout(h_btns)
-        layout.addWidget(card)
+        # Scroll Area for Cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        self.proxy_container = QWidget()
+        self.proxy_grid = QGridLayout(self.proxy_container)
+        self.proxy_grid.setSpacing(15)
+        self.proxy_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        scroll.setWidget(self.proxy_container)
+        layout.addWidget(scroll)
 
         # بخش Xray Bridge
         bridge_card = SettingCard("وضعیت پل Xray (V2Ray Bridge)")
@@ -731,43 +852,18 @@ class SettingsWidget(QWidget):
     async def load_proxies(self):
         loop = asyncio.get_running_loop()
         proxies = await loop.run_in_executor(None, lambda: crud.get_all_proxies(next(get_db())))
-        self.proxy_table.setRowCount(0)
+
+        # پاکسازی گرید
+        while self.proxy_grid.count():
+            item = self.proxy_grid.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+
+        cols = 3
         for i, p in enumerate(proxies):
-            self.proxy_table.insertRow(i)
-
-            name_text = f"⭐ {p.name}" if p.is_active else p.name
-            self.proxy_table.setItem(i, 0, QTableWidgetItem(name_text))
-            self.proxy_table.setItem(i, 1, QTableWidgetItem(p.type.upper()))
-
-            url_item = QTableWidgetItem(p.url[:50] + "..." if len(p.url) > 50 else p.url)
-            url_item.setToolTip(p.url)
-            self.proxy_table.setItem(i, 2, QTableWidgetItem(url_item))
-
-            ping_text = f"{p.last_ping}ms" if p.last_ping and p.last_ping > 0 else "--"
-            if p.last_ping == -1: ping_text = "Timeout"
-            if p.last_ping == -2: ping_text = "Error"
-
-            ping_item = QTableWidgetItem(ping_text)
-            if p.last_ping and p.last_ping > 0:
-                color = SUCCESS_COLOR if p.last_ping < 300 else WARNING_COLOR
-                ping_item.setForeground(QColor(color))
-            self.proxy_table.setItem(i, 3, ping_item)
-
-            # Actions
-            actions = QWidget()
-            lay = QHBoxLayout(actions); lay.setContentsMargins(0,0,0,0); lay.setSpacing(5)
-
-            btn_act = QPushButton("فعال‌سازی")
-            btn_act.setEnabled(not p.is_active)
-            btn_act.setStyleSheet(f"background: {SUCCESS_COLOR if not p.is_active else '#444'}; font-size: 10px;")
-            btn_act.clicked.connect(lambda _, pid=p.id: self.activate_proxy(pid))
-
-            btn_del = QPushButton("حذف")
-            btn_del.setStyleSheet(f"background: {DANGER_COLOR}; font-size: 10px;")
-            btn_del.clicked.connect(lambda _, pid=p.id: self.delete_proxy_entry(pid))
-
-            lay.addWidget(btn_act); lay.addWidget(btn_del)
-            self.proxy_table.setCellWidget(i, 4, actions)
+            card = ProxyCard(p, self)
+            card.activate_requested.connect(self.activate_proxy)
+            card.delete_requested.connect(self.delete_proxy_entry)
+            self.proxy_grid.addWidget(card, i // cols, i % cols)
 
     async def load_coupons(self):
         loop = asyncio.get_running_loop()
@@ -912,10 +1008,11 @@ class SettingsWidget(QWidget):
             proxies = crud.get_all_proxies(db)
             for p in proxies:
                 # تست غیرمسدودساز در پس‌زمینه
-                latency = await asyncio.get_running_loop().run_in_executor(
+                latency, country = await asyncio.get_running_loop().run_in_executor(
                     None, proxy_utils.test_proxy_connectivity, p.url, p.type
                 )
-                p.last_ping = latency
+                crud.update_proxy_health(db, p.id, latency)
+                if country: p.country_code = country
             db.commit()
         await self.load_proxies()
 

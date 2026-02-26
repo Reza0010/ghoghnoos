@@ -2,6 +2,7 @@ import socket
 import time
 import re
 import logging
+import httpx
 from urllib.parse import urlparse
 
 logger = logging.getLogger("ProxyUtils")
@@ -70,20 +71,39 @@ def parse_v2ray_link(link):
         logger.error(f"Failed to parse V2Ray link: {e}")
         return None
 
+def get_proxy_location(host):
+    """تشخیص کشور سرور با استفاده از Geo-IP API"""
+    if not host or host == "127.0.0.1": return None
+    try:
+        # استفاده از یک API رایگان و سریع
+        with httpx.Client(timeout=3.0) as client:
+            resp = client.get(f"http://ip-api.com/json/{host}?fields=status,countryCode")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "success":
+                    return data.get("countryCode")
+    except:
+        pass
+    return None
+
 def test_proxy_connectivity(proxy_url, proxy_type):
     """تست کلی اتصال بر اساس نوع پروکسی"""
+    host = None
+    port = None
+
     if proxy_type == 'v2ray':
         data = parse_v2ray_link(proxy_url)
         if data and data['address']:
-            return tcp_ping(data['address'], data['port'])
+            host = data['address']
+            port = data['port']
     else:
-        # برای HTTP/SOCKS5
         try:
             parsed = urlparse(proxy_url)
             host = parsed.hostname
             port = parsed.port or (80 if parsed.scheme == 'http' else 1080)
-            if host:
-                return tcp_ping(host, port)
-        except:
-            pass
-    return -2
+        except: pass
+
+    if host and port:
+        return tcp_ping(host, port), get_proxy_location(host)
+
+    return -2, None
