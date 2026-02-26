@@ -27,8 +27,8 @@ async def run_db(
 ) -> T:
     """
     اجرای توابع دیتابیس (Sync) در ترد جداگانه (Async) برای جلوگیری از هنگ کردن ربات.
-    
-    این تابع یک سشن دیتابیس ایجاد کرده، آن را به عنوان اولین ورودی به تابع 
+
+    این تابع یک سشن دیتابیس ایجاد کرده، آن را به عنوان اولین ورودی به تابع
     مورد نظر (func) پاس می‌دهد و پس از پایان کار، سشن را می‌بندد.
 
     :param func: تابعی از لایه CRUD که ورودی اول آن 'db' است.
@@ -37,7 +37,7 @@ async def run_db(
     :param kwargs: سایر ورودی‌های نام‌دار تابع.
     :return: نتیجه خروجی تابع اجرا شده.
     """
-    
+
     def sync_wrapper():
         # ایجاد سشن جدید مخصوص این ترد
         db = SessionLocal()
@@ -63,7 +63,7 @@ async def run_db(
             return await asyncio.wait_for(to_thread(sync_wrapper), timeout=timeout)
         else:
             return await to_thread(sync_wrapper)
-            
+
     except asyncio.TimeoutError:
         logger.error(f"⏰ Database Timeout in '{func.__name__}' after {timeout}s")
         raise Exception("عملیات پایگاه داده بیش از حد طول کشید.")
@@ -82,3 +82,38 @@ def shorten_text(text: str, max_length: int = 50) -> str:
     if not text:
         return ""
     return (text[:max_length] + '...') if len(text) > max_length else text
+
+async def get_branded_text(text: str) -> str:
+    """افزودن خودکار فوتر برندینگ به متن"""
+    from db import crud
+    footer = await run_db(crud.get_setting, "bot_footer_text", "")
+    if footer:
+        return f"{text}\n\n---\n{footer}"
+    return text
+
+async def send_digital_items(bot_app, rubika_client, order):
+    """ارسال خودکار کالاهای دیجیتال برای مشتری"""
+    if not order or not order.user: return
+
+    digital_items = [i for i in order.items if i.product and i.product.is_digital and i.product.digital_content]
+    if not digital_items: return
+
+    msg = f"🎁 **تحویل خودکار سفارش #{order.id}**\n\n"
+    msg += "بابت خرید شما متشکریم. اطلاعات محصولات دیجیتال شما در ادامه آمده است:\n\n"
+
+    for item in digital_items:
+        msg += f"📦 **{item.product.name}**\n"
+        msg += f"🔑 محتوا:\n`{item.product.digital_content}`\n"
+        msg += "----------------\n"
+
+    msg += "\nدر صورت بروز هرگونه مشکل با پشتیبانی در ارتباط باشید."
+
+    try:
+        if order.user.platform == 'telegram' and bot_app:
+            # اگر bot_app از نوع PanelBotWrapper باشد مستقیماً bot دارد
+            bot = getattr(bot_app, 'bot', bot_app)
+            await bot.send_message(chat_id=int(order.user_id), text=msg.replace("**", "<b>").replace("**", "</b>"), parse_mode='HTML')
+        elif order.user.platform == 'rubika' and rubika_client:
+            await rubika_client.api.send_message(chat_id=order.user_id, text=msg.replace("**", ""))
+    except Exception as e:
+        logger.error(f"Failed to send digital items for order {order.id}: {e}")

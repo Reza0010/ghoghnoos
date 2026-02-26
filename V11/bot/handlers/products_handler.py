@@ -183,9 +183,10 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
     cart_qty = this_item.quantity if this_item else 0
 
     # آماده‌سازی متن قیمت (تخفیف هوشمند)
-    final_price = prod.discount_price if (prod.discount_price and prod.discount_price > 0) else prod.price
+    is_disc = crud.is_product_discount_active(prod)
+    final_price = prod.discount_price if is_disc else prod.price
     price_text = responses.format_price(final_price)
-    if prod.discount_price and prod.discount_price > 0:
+    if is_disc:
         price_text = f"<s>{responses.format_price(prod.price)}</s> ➡️ {price_text} 🔥"
 
     # ساخت متن نهایی
@@ -199,48 +200,86 @@ async def show_product_details(update: Update, context: ContextTypes.DEFAULT_TYP
         cart_preview=f"\n🛒 در سبد خرید شما: <b>{cart_qty} عدد</b>" if cart_qty > 0 else ""
     )
 
+    # افزودن فوتر برندینگ
+    from bot.utils import get_branded_text
+    text = await get_branded_text(text)
+
     bot_info = await context.bot.get_me()
     kbd = keyboards.get_product_detail_keyboard(prod, is_fav, cart_qty, bot_info.username)
 
-    # --- منطق ارسال مدیا (بسیار مهم برای پرفورمنس) ---
-    image_to_send = None
+    # --- منطق ارسال آلبوم تصاویر (Media Group) ---
+    media_list = []
     
-    # 1. اولویت اول: استفاده از File ID تلگرام (بسیار سریع)
-    if prod.image_file_id:
-        image_to_send = prod.image_file_id
-    # 2. اولویت دوم: استفاده از گالری جدید (اولین عکس)
-    elif prod.images:
-        full_path = Path(BASE_DIR) / prod.images[0].image_path
-        if full_path.exists():
-            image_to_send = open(full_path, 'rb')
-    # 3. اولویت سوم: ستون قدیمی (برای سازگاری)
-    elif hasattr(prod, 'image_path') and prod.image_path:
-        full_path = Path(BASE_DIR) / prod.image_path
-        if full_path.exists():
-            image_to_send = open(full_path, 'rb')
+    # جمع‌آوری تمام تصاویر محصول
+    images = prod.images if prod.images else []
+    if not images and hasattr(prod, 'image_path') and prod.image_path:
+        # اگر در گالری نبود ولی در ستون قدیمی بود
+        images = [models.ProductImage(image_path=prod.image_path, image_file_id=prod.image_file_id)]
+
+    for idx, img in enumerate(images):
+        media_item = None
+        if img.image_file_id:
+            media_item = img.image_file_id
+        else:
+            full_path = Path(BASE_DIR) / img.image_path
+            if full_path.exists():
+                media_item = open(full_path, 'rb')
+
+        if media_item:
+            # فقط اولین تصویر کپشن داشته باشد (استاندارد تلگرام برای آلبوم)
+            caption = text if idx == 0 else ""
+            media_list.append(InputMediaPhoto(media=media_item, caption=caption, parse_mode='HTML'))
 
     try:
-        if image_to_send:
+        if len(media_list) > 1:
+            # ارسال به صورت آلبوم (Media Group)
+            # نکته: مدیاگروپ را نمی‌توان روی پیام قبلی Edit کرد، پس پیام قبلی حذف و جدید فرستاده می‌شود
+            if query: await msg_obj.delete()
+
+            sent_messages = await context.bot.send_media_group(chat_id=msg_obj.chat_id, media=media_list)
+            # ارسال کیبورد زیر آلبوم (با یک پیام متنی کوچک)
+            await context.bot.send_message(
+                chat_id=msg_obj.chat_id,
+                text="👆 <b>تصاویر محصول را مشاهده کنید.</b>\nبرای خرید یا اطلاعات بیشتر از دکمه‌های زیر استفاده کنید:",
+                reply_markup=kbd,
+                parse_mode='HTML'
+            )
+
+            # کش کردن File IDها برای دفعات بعد
+            def cache_ids(db, pid, m_list):
+                p_obj = db.query(models.Product).get(pid)
+                for i, sent_m in enumerate(m_list):
+                    if i < len(p_obj.images):
+                        p_obj.images[i].image_file_id = sent_m.photo[-1].file_id
+                    elif i == 0:
+                        p_obj.image_file_id = sent_m.photo[-1].file_id
+                db.commit()
+
+            asyncio.create_task(run_db(cache_ids, prod.id, sent_messages))
+
+        elif len(media_list) == 1:
+            # تک تصویر (ارسال سریع‌تر و زیباتر با قابلیت ادیت)
             if msg_obj.photo:
-                # ویرایش تصویر پیام فعلی (بدون پرش)
-                await msg_obj.edit_media(
-                    media=InputMediaPhoto(media=image_to_send, caption=text, parse_mode='HTML'),
-                    reply_markup=kbd
-                )
+                await msg_obj.edit_media(media=media_list[0], reply_markup=kbd)
             else:
-                # ارسال پیام جدید اگر قبلی متنی بود
                 if query: await msg_obj.delete()
-                sent = await context.bot.send_photo(msg_obj.chat_id, image_to_send, caption=text, reply_markup=kbd, parse_mode='HTML')
-                
-                # ذخیره File ID در دیتابیس برای دفعات بعدی (Cache)
-                if not prod.image_file_id:
+                sent = await context.bot.send_photo(
+                    chat_id=msg_obj.chat_id,
+                    photo=media_list[0].media,
+                    caption=text,
+                    reply_markup=kbd,
+                    parse_mode='HTML'
+                )
+                # کش کردن File ID
+                if not images[0].image_file_id:
                     def save_fid(db, pid, fid):
                         p = db.query(models.Product).get(pid)
+                        if p.images: p.images[0].image_file_id = fid
                         p.image_file_id = fid
                         db.commit()
-                    await run_db(save_fid, prod.id, sent.photo[-1].file_id)
+                    asyncio.create_task(run_db(save_fid, prod.id, sent.photo[-1].file_id))
         else:
-            # ارسال متنی اگر هیچ عکسی یافت نشد
+            # بدون تصویر
             if query: await msg_obj.edit_text(text, reply_markup=kbd, parse_mode='HTML')
             else: await msg_obj.reply_text(text, reply_markup=kbd, parse_mode='HTML')
             

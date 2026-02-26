@@ -108,17 +108,19 @@ logger = logging.getLogger("Config")
 # ==============================================================================
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 RUBIKA_BOT_TOKEN = os.getenv("RUBIKA_BOT_TOKEN")
+PROXY_URL = os.getenv("PROXY_URL") # مثال: http://127.0.0.1:8080
 
 # ادمین‌ها
-ADMIN_USER_IDS_STR = os.getenv("ADMIN_USER_IDS", "")
+_ADMIN_USER_IDS_STR = os.getenv("ADMIN_USER_IDS", "")
 try:
-    ADMIN_USER_IDS = [int(x.strip()) for x in ADMIN_USER_IDS_STR.split(',') if x.strip().isdigit()]
+    ADMIN_USER_IDS = [int(x.strip()) for x in _ADMIN_USER_IDS_STR.split(',') if x.strip().isdigit()]
 except Exception as e:
-    logger.error(f"Error parsing ADMIN_USER_IDS: {e}")
+    logging.getLogger("Config").error(f"Error parsing ADMIN_USER_IDS: {e}")
     ADMIN_USER_IDS = []
 
+
 if not ADMIN_USER_IDS:
-    logger.warning("⚠️ No admins defined! Some features may be restricted.")
+    logging.getLogger("Config").warning("⚠️ No admins defined! Some features may be restricted.")
 
 # ==============================================================================
 # 4. تنظیمات دیتابیس
@@ -143,6 +145,6 @@ TIME_ZONE = os.getenv("TIME_ZONE", "Asia/Tehran")
 __all__ = [
     "BASE_DIR", "MEDIA_DIR", "MEDIA_PRODUCTS_DIR", "TEMP_DIR",
     "DB_FOLDER", "BACKUP_DIR", "LOG_DIR",
-    "TELEGRAM_BOT_TOKEN", "RUBIKA_BOT_TOKEN", "ADMIN_USER_IDS",
+    "TELEGRAM_BOT_TOKEN", "RUBIKA_BOT_TOKEN", "PROXY_URL", "ADMIN_USER_IDS",
     "DATABASE_URL", "TIME_ZONE"
 ]

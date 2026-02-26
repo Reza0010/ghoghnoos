@@ -23,7 +23,12 @@ class User(Base):
     saved_address = Column(Text, nullable=True)
     saved_phone = Column(String(20), nullable=True)
     private_note = Column(Text, nullable=True)  # یادداشت ادمین برای کاربر
+    tags = Column(String(255), nullable=True) # تگ‌های کاربر (سگمنتیشن) - جدا شده با کاما
     
+    # وفادارسازی و زیرمجموعه‌گیری
+    loyalty_points = Column(Integer, default=0, nullable=False)
+    referred_by_id = Column(String(50), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+
     last_seen = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -38,6 +43,7 @@ class User(Base):
         Index('idx_user_platform', 'platform'),
         Index('idx_user_created', 'created_at'),
         Index('idx_user_banned', 'is_banned'),
+        Index('idx_user_tags', 'tags'),
     )
 
     def __repr__(self):
@@ -67,8 +73,15 @@ class Product(Base):
     brand = Column(String(100), nullable=True)
     
     price = Column(Numeric(12, 0), nullable=False)
+    purchase_price = Column(Numeric(12, 0), default=0) # قیمت خرید (برای محاسبه سود)
     discount_price = Column(Numeric(12, 0), nullable=True)
+    discount_start_date = Column(DateTime(timezone=True), nullable=True)
+    discount_end_date = Column(DateTime(timezone=True), nullable=True)
     stock = Column(Integer, default=0, nullable=False)
+
+    # کالای دیجیتال
+    is_digital = Column(Boolean, default=False)
+    digital_content = Column(Text, nullable=True) # لایسنس یا متن ارسالی خودکار
     
     is_active = Column(Boolean, default=True, nullable=False)
     is_top_seller = Column(Boolean, default=False, nullable=False)
@@ -154,6 +167,10 @@ class Order(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
+    # کد تخفیف اعمال شده
+    coupon_code = Column(String(50), nullable=True)
+    coupon_discount_amount = Column(Numeric(12, 0), default=0)
+
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin")
 
@@ -170,6 +187,7 @@ class OrderItem(Base):
     
     quantity = Column(Integer, nullable=False)
     price_at_purchase = Column(Numeric(12, 0), nullable=False)
+    purchase_price_at_purchase = Column(Numeric(12, 0), default=0) # هزینه خرید در زمان سفارش
     selected_attributes = Column(Text, nullable=True)
 
     order = relationship("Order", back_populates="items")
@@ -206,9 +224,102 @@ class UserAddress(Base):
     user = relationship("User", back_populates="addresses")
 
 
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    percent = Column(Integer, default=0) # درصد تخفیف
+    amount = Column(Numeric(12, 0), default=0) # مبلغ ثابت (اگر درصد ۰ باشد)
+    usage_limit = Column(Integer, default=100)
+    used_count = Column(Integer, default=0)
+    min_purchase = Column(Numeric(12, 0), default=0)
+    expiry_date = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class Setting(Base):
     __tablename__ = "settings"
     key = Column(String(100), primary_key=True, unique=True)
     value = Column(Text, nullable=True)
     description = Column(String(255), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(50), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    subject = Column(String(255), nullable=False)
+    status = Column(String(20), default="open", index=True)  # open, pending, closed
+    priority = Column(String(20), default="normal")  # low, normal, high
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
+
+    user = relationship("User")
+    messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketMessage.created_at")
+
+
+class AutoResponse(Base):
+    __tablename__ = "auto_responses"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String(255), nullable=False, unique=True, index=True)
+    response_text = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    match_type = Column(String(20), default="exact") # exact, contains
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class TicketMessage(Base):
+    __tablename__ = "ticket_messages"
+    id = Column(Integer, primary_key=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(String(50), nullable=False)  # user_id or admin_id
+    text = Column(Text, nullable=False)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    ticket = relationship("Ticket", back_populates="messages")
+
+
+class Proxy(Base):
+    __tablename__ = "proxies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    protocol = Column(String(20), default="http") # http, socks5, vless, vmess, ss, trojan
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False)
+    username = Column(String(100), nullable=True)
+    password = Column(String(100), nullable=True)
+
+    # برای لینک‌های مستقیم (V2Ray/Hiddify)
+    raw_link = Column(Text, nullable=True)
+    config_type = Column(String(50), nullable=True) # manual, link
+
+    is_active = Column(Boolean, default=False, index=True)
+    latency = Column(Integer, nullable=True) # ms
+    last_tested = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(String(50), index=True) # کی انجام داده
+    action = Column(String(100), nullable=False) # چه کاری (مثلاً حذف محصول)
+    target_type = Column(String(50)) # روی چه نوع موجودیتی (product, user, order)
+    target_id = Column(String(50)) # ID مورد نظر
+    details = Column(Text, nullable=True) # جزئیات بیشتر (مثلاً قیمت قبل و بعد)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class StockLog(Base):
+    __tablename__ = "stock_logs"
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    old_stock = Column(Integer, nullable=False)
+    new_stock = Column(Integer, nullable=False)
+    change_reason = Column(String(100), nullable=True) # sale, manual_update, restock
+    admin_id = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product")

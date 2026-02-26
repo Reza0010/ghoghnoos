@@ -18,9 +18,10 @@ class RubikaAPI:
     """
     BASE_URL = "https://botapi.rubika.ir/v3/"
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, proxy: str = None):
         self.token = token
         self.url = f"{self.BASE_URL}{token}/"
+        self.proxy = proxy
         self.session: Optional[aiohttp.ClientSession] = None
         # ذخیره آخرین آفست برای جلوگیری از دریافت پیام تکراری
         self._last_offset_id: Optional[str] = None
@@ -35,22 +36,22 @@ class RubikaAPI:
         """ارسال درخواست استاندارد POST و مدیریت خطاها"""
         session = await self._get_session()
         full_url = f"{self.url}{method}"
-        
+
         try:
-            async with session.post(full_url, json=payload or {}) as resp:
+            async with session.post(full_url, json=payload or {}, proxy=self.proxy) as resp:
                 if resp.status != 200:
                     text = await resp.text()
                     logger.error(f"HTTP Error {resp.status}: {text}")
                     raise RubikaError(f"HTTP Error {resp.status}")
-                
+
                 data = await resp.json()
-                
+
                 status = data.get("status")
                 if status == "ERROR":
                     desc = data.get("description", "Unknown Error")
                     logger.error(f"Rubika Logic Error: {desc}")
                     raise RubikaError(desc)
-                
+
                 # برگرداندن بخش data (اگر وجود داشته باشد) یا کل دیتا
                 return data.get("data", data)
 
@@ -73,13 +74,18 @@ class RubikaAPI:
                     "type": btn.get("type", "Simple"),
                     "button_text": btn.get("text", "Button")
                 }
+                # پشتیبانی از لینک در دکمه‌های شیشه‌ای روبیکا
+                if btn.get("url"):
+                    btn_obj["url"] = btn["url"]
+                    btn_obj["type"] = "OpenUrl"
+
                 # اگر دکمه نوع دیگری مثل Selection است
                 if btn.get("selection"):
                      btn_obj["button_selection"] = btn["selection"]
-                
+
                 row_buttons.append(btn_obj)
             rows.append({"buttons": row_buttons})
-            
+
         return {"rows": rows}
 
     # =========================================================================
@@ -91,10 +97,10 @@ class RubikaAPI:
         return await self._request("getMe")
 
     async def send_message(
-        self, 
-        chat_id: str, 
-        text: str, 
-        reply_keyboard: List[List[Dict]] = None, 
+        self,
+        chat_id: str,
+        text: str,
+        reply_keyboard: List[List[Dict]] = None,
         inline_keyboard: List[List[Dict]] = None,
         reply_to_message_id: str = None
     ) -> str:
@@ -106,14 +112,14 @@ class RubikaAPI:
             "chat_id": chat_id,
             "text": text
         }
-        
+
         if reply_keyboard:
             payload["chat_keypad_type"] = "New"
             payload["chat_keypad"] = self._build_keypad(reply_keyboard)
-            
+
         if inline_keyboard:
             payload["inline_keypad"] = self._build_keypad(inline_keyboard)
-            
+
         if reply_to_message_id:
             payload["reply_to_message_id"] = reply_to_message_id
 
@@ -129,7 +135,7 @@ class RubikaAPI:
         }
         if inline_keyboard:
             payload["inline_keypad"] = self._build_keypad(inline_keyboard)
-        
+
         await self._request("editMessageText", payload)
 
     async def edit_message_keypad(self, chat_id: str, message_id: str, inline_keyboard: List[List[Dict]]):
@@ -157,20 +163,20 @@ class RubikaAPI:
         مدیریت خودکار offset_id برای جلوگیری از دریافت پیام تکراری.
         """
         payload = {"limit": limit}
-        
+
         # ارسال آخرین آفست برای دریافت پیام‌های جدیدتر
         if self._last_offset_id:
             payload["offset_id"] = self._last_offset_id
-            
+
         result = await self._request("getUpdates", payload)
-        
+
         updates = result.get("updates", [])
         next_offset = result.get("next_offset_id")
-        
+
         # اگر آفست جدیدی داریم، ذخیره می‌کنیم
         if next_offset:
             self._last_offset_id = next_offset
-            
+
         return updates
 
     # =========================================================================
@@ -192,22 +198,22 @@ class RubikaAPI:
         # 1. Get Upload URL
         req_data = await self.request_send_file(file_type)
         upload_url = req_data.get("upload_url")
-        
+
         if not upload_url:
             raise RubikaError("Could not get upload URL")
 
         # 2. Upload File
         session = await self._get_session()
         file_name = os.path.basename(file_path)
-        
+
         with open(file_path, 'rb') as f:
             form = aiohttp.FormData()
             form.add_field('file', f, filename=file_name)
-            
-            async with session.post(upload_url, data=form) as resp:
+
+            async with session.post(upload_url, data=form, proxy=self.proxy) as resp:
                 if resp.status != 200:
                     raise RubikaError("File upload failed")
-                
+
                 up_data = await resp.json()
                 if up_data.get("status") == "OK":
                     return up_data["data"]["file_id"]
@@ -223,7 +229,7 @@ class RubikaAPI:
         }
         if inline_keyboard:
             payload["inline_keypad"] = self._build_keypad(inline_keyboard)
-            
+
         return await self._request("sendFile", payload)
 
     # =========================================================================

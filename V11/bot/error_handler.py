@@ -34,7 +34,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     # 4. آماده‌سازی پیام گزارش برای ادمین‌ها
     # محدودیت کاراکتر تلگرام را رعایت می‌کنیم (۴۰۹۶ کاراکتر)
     # بخش‌های مختلف را جداگانه اسکیپ (Escape) می‌کنیم تا HTML خراب نشود
-    
+
     error_message = str(context.error)
     # کوتاه کردن تریس‌بک برای جا شدن در پیام
     short_tb = tb_string[-2000:] if len(tb_string) > 2000 else tb_string
@@ -85,7 +85,7 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
         try:
             if update.effective_message:
                 await update.effective_message.reply_text(
-                    user_msg, 
+                    user_msg,
                     parse_mode=ParseMode.HTML
                 )
         except Exception:

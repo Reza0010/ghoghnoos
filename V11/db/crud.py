@@ -10,6 +10,20 @@ from config import ADMIN_USER_IDS
 
 logger = logging.getLogger("CRUD")
 
+def get_admin_ids(db: Session) -> List[int]:
+    """ترکیب ادمین‌های فایل کانفیگ و دیتابیس"""
+    ids = list(ADMIN_USER_IDS)
+    db_ids_str = get_setting(db, "admin_user_ids", "")
+    if db_ids_str:
+        try:
+            extra_ids = [int(x.strip()) for x in db_ids_str.split(',') if x.strip().isdigit()]
+            for eid in extra_ids:
+                if eid not in ids:
+                    ids.append(eid)
+        except:
+            pass
+    return ids
+
 # ======================================================================
 # 1. مدیریت کاربران (User Management)
 # ======================================================================
@@ -21,7 +35,8 @@ def get_or_create_user(
     telegram_id: Union[int, str],
     full_name: str,
     username: str = None,
-    platform: str = "telegram"
+    platform: str = "telegram",
+    referred_by: str = None
 ) -> models.User:
     """ایجاد یا آپدیت کاربر (سازگار با تلگرام و روبیکا)"""
     user_id_str = str(telegram_id)
@@ -41,6 +56,7 @@ def get_or_create_user(
                 username=username,
                 platform=platform,
                 is_admin=is_admin_flag,
+                referred_by_id=referred_by,
                 created_at=datetime.now()
             )
             db.add(user)
@@ -70,15 +86,34 @@ def get_or_create_user(
         # تلاش مجدد برای خواندن (اگر در ترد دیگری ساخته شده باشد)
         return db.query(models.User).filter(models.User.user_id == user_id_str).first()
 
-def get_all_users(db: Session, limit: int = 10000) -> List[models.User]:
+def get_all_users(db: Session, limit: int = 50, offset: int = 0) -> List[models.User]:
     """دریافت لیست کاربران با لود کردن سفارشات (برای محاسبه CRM)"""
     return (
         db.query(models.User)
         .options(selectinload(models.User.orders)) # بهینه سازی کوئری
         .order_by(desc(models.User.last_seen))
         .limit(limit)
+        .offset(offset)
         .all()
     )
+
+def get_users_count(db: Session, query: str = "", platform: str = "all", status: str = "all") -> int:
+    """تعداد کل کاربران با فیلترها (برای صفحه‌بندی)"""
+    q = db.query(func.count(models.User.user_id))
+
+    if platform != "all" and platform != "همه پلتفرم‌ها":
+        q = q.filter(models.User.platform == platform.lower())
+
+    if status == "فعال":
+        q = q.filter(models.User.is_banned == False)
+    elif status == "مسدود":
+        q = q.filter(models.User.is_banned == True)
+
+    if query:
+        search = f"%{query}%"
+        q = q.filter(or_(models.User.full_name.ilike(search), models.User.user_id.ilike(search), models.User.tags.ilike(search)))
+
+    return q.scalar()
 
 def update_user_info(db: Session, user_id: Union[int, str], **kwargs) -> bool:
     try:
@@ -171,6 +206,19 @@ def get_product(db: Session, prod_id: int) -> Optional[models.Product]:
         joinedload(models.Product.category)
     ).filter_by(id=prod_id).first()
 
+def is_product_discount_active(product: models.Product) -> bool:
+    """بررسی فعال بودن تخفیف بر اساس زمان‌بندی"""
+    if not product.discount_price or product.discount_price <= 0:
+        return False
+
+    now = datetime.now()
+    if product.discount_start_date and now < product.discount_start_date:
+        return False
+    if product.discount_end_date and now > product.discount_end_date:
+        return False
+
+    return True
+
 def get_active_products_by_category(db: Session, category_id: int) -> List[models.Product]:
     return db.query(models.Product).filter(
         models.Product.category_id == category_id,
@@ -221,18 +269,46 @@ def advanced_search_products(
         q = q.order_by(desc(models.Product.price))
     elif sort_by == "top_seller":
         q = q.order_by(desc(models.Product.is_top_seller), desc(models.Product.created_at))
+    elif sort_by == "stock_asc":
+        q = q.order_by(asc(models.Product.stock))
+    elif sort_by == "stock_desc":
+        q = q.order_by(desc(models.Product.stock))
     else: # newest
         q = q.order_by(desc(models.Product.created_at))
 
     return q.limit(limit).offset(offset).all()
 
-def get_product_search_count(db: Session, query: str = "", **kwargs) -> int:
+def get_product_search_count(
+    db: Session,
+    query: str = "",
+    category_id: int = None,
+    min_price: int = 0,
+    max_price: int = 0,
+    in_stock_only: bool = False,
+    **kwargs
+) -> int:
     """تعداد نتایج جستجو (برای صفحه‌بندی)"""
     q = db.query(func.count(models.Product.id))
+
     if query:
         search = f"%{query}%"
-        q = q.filter(or_(models.Product.name.ilike(search), models.Product.brand.ilike(search)))
-    # سایر فیلترها مشابه advanced_search_products اعمال شود...
+        q = q.filter(
+            or_(
+                models.Product.name.ilike(search),
+                models.Product.brand.ilike(search),
+                models.Product.tags.ilike(search)
+            )
+        )
+
+    if category_id:
+        q = q.filter(models.Product.category_id == category_id)
+    if min_price > 0:
+        q = q.filter(models.Product.price >= min_price)
+    if max_price > 0:
+        q = q.filter(models.Product.price <= max_price)
+    if in_stock_only:
+        q = q.filter(models.Product.stock > 0)
+
     return q.scalar()
 
 def create_product_with_variants(
@@ -260,6 +336,10 @@ def create_product_with_variants(
         db.add(prod)
         db.flush() # برای گرفتن ID
 
+        # لاگ موجودی اولیه
+        if prod.stock > 0:
+            log_stock_change(db, prod.id, 0, prod.stock, "initial_creation")
+
         # افزودن تصاویر به جدول جدید
         if image_paths:
             for path in image_paths:
@@ -283,12 +363,15 @@ def update_product_with_variants(
     prod_id: int,
     product_data: dict,
     variants_data: List[dict],
-    image_paths: List[str] = None
+    image_paths: List[str] = None,
+    admin_id: str = "Panel"
 ):
     """آپدیت کامل محصول شامل عکس‌ها و متغیرها"""
     try:
         prod = db.query(models.Product).filter_by(id=prod_id).first()
         if not prod: raise ValueError("Product not found")
+
+        old_stock = prod.stock
 
         # آپدیت فیلدهای اصلی
         valid_keys = {c.name for c in models.Product.__table__.columns}
@@ -301,6 +384,10 @@ def update_product_with_variants(
             prod.image_path = image_paths[0]
 
         prod.updated_at = datetime.now()
+
+        # لاگ موجودی اگر تغییر کرده
+        if old_stock != prod.stock:
+            log_stock_change(db, prod_id, old_stock, prod.stock, "manual_update", admin_id)
 
         # آپدیت تصاویر: حذف قدیمی‌ها و افزودن جدیدها
         if image_paths is not None:
@@ -316,19 +403,21 @@ def update_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+        log_audit(db, admin_id, "update_product", "product", str(prod_id), f"Name: {prod.name}")
         return prod
     except Exception as e:
         db.rollback()
         raise e
 
-def delete_product(db: Session, prod_id: int):
-    return bulk_delete_products(db, [prod_id])
+def delete_product(db: Session, prod_id: int, admin_id: str = "Panel"):
+    return bulk_delete_products(db, [prod_id], admin_id=admin_id)
 
-def bulk_delete_products(db: Session, product_ids: List[int]):
+def bulk_delete_products(db: Session, product_ids: List[int], admin_id: str = "Panel"):
     try:
         # حذف وابسته ها خودکار انجام میشود (Cascade) اما برای اطمینان:
         db.query(models.Product).filter(models.Product.id.in_(product_ids)).delete(synchronize_session=False)
         db.commit()
+        log_audit(db, admin_id, "delete_products", "product", ",".join(map(str, product_ids)))
         return True
     except SQLAlchemyError:
         db.rollback()
@@ -404,16 +493,16 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
             order_items = []
 
             for item in cart_items:
-                # قفل کردن ردیف محصول برای جلوگیری از Race Condition (در دیتابیس‌های پیشرفته مثل PG)
-                # در SQLite این کار با تراکنش معمولی انجام می‌شود
                 prod = db.query(models.Product).filter_by(id=item.product_id).first()
                 
                 if prod.stock < item.quantity:
                     raise ValueError(f"موجودی '{prod.name}' تمام شده است.")
                 
                 # کسر موجودی
+                old_stock = prod.stock
                 prod.stock -= item.quantity
-                
+                log_stock_change(db, prod.id, old_stock, prod.stock, "sale", f"Order {user_id}")
+
                 # محاسبه قیمت (با تخفیف)
                 price = prod.discount_price if (prod.discount_price and prod.discount_price > 0) else prod.price
                 line_total = price * item.quantity
@@ -424,6 +513,7 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
                     variant_id=item.variant_id,
                     quantity=item.quantity,
                     price_at_purchase=price,
+                    purchase_price_at_purchase=prod.purchase_price or 0,
                     selected_attributes=item.selected_attributes
                 ))
 
@@ -469,13 +559,41 @@ def get_filtered_orders(db: Session, status: str = "all", limit: int = 500) -> L
     
     return q.order_by(desc(models.Order.created_at)).limit(limit).all()
 
-def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[models.Order]:
+def update_order_status(db: Session, order_id: int, new_status: str, admin_id: str = "Panel") -> Optional[models.Order]:
     order = db.query(models.Order).filter_by(id=order_id).first()
     if order:
+        old_status = order.status
         order.status = new_status
+
+        # منطق وفادارسازی: اگر سفارش تایید شد، امتیاز اضافه کن
+        if new_status in ['approved', 'paid'] and old_status not in ['approved', 'paid']:
+            _award_loyalty_points(db, order)
+
         db.commit()
         db.refresh(order)
+        log_audit(db, admin_id, "update_order_status", "order", str(order_id), f"Old: {old_status} -> New: {new_status}")
     return order
+
+def _award_loyalty_points(db: Session, order: models.Order):
+    """محاسبه و واریز امتیاز وفاداری"""
+    try:
+        # درصد امتیاز از تنظیمات (پیش‌فرض ۱٪)
+        percent = int(get_setting(db, "loyalty_percent", "1"))
+        points = int(float(order.total_amount) * (percent / 100))
+
+        if points > 0 and order.user:
+            order.user.loyalty_points += points
+            logger.info(f"Awarded {points} points to user {order.user_id}")
+
+            # اگر زیرمجموعه کسی باشد، به معرف هم امتیاز بده (مثلاً نیم درصد)
+            if order.user.referred_by_id:
+                referrer = db.query(models.User).get(order.user.referred_by_id)
+                if referrer:
+                    ref_points = int(float(order.total_amount) * 0.005) # 0.5%
+                    referrer.loyalty_points += ref_points
+                    logger.info(f"Awarded {ref_points} referral points to {referrer.user_id}")
+    except Exception as e:
+        logger.error(f"Loyalty Award Error: {e}")
 
 def get_order_by_id(db: Session, order_id: int) -> Optional[models.Order]:
     return db.query(models.Order).options(
@@ -493,14 +611,51 @@ def get_setting(db: Session, key: str, default: str = "") -> str:
     s = db.query(models.Setting).filter_by(key=key).first()
     return s.value if s else default
 
-def set_setting(db: Session, key: str, value: str):
+def set_setting(db: Session, key: str, value: str, admin_id: str = "Panel"):
     s = db.query(models.Setting).filter_by(key=key).first()
+    old_val = s.value if s else None
     if s:
         s.value = str(value)
         s.updated_at = datetime.now()
     else:
         db.add(models.Setting(key=key, value=str(value)))
     db.commit()
+    if old_val != str(value):
+        log_audit(db, admin_id, "change_setting", "setting", key, f"Old: {old_val} -> New: {value}")
+
+def is_shop_currently_open(db: Session) -> bool:
+    """بررسی باز یا بسته بودن فروشگاه با لحاظ کردن ساعات کاری"""
+    manual_open = get_setting(db, "tg_is_open", "true") == "true"
+    if not manual_open:
+        return False
+
+    op_hours_enabled = get_setting(db, "op_hours_enabled", "false") == "true"
+    if not op_hours_enabled:
+        return True
+
+    try:
+        now = datetime.now().time()
+        start_str = get_setting(db, "op_hours_start", "08:00")
+        end_str = get_setting(db, "op_hours_end", "22:00")
+
+        start_time = datetime.strptime(start_str, "%H:%M").time()
+        end_time = datetime.strptime(end_str, "%H:%M").time()
+
+        if start_time < end_time:
+            return start_time <= now <= end_time
+        else: # بازه از شب تا صبح روز بعد
+            return now >= start_time or now <= end_time
+    except:
+        return True
+
+def get_admins_by_role(db: Session, role: str) -> List[int]:
+    """دریافت لیست ادمین‌ها بر اساس نقش (sales, support, system)"""
+    try:
+        roles_json = get_setting(db, "admin_notification_roles", "{}")
+        roles = json.loads(roles_json)
+        return [int(uid) for uid in roles.get(role, [])]
+    except:
+        return get_admin_ids(db)
 
 def log_setting_change(db: Session, admin_id, keys, values):
     logger.info(f"Admin {admin_id} changed settings: {keys}")
@@ -516,6 +671,26 @@ def get_total_revenue_by_platform(db: Session, platform: str) -> float:
             models.User.platform == platform
         ).scalar()
 
+def get_total_profit(db: Session, days: int = 30) -> float:
+    """محاسبه سود خالص (فروش منهای هزینه خرید) در بازه زمانی مشخص"""
+    start_date = datetime.now() - timedelta(days=days)
+
+    revenue = db.query(func.coalesce(func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase), 0))\
+        .join(models.Order)\
+        .filter(
+            models.Order.status.in_(['approved', 'shipped', 'paid']),
+            models.Order.created_at >= start_date
+        ).scalar()
+
+    cost = db.query(func.coalesce(func.sum(models.OrderItem.quantity * models.OrderItem.purchase_price_at_purchase), 0))\
+        .join(models.Order)\
+        .filter(
+            models.Order.status.in_(['approved', 'shipped', 'paid']),
+            models.Order.created_at >= start_date
+        ).scalar()
+
+    return float(revenue) - float(cost)
+
 def get_orders_count_by_platform_and_status(db: Session, platform: str, status: str) -> int:
     return db.query(func.count(models.Order.id))\
         .join(models.User)\
@@ -523,6 +698,99 @@ def get_orders_count_by_platform_and_status(db: Session, platform: str, status: 
             models.Order.status == status,
             models.User.platform == platform
         ).scalar()
+
+def get_top_selling_products(db: Session, limit: int = 5):
+    """لیست محصولات پرفروش به همراه تعداد و درآمد کل"""
+    return db.query(
+        models.Product.name,
+        func.sum(models.OrderItem.quantity).label('total_qty'),
+        func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase).label('total_revenue')
+    ).join(models.OrderItem).group_by(models.Product.id)\
+    .order_by(desc('total_qty')).limit(limit).all()
+
+def get_recent_activities(db: Session, limit: int = 15) -> List[Dict]:
+    """دریافت فعالیت‌های متنوع برای فید داشبورد"""
+    activities = []
+
+    # سفارشات اخیر
+    orders = db.query(models.Order).order_by(desc(models.Order.created_at)).limit(limit).all()
+    for o in orders:
+        activities.append({
+            "type": "order",
+            "text": f"سفارش #{o.id} ثبت شد",
+            "user": o.user.full_name if o.user else "ناشناس",
+            "time": o.created_at,
+            "platform": o.user.platform if o.user else "telegram",
+            "amount": float(o.total_amount)
+        })
+
+    # کاربران جدید
+    users = db.query(models.User).order_by(desc(models.User.created_at)).limit(limit).all()
+    for u in users:
+        activities.append({
+            "type": "user",
+            "text": f"کاربر جدید پیوست",
+            "user": u.full_name or "بدون نام",
+            "time": u.created_at,
+            "platform": u.platform,
+            "amount": None
+        })
+
+    # تیکت‌های جدید
+    tickets = db.query(models.Ticket).order_by(desc(models.Ticket.created_at)).limit(limit).all()
+    for t in tickets:
+        activities.append({
+            "type": "ticket",
+            "text": f"تیکت جدید: {t.subject[:20]}...",
+            "user": t.user.full_name if t.user else "ناشناس",
+            "time": t.created_at,
+            "platform": t.user.platform if t.user else "telegram",
+            "amount": None
+        })
+
+    # مرتب‌سازی کل بر اساس زمان
+    activities.sort(key=lambda x: x["time"], reverse=True)
+    return activities[:limit]
+
+def get_sales_growth(db: Session):
+    """محاسبه درصد رشد فروش امروز نسبت به دیروز"""
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+
+    def get_day_revenue(day):
+        return db.query(func.coalesce(func.sum(models.Order.total_amount), 0))\
+            .filter(func.date(models.Order.created_at) == day)\
+            .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+            .scalar()
+
+    rev_today = get_day_revenue(today)
+    rev_yesterday = get_day_revenue(yesterday)
+
+    if rev_yesterday == 0:
+        return 100 if rev_today > 0 else 0
+
+    growth = ((rev_today - rev_yesterday) / rev_yesterday) * 100
+    return round(growth, 1)
+
+def get_monthly_growth(db: Session):
+    """محاسبه رشد درآمد ماه جاری نسبت به ماه قبل"""
+    now = datetime.now()
+    this_month_start = now.replace(day=1, hour=0, minute=0, second=0)
+    last_month_end = this_month_start - timedelta(seconds=1)
+    last_month_start = last_month_end.replace(day=1, hour=0, minute=0, second=0)
+
+    def get_period_revenue(start, end):
+        return db.query(func.coalesce(func.sum(models.Order.total_amount), 0))\
+            .filter(models.Order.created_at >= start, models.Order.created_at <= end)\
+            .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+            .scalar()
+
+    rev_this = get_period_revenue(this_month_start, now)
+    rev_last = get_period_revenue(last_month_start, last_month_end)
+
+    if rev_last == 0:
+        return 100 if rev_this > 0 else 0
+    return round(((rev_this - rev_last) / rev_last) * 100, 1)
 
 # ======================================================================
 # 8. آدرس‌ها و علاقه‌مندی‌ها
@@ -565,3 +833,253 @@ def add_product_notification(db: Session, user_id, product_id):
     if not exists:
         db.add(models.ProductNotification(user_id=str(user_id), product_id=product_id))
         db.commit()
+
+# ======================================================================
+# 9. سیستم تیکتینگ (Ticketing System)
+# ======================================================================
+def create_ticket(db: Session, user_id: str, subject: str, initial_message: str) -> models.Ticket:
+    ticket = models.Ticket(user_id=str(user_id), subject=subject)
+    db.add(ticket)
+    db.flush()
+
+    msg = models.TicketMessage(ticket_id=ticket.id, sender_id=str(user_id), text=initial_message, is_admin=False)
+    db.add(msg)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+def add_ticket_message(db: Session, ticket_id: int, sender_id: str, text: str, is_admin: bool = False):
+    msg = models.TicketMessage(ticket_id=ticket_id, sender_id=str(sender_id), text=text, is_admin=is_admin)
+    db.add(msg)
+    # آپدیت زمان آخرین تغییر تیکت
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.updated_at = datetime.now()
+        if is_admin:
+            ticket.status = "pending" # در انتظار پاسخ کاربر
+        else:
+            ticket.status = "open" # باز (نیاز به پاسخ ادمین)
+    db.commit()
+    return msg
+
+def get_user_activity_history(db: Session, user_id: str) -> List[Dict]:
+    """دریافت تمام فعالیت‌های یک کاربر خاص به صورت زمانی"""
+    history = []
+    uid = str(user_id)
+
+    # سفارشات
+    orders = db.query(models.Order).filter_by(user_id=uid).all()
+    for o in orders:
+        history.append({
+            "type": "order",
+            "title": f"ثبت سفارش #{o.id}",
+            "desc": f"مبلغ {int(o.total_amount):,} تومان | وضعیت: {o.status}",
+            "time": o.created_at
+        })
+
+    # تیکت‌ها
+    tickets = db.query(models.Ticket).filter_by(user_id=uid).all()
+    for t in tickets:
+        history.append({
+            "type": "ticket",
+            "title": f"ایجاد تیکت: {t.subject}",
+            "desc": f"وضعیت نهایی: {t.status}",
+            "time": t.created_at
+        })
+
+    # زمان عضویت
+    user = db.query(models.User).filter_by(user_id=uid).first()
+    if user:
+        history.append({
+            "type": "join",
+            "title": "عضویت در فروشگاه",
+            "desc": f"پلتفرم: {user.platform}",
+            "time": user.created_at
+        })
+
+    history.sort(key=lambda x: x["time"], reverse=True)
+    return history
+
+def get_user_tickets(db: Session, user_id: str) -> List[models.Ticket]:
+    return db.query(models.Ticket).filter_by(user_id=str(user_id)).order_by(desc(models.Ticket.updated_at)).all()
+
+def get_all_tickets(db: Session, status: str = None) -> List[models.Ticket]:
+    q = db.query(models.Ticket).options(joinedload(models.Ticket.user))
+    if status and status != "all":
+        q = q.filter(models.Ticket.status == status)
+    return q.order_by(desc(models.Ticket.updated_at)).all()
+
+def get_ticket_with_messages(db: Session, ticket_id: int) -> Optional[models.Ticket]:
+    return db.query(models.Ticket).options(
+        selectinload(models.Ticket.messages),
+        joinedload(models.Ticket.user)
+    ).filter_by(id=ticket_id).first()
+
+def get_all_auto_responses(db: Session) -> List[models.AutoResponse]:
+    return db.query(models.AutoResponse).all()
+
+def set_auto_response(db: Session, keyword: str, response: str, match_type: str = "exact"):
+    res = db.query(models.AutoResponse).filter_by(keyword=keyword).first()
+    if res:
+        res.response_text = response
+        res.match_type = match_type
+    else:
+        db.add(models.AutoResponse(keyword=keyword, response_text=response, match_type=match_type))
+    db.commit()
+
+def delete_auto_response(db: Session, res_id: int):
+    db.query(models.AutoResponse).filter_by(id=res_id).delete()
+    db.commit()
+
+def find_auto_response(db: Session, text: str) -> Optional[str]:
+    """یافتن بهترین پاسخ خودکار برای متن ورودی"""
+    text = text.strip().lower()
+    # اول تطابق دقیق
+    exact = db.query(models.AutoResponse).filter(
+        models.AutoResponse.keyword == text,
+        models.AutoResponse.is_active == True,
+        models.AutoResponse.match_type == "exact"
+    ).first()
+    if exact: return exact.response_text
+
+    # سپس تطابق محتوایی
+    contains = db.query(models.AutoResponse).filter(
+        models.AutoResponse.match_type == "contains",
+        models.AutoResponse.is_active == True
+    ).all()
+    for item in contains:
+        if item.keyword.lower() in text:
+            return item.response_text
+    return None
+
+def close_ticket(db: Session, ticket_id: int):
+    ticket = db.query(models.Ticket).get(ticket_id)
+    if ticket:
+        ticket.status = "closed"
+        db.commit()
+    return ticket
+
+# ======================================================================
+# 11. مدیریت کوپن‌ها (Coupons)
+# ======================================================================
+def get_all_coupons(db: Session) -> List[models.Coupon]:
+    return db.query(models.Coupon).all()
+
+def create_coupon(db: Session, data: dict) -> models.Coupon:
+    coupon = models.Coupon(**data)
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+def delete_coupon(db: Session, coupon_id: int):
+    db.query(models.Coupon).filter_by(id=coupon_id).delete()
+    db.commit()
+
+def validate_coupon(db: Session, code: str, total_amount: float) -> Tuple[bool, str, Optional[float]]:
+    """اعتبارسنجی کد تخفیف و بازگرداندن مبلغ تخفیف"""
+    code = code.strip().upper()
+    coupon = db.query(models.Coupon).filter_by(code=code, is_active=True).first()
+
+    if not coupon:
+        return False, "❌ کد تخفیف معتبر نیست.", None
+
+    if coupon.expiry_date and datetime.now() > coupon.expiry_date:
+        return False, "❌ مهلت استفاده از این کد به پایان رسیده است.", None
+
+    if coupon.used_count >= coupon.usage_limit:
+        return False, "❌ ظرفیت استفاده از این کد تکمیل شده است.", None
+
+    if float(total_amount) < float(coupon.min_purchase):
+        return False, f"❌ حداقل خرید برای این کد {int(coupon.min_purchase):,} تومان است.", None
+
+    # محاسبه مبلغ تخفیف
+    discount = 0
+    if coupon.percent > 0:
+        discount = float(total_amount) * (coupon.percent / 100)
+    else:
+        discount = float(coupon.amount)
+
+    return True, "✅ کد تخفیف اعمال شد.", min(discount, float(total_amount))
+
+def use_coupon(db: Session, code: str):
+    coupon = db.query(models.Coupon).filter_by(code=code.upper()).first()
+    if coupon:
+        coupon.used_count += 1
+        db.commit()
+
+# ======================================================================
+# 10. مدیریت پروکسی (Proxy Management)
+# ======================================================================
+def get_all_proxies(db: Session) -> List[models.Proxy]:
+    return db.query(models.Proxy).order_by(desc(models.Proxy.created_at)).all()
+
+def add_proxy(db: Session, data: dict) -> models.Proxy:
+    # فیلتر کردن فیلدهای اضافی (مثل uuid یا params در لینک‌های v2ray) برای جلوگیری از کرش
+    valid_keys = {c.name for c in models.Proxy.__table__.columns}
+    clean_data = {k: v for k, v in data.items() if k in valid_keys}
+    proxy = models.Proxy(**clean_data)
+    db.add(proxy)
+    db.commit()
+    db.refresh(proxy)
+    return proxy
+
+def delete_proxy(db: Session, proxy_id: int):
+    db.query(models.Proxy).filter_by(id=proxy_id).delete()
+    db.commit()
+
+def set_active_proxy(db: Session, proxy_id: Optional[int]):
+    # غیرفعال کردن همه
+    db.query(models.Proxy).update({models.Proxy.is_active: False})
+    if proxy_id:
+        db.query(models.Proxy).filter_by(id=proxy_id).update({models.Proxy.is_active: True})
+    db.commit()
+
+def get_active_proxy(db: Session) -> Optional[models.Proxy]:
+    return db.query(models.Proxy).filter_by(is_active=True).first()
+
+def update_proxy_latency(db: Session, proxy_id: int, latency: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if proxy:
+        proxy.latency = latency
+        proxy.last_tested = datetime.now()
+        db.commit()
+
+# ======================================================================
+# 12. سیستم گزارشات امنیتی و انبار (Audit & Stock Logs)
+# ======================================================================
+def log_audit(db: Session, admin_id: str, action: str, target_type: str = None, target_id: str = None, details: str = None):
+    try:
+        log = models.AuditLog(
+            admin_id=str(admin_id),
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id) if target_id else None,
+            details=details
+        )
+        db.add(log)
+        db.commit()
+        return log
+    except Exception as e:
+        logger.error(f"Audit Log Error: {e}")
+        db.rollback()
+
+def get_recent_audit_logs(db: Session, limit: int = 100):
+    return db.query(models.AuditLog).order_by(desc(models.AuditLog.created_at)).limit(limit).all()
+
+def log_stock_change(db: Session, product_id: int, old_stock: int, new_stock: int, reason: str, admin_id: str = None):
+    try:
+        log = models.StockLog(
+            product_id=product_id,
+            old_stock=old_stock,
+            new_stock=new_stock,
+            change_reason=reason,
+            admin_id=admin_id
+        )
+        db.add(log)
+        # توجه: کامیت اینجا انجام نمی‌شود چون معمولا بخشی از یک تراکنش بزرگتر است
+    except Exception as e:
+        logger.error(f"Stock Log Error: {e}")
+
+def get_product_stock_history(db: Session, product_id: int, limit: int = 50):
+    return db.query(models.StockLog).filter_by(product_id=product_id).order_by(desc(models.StockLog.created_at)).limit(limit).all()

@@ -65,6 +65,7 @@ async def handle_user_profile(update: Update, context: ContextTypes.DEFAULT_TYPE
         user_id=user.id,
         full_name=safe_name,
         phone=db_user.phone_number or "ثبت نشده ❌",
+        points=db_user.loyalty_points or 0,
         join_date=join_date,
         order_count=stats.get("total_orders", 0),
         total_spent=responses.format_price(stats.get("total_spent", 0))
@@ -132,6 +133,30 @@ async def handle_track_order(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # مدیریت آدرس‌ها
 # ==============================================================================
 
+async def handle_user_referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بخش زیرمجموعه‌گیری و لینک دعوت"""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    bot_me = await context.bot.get_me()
+
+    # شمارش زیرمجموعه‌ها
+    def _count_refs(db, uid):
+        return db.query(crud.models.User).filter_by(referred_by_id=str(uid)).count()
+
+    ref_count = await run_db(_count_refs, user.id)
+    ref_link = f"https://t.me/{bot_me.username}?start=ref_{user.id}"
+
+    text = responses.USER_REFERRAL_PAGE.format(
+        divider=responses.get_divider(),
+        ref_link=ref_link,
+        ref_count=ref_count
+    )
+
+    kbd = InlineKeyboardMarkup([[InlineKeyboardButton(responses.BACK_BUTTON, callback_data="user_profile")]])
+    await _safe_edit(update, text, kbd)
+
 async def handle_user_addresses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لیست دفترچه آدرس کاربر"""
     query = update.callback_query
@@ -165,13 +190,42 @@ async def handle_delete_address(update: Update, context: ContextTypes.DEFAULT_TY
 # ==============================================================================
 
 async def handle_special_offers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بخش پیشنهادات ویژه (جایگاه کمپین‌های تبلیغاتی)"""
+    """بخش پیشنهادات ویژه (نمایش محصولات تخفیف‌دار و پرفروش)"""
     query = update.callback_query
     await query.answer()
     
-    # می‌توان این متن را از یک Setting در دیتابیس خواند
-    text = f"🔥 <b>جشنواره تخفیفات ویژه</b>\n{responses.get_divider()}\nدر حال حاضر کمپین فعالی وجود ندارد.\nبا عضویت در کانال ما از کدهای تخفیف باخبر شوید!"
-    await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    def _fetch_specials(db):
+        # محصولات تخفیف‌دار
+        discounted = db.query(models.Product).filter(models.Product.discount_price > 0, models.Product.stock > 0).limit(5).all()
+        # محصولات پرفروش
+        top_sellers = db.query(models.Product).filter(models.Product.is_top_seller == True, models.Product.stock > 0).limit(5).all()
+        return discounted, top_sellers
+
+    discounted, top_sellers = await run_db(_fetch_specials)
+
+    text = f"🔥 <b>پیشنهادات ویژه و جشنواره‌ها</b>\n{responses.get_divider()}\n"
+
+    btns = []
+    if discounted:
+        text += "💰 <b>محصولات دارای تخفیف:</b>\n"
+        for p in discounted:
+            text += f"• {p.name}\n"
+            btns.append([InlineKeyboardButton(f"🎁 {p.name}", callback_data=f"prod:show:{p.id}")])
+
+    if top_sellers:
+        text += "\n🏆 <b>محبوب‌ترین‌های این هفته:</b>\n"
+        for p in top_sellers:
+            text += f"• {p.name}\n"
+            # جلوگیری از دکمه تکراری
+            if not any(b[0].callback_data == f"prod:show:{p.id}" for b in btns):
+                btns.append([InlineKeyboardButton(f"⭐ {p.name}", callback_data=f"prod:show:{p.id}")])
+
+    if not discounted and not top_sellers:
+        text += "در حال حاضر جشنواره فعالی وجود ندارد. منتظر خبرهای خوب باشید!"
+
+    btns.append([InlineKeyboardButton(responses.BACK_BUTTON, callback_data="main_menu")])
+
+    await _safe_edit(update, text, InlineKeyboardMarkup(btns))
 
 async def handle_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اطلاعات تماس با پشتیبانی"""
@@ -206,3 +260,17 @@ async def handle_about_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
         divider=responses.get_divider()
     )
     await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+
+async def handle_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """هندلر سراسری برای پاسخ به کلمات کلیدی تعریف شده در پنل"""
+    if not update.message or not update.message.text: return
+
+    text = update.message.text.strip()
+    # جلوگیری از تداخل با دستورات
+    if text.startswith('/'): return
+
+    # جستجو در دیتابیس برای پاسخ
+    reply = await run_db(crud.find_auto_response, text)
+
+    if reply:
+        await update.message.reply_text(reply, parse_mode='HTML')

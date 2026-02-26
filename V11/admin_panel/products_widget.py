@@ -21,7 +21,7 @@ from qasync import asyncSlot
 import qtawesome as qta
 
 from db.database import get_db
-from db import crud
+from db import crud, models
 from config import BASE_DIR, MEDIA_PRODUCTS_DIR
 
 logger = logging.getLogger(__name__)
@@ -212,11 +212,18 @@ class ProductEditorDialog(QDialog):
         tab_price = QWidget(); l_price = QVBoxLayout(tab_price); l_price.setContentsMargins(20, 20, 20, 20); l_price.setSpacing(15)
         self.inp_price = FormattedPriceInput(placeholder="قیمت اصلی")
         self.inp_discount = FormattedPriceInput(placeholder="قیمت تخفیف (اختیاری)")
+
+        h_dates = QHBoxLayout()
+        self.inp_disc_start = QLineEdit(); self.inp_disc_start.setPlaceholderText("شروع (YYYY-MM-DD)")
+        self.inp_disc_end = QLineEdit(); self.inp_disc_end.setPlaceholderText("پایان (YYYY-MM-DD)")
+        h_dates.addWidget(self.inp_disc_start); h_dates.addWidget(self.inp_disc_end)
+
         self.inp_stock = QSpinBox(); self.inp_stock.setRange(0, 100000)
         self.inp_stock.setStyleSheet(f"background: {BG_COLOR}; color: {TEXT_MAIN}; border: 1px solid {BORDER_COLOR}; padding: 10px; border-radius: 8px;")
         self.chk_top = QCheckBox("پرفروش"); self.chk_top.setStyleSheet(f"color: {TEXT_MAIN}; font-weight: bold;")
         l_price.addWidget(QLabel("قیمت:")); l_price.addWidget(self.inp_price)
         l_price.addWidget(QLabel("تخفیف:")); l_price.addWidget(self.inp_discount)
+        l_price.addWidget(QLabel("زمان‌بندی تخفیف:")); l_price.addLayout(h_dates)
         l_price.addWidget(QLabel("موجودی:")); l_price.addWidget(self.inp_stock)
         l_price.addWidget(self.chk_top); l_price.addStretch()
 
@@ -235,7 +242,14 @@ class ProductEditorDialog(QDialog):
         l_extra.addWidget(QLabel("تگ‌ها:")); l_extra.addWidget(self.inp_tags)
         l_extra.addWidget(QLabel("مرتبط:")); l_extra.addWidget(self.inp_rel); l_extra.addStretch()
 
-        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع"); self.tabs.addTab(tab_extra, "سئو")
+        # Digital Tab
+        tab_digi = QWidget(); l_digi = QVBoxLayout(tab_digi); l_digi.setContentsMargins(20, 20, 20, 20)
+        self.chk_digital = QCheckBox("این محصول دیجیتال است (ارسال خودکار پس از پرداخت)"); self.chk_digital.setStyleSheet(f"color: {ACCENT_COLOR}; font-weight: bold;")
+        self.inp_digi_content = QTextEdit(); self.inp_digi_content.setPlaceholderText("محتوای دیجیتال (لایسنس، لینک و ...) که پس از خرید برای مشتری ارسال می‌شود")
+        self.inp_digi_content.setStyleSheet(f"background: {BG_COLOR}; color: white; border: 1px solid {BORDER_COLOR}; border-radius: 8px;")
+        l_digi.addWidget(self.chk_digital); l_digi.addWidget(QLabel("محتوای ارسالی:")); l_digi.addWidget(self.inp_digi_content)
+
+        self.tabs.addTab(tab_main, "اصلی"); self.tabs.addTab(tab_price, "قیمت"); self.tabs.addTab(tab_vars, "تنوع"); self.tabs.addTab(tab_extra, "سئو"); self.tabs.addTab(tab_digi, "دیجیتال")
         layout.addWidget(self.tabs)
 
         btn_box = QHBoxLayout()
@@ -270,23 +284,30 @@ class ProductEditorDialog(QDialog):
         p = data["obj"]
         self.inp_name.setText(p.name); self.inp_price.setValue(float(p.price))
         self.inp_discount.setValue(float(p.discount_price or 0)); self.inp_stock.setValue(p.stock)
+        self.inp_disc_start.setText(p.discount_start_date.strftime("%Y-%m-%d") if p.discount_start_date else "")
+        self.inp_disc_end.setText(p.discount_end_date.strftime("%Y-%m-%d") if p.discount_end_date else "")
         self.inp_brand.setText(p.brand or ""); self.inp_desc.setPlainText(p.description or "")
         self.inp_tags.set_tags(p.tags or ""); self.inp_rel.setText(p.related_product_ids or "")
         self.chk_top.setChecked(p.is_top_seller)
+        self.chk_digital.setChecked(p.is_digital)
+        self.inp_digi_content.setPlainText(p.digital_content or "")
         idx = self.inp_cat.findData(p.category_id)
         if idx >= 0: self.inp_cat.setCurrentIndex(idx)
         self.img_manager.set_images(data["images"])
         for v in data["variants"]: self.variant_mgr.add_row(v["name"], v["price_adjustment"], v["stock"])
 
     @asyncSlot()
-    async def save_product(self):
+    async def save_product(self, *args, **kwargs):
         if not self.inp_name.text(): return QMessageBox.warning(self, "خطا", "نام الزامی است.")
         data = {
             "name": self.inp_name.text(), "category_id": self.inp_cat.currentData(),
             "price": self.inp_price.value(), "discount_price": self.inp_discount.value(),
+            "discount_start_date": datetime.strptime(self.inp_disc_start.text(), "%Y-%m-%d") if self.inp_disc_start.text() else None,
+            "discount_end_date": datetime.strptime(self.inp_disc_end.text(), "%Y-%m-%d") if self.inp_disc_end.text() else None,
             "stock": self.inp_stock.value(), "brand": self.inp_brand.text(),
             "description": self.inp_desc.toPlainText(), "tags": ",".join(self.inp_tags.get_tags_list()),
-            "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked()
+            "related_product_ids": self.inp_rel.text(), "is_top_seller": self.chk_top.isChecked(),
+            "is_digital": self.chk_digital.isChecked(), "digital_content": self.inp_digi_content.toPlainText()
         }
         raw_images = self.img_manager.get_images()
         final_images = []
@@ -383,12 +404,15 @@ class ProductCard(QFrame):
         
         row_price = QHBoxLayout()
         if product.discount_price and product.discount_price > 0:
-             lbl_price = QLabel(f"{int(product.discount_price):,} ت"); lbl_price.setStyleSheet(f"color: {WARNING_COLOR}; font-weight: bold; font-size: 14px;")
+             self.lbl_price = QLabel(f"{int(product.discount_price):,} ت"); self.lbl_price.setStyleSheet(f"color: {WARNING_COLOR}; font-weight: bold; font-size: 14px;")
              lbl_old = QLabel(f"{int(product.price):,}"); lbl_old.setStyleSheet(f"color: {TEXT_SUB}; font-size: 10px; text-decoration: line-through;")
-             row_price.addWidget(lbl_price); row_price.addWidget(lbl_old)
+             row_price.addWidget(self.lbl_price); row_price.addWidget(lbl_old)
         else:
-             lbl_price = QLabel(f"{int(product.price):,} تومان"); lbl_price.setStyleSheet(f"color: {SUCCESS_COLOR}; font-weight: bold; font-size: 14px;")
-             row_price.addWidget(lbl_price)
+             self.lbl_price = QLabel(f"{int(product.price):,} تومان"); self.lbl_price.setStyleSheet(f"color: {SUCCESS_COLOR}; font-weight: bold; font-size: 14px;")
+             row_price.addWidget(self.lbl_price)
+
+        self.lbl_price.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lbl_price.mouseDoubleClickEvent = lambda e: self._quick_edit_price()
 
         # موجودی با قابلیت دابل کلیک
         stock_color = DANGER_COLOR if product.stock < 5 else TEXT_SUB
@@ -446,12 +470,18 @@ class ProductCard(QFrame):
         lbl.move(x, 10)
 
     def _quick_edit_stock(self):
-        val, ok = QInputDialog.getInt(self, "ویرایش سریع موجودی", f"موجی جدید برای {self.product.name}:", value=self.product.stock, min=0)
+        val, ok = QInputDialog.getInt(self, "ویرایش سریع موجودی", f"موجودی جدید برای {self.product.name}:", value=self.product.stock, min=0)
         if ok:
             self.quickUpdateRequested.emit(self.product.id, "stock", val)
-            # آپدیت ظاهری موقت تا رفرش بعدی
             self.lbl_stock.setText(f"📦 موجودی: {val}")
-            self.product.stock = val # آپدیت مدل داخلی
+            self.product.stock = val
+
+    def _quick_edit_price(self):
+        val, ok = QInputDialog.getInt(self, "ویرایش سریع قیمت", f"قیمت جدید برای {self.product.name}:", value=int(self.product.price), min=0)
+        if ok:
+            self.quickUpdateRequested.emit(self.product.id, "price", val)
+            self.lbl_price.setText(f"{val:,} تومان")
+            self.product.price = val
 
     def on_checked(self, state):
         self.selectionChanged.emit(self.product.id, state == 2)
@@ -477,6 +507,9 @@ class ProductsWidget(QWidget):
         self.selected_ids = set()
         self.bot_username = "MyBot"
         self.rubika_username = "MyShopBot"
+        self.current_page = 1
+        self.items_per_page = 12
+        self.total_pages = 1
         self.setup_ui()
         self._data_loaded = False
 
@@ -496,7 +529,12 @@ class ProductsWidget(QWidget):
         btn_bulk_del = QPushButton("حذف گروهی"); btn_bulk_del.setIcon(qta.icon('fa5s.trash', color=DANGER_COLOR))
         btn_bulk_del.setStyleSheet(f"background: transparent; border: 1px solid {DANGER_COLOR}; color: {DANGER_COLOR}; border-radius: 6px; padding: 5px;")
         btn_bulk_del.clicked.connect(self.delete_bulk_slot)
-        h_bulk.addWidget(self.lbl_sel_count); h_bulk.addWidget(btn_bulk_del); h_bulk.addStretch()
+
+        btn_bulk_cat = QPushButton("تغییر دسته"); btn_bulk_cat.setIcon(qta.icon('fa5s.layer-group', color=INFO_COLOR))
+        btn_bulk_cat.setStyleSheet(f"background: transparent; border: 1px solid {INFO_COLOR}; color: {INFO_COLOR}; border-radius: 6px; padding: 5px;")
+        btn_bulk_cat.clicked.connect(self.change_bulk_category)
+
+        h_bulk.addWidget(self.lbl_sel_count); h_bulk.addWidget(btn_bulk_del); h_bulk.addWidget(btn_bulk_cat); h_bulk.addStretch()
         
         top_row.addWidget(lbl_title); top_row.addWidget(self.bulk_toolbar); top_row.addStretch()
         
@@ -551,6 +589,25 @@ class ProductsWidget(QWidget):
         self.empty_state.setWordWrap(True)
         layout.addWidget(self.empty_state)
         self.empty_state.hide()
+
+        # صفحه‌بندی
+        self.pag_bar = QFrame()
+        self.pag_bar.setStyleSheet(f"background: {PANEL_BG}; border-radius: 8px; border: 1px solid {BORDER_COLOR};")
+        h_pag = QHBoxLayout(self.pag_bar)
+        self.btn_prev = QPushButton("قبلی")
+        self.btn_prev.setIcon(qta.icon('fa5s.chevron-right', color='white'))
+        self.btn_prev.clicked.connect(self.prev_page)
+
+        self.lbl_page = QLabel("صفحه ۱ از ۱")
+        self.lbl_page.setStyleSheet("color: white; font-weight: bold;")
+
+        self.btn_next = QPushButton("بعدی")
+        self.btn_next.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.btn_next.setIcon(qta.icon('fa5s.chevron-left', color='white'))
+        self.btn_next.clicked.connect(self.next_page)
+
+        h_pag.addWidget(self.btn_prev); h_pag.addStretch(); h_pag.addWidget(self.lbl_page); h_pag.addStretch(); h_pag.addWidget(self.btn_next)
+        layout.addWidget(self.pag_bar)
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -563,12 +620,33 @@ class ProductsWidget(QWidget):
         dialog.product_saved.connect(self.refresh_data_slot)
         dialog.exec()
 
+    def prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            asyncio.create_task(self.refresh_data())
+
+    def next_page(self):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            asyncio.create_task(self.refresh_data())
+
     @asyncSlot()
-    async def refresh_data_slot(self): await self.refresh_data()
+    async def refresh_data_slot(self, *args, **kwargs):
+        self.current_page = 1
+        try:
+            await self.refresh_data()
+        except Exception:
+            pass
 
     async def refresh_data(self):
-        for i in reversed(range(self.grid_layout.count())): 
-            if self.grid_layout.itemAt(i).widget(): self.grid_layout.itemAt(i).widget().setParent(None)
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+            for i in reversed(range(self.grid_layout.count())):
+                w = self.grid_layout.itemAt(i).widget()
+                if w: w.deleteLater()
+        except RuntimeError:
+            return
         self.selected_ids.clear(); self.update_bulk_toolbar()
         
         loop = asyncio.get_running_loop()
@@ -576,20 +654,37 @@ class ProductsWidget(QWidget):
             def fetch():
                 with next(get_db()) as db:
                     cats = crud.get_all_categories(db)
-                    prods = crud.advanced_search_products(db, query=self.inp_search.text(), category_id=self.cmb_cat_filter.currentData())
                     
-                    # اعمال مرتب‌سازی
-                    sort_idx = self.cmb_sort.currentIndex()
-                    if sort_idx == 1: prods.sort(key=lambda x: x.price, reverse=True) # گرانترین
-                    elif sort_idx == 2: prods.sort(key=lambda x: x.price) # ارزانترین
-                    elif sort_idx == 3: prods.sort(key=lambda x: x.stock, reverse=True) # بیشترین موجودی
-                    elif sort_idx == 4: prods.sort(key=lambda x: x.stock) # کمترین موجودی
-                    # 0 = جدیدترین (پیش‌فرض)
+                    # مرتب‌سازی برای SQL
+                    sort_map = {0: "newest", 1: "price_desc", 2: "price_asc", 3: "stock_desc", 4: "stock_asc"}
+                    sort_by = sort_map.get(self.cmb_sort.currentIndex(), "newest")
+
+                    # دریافت تعداد کل برای صفحه‌بندی
+                    total = crud.get_product_search_count(
+                        db,
+                        query=self.inp_search.text(),
+                        category_id=self.cmb_cat_filter.currentData()
+                    )
                     
-                    return cats, prods
-                    
-            cats, prods = await loop.run_in_executor(None, fetch)
+                    offset = (self.current_page - 1) * self.items_per_page
+                    prods = crud.advanced_search_products(
+                        db,
+                        query=self.inp_search.text(),
+                        category_id=self.cmb_cat_filter.currentData(),
+                        sort_by=sort_by,
+                        limit=self.items_per_page,
+                        offset=offset
+                    )
+
+                    return cats, prods, total
+
+            cats, prods, total = await loop.run_in_executor(None, fetch)
             
+            self.total_pages = max(1, (total + self.items_per_page - 1) // self.items_per_page)
+            self.lbl_page.setText(f"صفحه {self.current_page} از {self.total_pages} (کل: {total})")
+            self.btn_prev.setEnabled(self.current_page > 1)
+            self.btn_next.setEnabled(self.current_page < self.total_pages)
+
             current_cat = self.cmb_cat_filter.currentData()
             self.cmb_cat_filter.clear(); self.cmb_cat_filter.addItem("همه دسته‌ها", None)
             for c in cats: self.cmb_cat_filter.addItem(c.name, c.id)
@@ -640,14 +735,22 @@ class ProductsWidget(QWidget):
         self.lbl_sel_count.setText(f"{count} انتخاب شده")
 
     @asyncSlot()
-    async def delete_product_single(self, pid):
-        if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: crud.delete_product(next(get_db()), pid))
-            await self.refresh_data()
+    async def delete_product_single(self, pid, *args, **kwargs):
+        try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
+            if QMessageBox.question(self, "حذف", "آیا مطمئن هستید؟") == QMessageBox.StandardButton.Yes:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: crud.delete_product(next(get_db()), pid))
+                await self.refresh_data()
+        except RuntimeError:
+            pass
 
     @asyncSlot()
-    async def duplicate_product(self, pid):
+    async def duplicate_product(self, pid, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
         loop = asyncio.get_running_loop()
         try:
             def db_op():
@@ -667,12 +770,47 @@ class ProductsWidget(QWidget):
             logger.error(e)
 
     @asyncSlot()
-    async def delete_bulk_slot(self):
-        if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
+    async def change_bulk_category(self, *args, **kwargs):
+        if not self.selected_ids: return
+
+        # دریافت لیست دسته‌ها
+        with next(get_db()) as db:
+            cats = crud.get_all_categories(db)
+            cat_names = [c.name for c in cats]
+            cat_ids = [c.id for c in cats]
+
+        if not cat_names: return
+
+        item, ok = QInputDialog.getItem(self, "تغییر دسته‌بندی گروهی", "دسته جدید را انتخاب کنید:", cat_names, 0, False)
+        if ok and item:
+            new_cat_id = cat_ids[cat_names.index(item)]
             ids = list(self.selected_ids)
+
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: crud.bulk_delete_products(next(get_db()), ids))
-            await self.refresh_data()
+            try:
+                def db_op():
+                    with next(get_db()) as db:
+                        for pid in ids:
+                            p = db.query(models.Product).get(pid)
+                            if p: p.category_id = new_cat_id
+                        db.commit()
+                await loop.run_in_executor(None, db_op)
+                self.window().show_toast(f"دسته {len(ids)} محصول تغییر یافت.")
+                await self.refresh_data()
+            except Exception as e:
+                logger.error(e)
+
+    @asyncSlot()
+    async def delete_bulk_slot(self, *args, **kwargs):
+        try:
+            if not self.window() or getattr(self.window(), '_is_shutting_down', False): return
+            if QMessageBox.question(self, "حذف گروهی", f"حذف {len(self.selected_ids)} محصول؟") == QMessageBox.StandardButton.Yes:
+                ids = list(self.selected_ids)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: crud.bulk_delete_products(next(get_db()), ids))
+                await self.refresh_data()
+        except RuntimeError:
+            pass
 
     # Import/Export Logic (خلاصه شده)
     def export_data_slot(self):
