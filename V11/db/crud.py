@@ -11,6 +11,31 @@ from config import ADMIN_USER_IDS
 logger = logging.getLogger("CRUD")
 
 # ======================================================================
+# 0. سیستم لاگ و امنیت (Security & Logging)
+# ======================================================================
+def record_audit_log(db: Session, action: str, admin_id: str = "system", target_type: str = None, target_id: str = None, description: str = None):
+    try:
+        log = models.AuditLog(
+            admin_id=str(admin_id),
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id) if target_id else None,
+            description=description
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Audit Log Error: {e}")
+
+def record_stock_log(db: Session, product_id: int, change: int, reason: str):
+    try:
+        log = models.StockLog(product_id=product_id, change_amount=change, reason=reason)
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Stock Log Error: {e}")
+
+# ======================================================================
 # 1. مدیریت کاربران (User Management)
 # ======================================================================
 def get_user_by_id(db: Session, user_id: str) -> Optional[models.User]:
@@ -28,11 +53,16 @@ def get_or_create_user(
     try:
         user = db.query(models.User).filter(models.User.user_id == user_id_str).first()
         
-        # بررسی ادمین بودن (فقط برای تلگرام و بر اساس کانفیگ)
+        # بررسی ادمین بودن (اولویت با لیست دیتابیس)
         is_admin_flag = False
-        if platform == "telegram" and user_id_str.isdigit():
-            if int(user_id_str) in ADMIN_USER_IDS:
-                is_admin_flag = True
+        db_admin_ids = get_setting(db, "admin_ids", "")
+        allowed_ids = [i.strip() for i in db_admin_ids.split(",") if i.strip()]
+
+        if not allowed_ids: # فال‌بک به کانفیگ
+            allowed_ids = [str(i) for i in ADMIN_USER_IDS]
+
+        if user_id_str in allowed_ids:
+            is_admin_flag = True
 
         if not user:
             user = models.User(
@@ -83,7 +113,11 @@ def get_all_users(db: Session, limit: int = 10000) -> List[models.User]:
 def update_user_info(db: Session, user_id: Union[int, str], **kwargs) -> bool:
     try:
         user_id_str = str(user_id)
-        db.query(models.User).filter(models.User.user_id == user_id_str).update(kwargs)
+        # فیلتر کردن پارامترها برای اطمینان از وجود در مدل
+        valid_cols = {c.name for c in models.User.__table__.columns}
+        clean_kwargs = {k: v for k, v in kwargs.items() if k in valid_cols}
+
+        db.query(models.User).filter(models.User.user_id == user_id_str).update(clean_kwargs)
         db.commit()
         return True
     except SQLAlchemyError:
@@ -159,6 +193,48 @@ def delete_category(db: Session, cat_id: int):
     # سپس حذف دسته
     db.query(models.Category).filter_by(id=cat_id).delete()
     db.commit()
+
+def migrate_products(db: Session, from_cat_id: int, to_cat_id: int) -> int:
+    """انتقال تمام محصولات از یک دسته به دسته دیگر"""
+    count = db.query(models.Product).filter_by(category_id=from_cat_id).update(
+        {models.Product.category_id: to_cat_id},
+        synchronize_session=False
+    )
+    db.commit()
+    return count
+
+def get_category_stats(db: Session, cat_id: int) -> Dict[str, Any]:
+    """دریافت آمار سلسله‌مراتبی یک دسته (شامل زیرمجموعه‌ها)"""
+    # دریافت شناسه خود دسته و تمام فرزندانش به صورت بازگشتی (در SQLite ساده)
+    all_ids = [cat_id]
+    subs = db.query(models.Category.id).filter_by(parent_id=cat_id).all()
+    for s in subs:
+        all_ids.append(s[0])
+        # یک سطح پایین‌تر (برای سادگی فعلاً ۲ سطح، اما در آینده بازگشتی)
+        grand_subs = db.query(models.Category.id).filter_by(parent_id=s[0]).all()
+        all_ids.extend([gs[0] for gs in grand_subs])
+
+    product_count = db.query(func.count(models.Product.id)).filter(models.Product.category_id.in_(all_ids)).scalar() or 0
+
+    total_sales = db.query(func.sum(models.OrderItem.quantity * models.OrderItem.price_at_purchase))\
+        .join(models.Product)\
+        .filter(models.Product.category_id.in_(all_ids)).scalar() or 0
+
+    return {
+        "product_count": product_count,
+        "total_sales": float(total_sales)
+    }
+
+def update_category_hierarchy(db: Session, cat_id: int, new_parent_id: Optional[int]):
+    """بروزرسانی والد برای Drag & Drop"""
+    cat = db.query(models.Category).get(cat_id)
+    if cat:
+        # جلوگیری از لوپ (والد نمی‌تواند فرزند خودش باشد)
+        if new_parent_id == cat_id: return False
+        cat.parent_id = new_parent_id
+        db.commit()
+        return True
+    return False
 
 # ======================================================================
 # 3. مدیریت محصولات
@@ -272,6 +348,12 @@ def create_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+
+        # ثبت لاگ
+        record_audit_log(db, "create_product", target_type="product", target_id=prod.id, description=f"محصول '{prod.name}' ایجاد شد.")
+        if prod.stock > 0:
+            record_stock_log(db, prod.id, prod.stock, "موجودی اولیه هنگام ایجاد")
+
         return prod
     except Exception as e:
         db.rollback()
@@ -316,6 +398,10 @@ def update_product_with_variants(
 
         db.commit()
         db.refresh(prod)
+
+        # ثبت لاگ
+        record_audit_log(db, "update_product", target_type="product", target_id=prod_id, description=f"محصول '{prod.name}' ویرایش شد.")
+
         return prod
     except Exception as e:
         db.rollback()
@@ -326,9 +412,17 @@ def delete_product(db: Session, prod_id: int):
 
 def bulk_delete_products(db: Session, product_ids: List[int]):
     try:
+        # دریافت نام محصولات قبل از حذف برای لاگ
+        products = db.query(models.Product).filter(models.Product.id.in_(product_ids)).all()
+        prod_names = [p.name for p in products]
+
         # حذف وابسته ها خودکار انجام میشود (Cascade) اما برای اطمینان:
         db.query(models.Product).filter(models.Product.id.in_(product_ids)).delete(synchronize_session=False)
         db.commit()
+
+        for pid, name in zip(product_ids, prod_names):
+            record_audit_log(db, "delete_product", target_type="product", target_id=pid, description=f"محصول '{name}' حذف شد.")
+
         return True
     except SQLAlchemyError:
         db.rollback()
@@ -343,6 +437,28 @@ def get_low_stock_products(db: Session, limit: int = 5):
 def get_all_products_raw(db: Session):
     """دریافت تمام محصولات برای خروجی اکسل"""
     return db.query(models.Product).options(joinedload(models.Product.category)).all()
+
+def bulk_update_products(db: Session, updates: List[Dict[str, Any]]):
+    """آپدیت گروهی محصولات (برای Bulk Edit)"""
+    try:
+        for item in updates:
+            pid = item.pop('id', None)
+            if not pid: continue
+
+            # ثبت لاگ موجودی اگر تغییر کرده باشد
+            if 'stock' in item:
+                old_prod = db.query(models.Product).filter_by(id=pid).first()
+                if old_prod and old_prod.stock != item['stock']:
+                    change = int(item['stock']) - old_prod.stock
+                    record_stock_log(db, pid, change, "ویرایش گروهی در پنل")
+
+            db.query(models.Product).filter_by(id=pid).update(item)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Bulk Update Error: {e}")
+        return False
 
 # ======================================================================
 # 4. سبد خرید
@@ -424,6 +540,7 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
                     variant_id=item.variant_id,
                     quantity=item.quantity,
                     price_at_purchase=price,
+                    purchase_price_at_purchase=prod.purchase_price or 0,
                     selected_attributes=item.selected_attributes
                 ))
 
@@ -453,6 +570,11 @@ def create_order_from_cart(db: Session, user_id: Union[int, str], shipping_data:
             
         db.commit()
         db.refresh(order)
+
+        # ثبت لاگ موجودی برای هر آیتم
+        for item in order.items:
+            record_stock_log(db, item.product_id, -item.quantity, f"خرید در سفارش #{order.id}")
+
         return order
     except Exception as e:
         db.rollback()
@@ -472,9 +594,15 @@ def get_filtered_orders(db: Session, status: str = "all", limit: int = 500) -> L
 def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[models.Order]:
     order = db.query(models.Order).filter_by(id=order_id).first()
     if order:
+        old_status = order.status
         order.status = new_status
         db.commit()
         db.refresh(order)
+
+        # ثبت لاگ
+        record_audit_log(db, "update_order_status", target_type="order", target_id=order_id,
+                         description=f"وضعیت سفارش از '{old_status}' به '{new_status}' تغییر یافت.")
+
     return order
 
 def get_order_by_id(db: Session, order_id: int) -> Optional[models.Order]:
@@ -565,3 +693,198 @@ def add_product_notification(db: Session, user_id, product_id):
     if not exists:
         db.add(models.ProductNotification(user_id=str(user_id), product_id=product_id))
         db.commit()
+
+# ======================================================================
+# 9. مدیریت کوپن و کد تخفیف
+# ======================================================================
+def get_all_coupons(db: Session) -> List[models.Coupon]:
+    return db.query(models.Coupon).all()
+
+def create_coupon(db: Session, data: dict) -> models.Coupon:
+    coupon = models.Coupon(**data)
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+def validate_coupon(db: Session, code: str, amount: float) -> Tuple[bool, Optional[models.Coupon], str]:
+    """بررسی اعتبار کد تخفیف"""
+    coupon = db.query(models.Coupon).filter_by(code=code.strip().upper(), is_active=True).first()
+    if not coupon:
+        return False, None, "کد تخفیف معتبر نیست."
+
+    if coupon.expire_date and coupon.expire_date < datetime.now():
+        return False, None, "کد تخفیف منقضی شده است."
+
+    if coupon.max_uses > 0 and coupon.current_uses >= coupon.max_uses:
+        return False, None, "ظرفیت استفاده از این کد به پایان رسیده است."
+
+    if amount < float(coupon.min_purchase):
+        return False, None, f"حداقل مبلغ خرید برای این کد {int(coupon.min_purchase):,} تومان است."
+
+    return True, coupon, "کد تایید شد."
+
+def use_coupon(db: Session, coupon_id: int):
+    coupon = db.query(models.Coupon).get(coupon_id)
+    if coupon:
+        coupon.current_uses += 1
+        db.commit()
+
+# ======================================================================
+# 10. پاسخگوی خودکار (Auto Reply)
+# ======================================================================
+def get_all_auto_replies(db: Session) -> List[models.AutoReply]:
+    return db.query(models.AutoReply).all()
+
+def set_auto_reply(db: Session, keyword: str, response: str):
+    ar = db.query(models.AutoReply).filter_by(keyword=keyword.strip()).first()
+    if ar:
+        ar.response = response
+        ar.is_active = True
+    else:
+        ar = models.AutoReply(keyword=keyword.strip(), response=response)
+        db.add(ar)
+    db.commit()
+    return ar
+
+def get_auto_reply(db: Session, text: str) -> Optional[str]:
+    """یافتن پاسخ مناسب برای متن ورودی"""
+    # در اینجا یک جستجوی ساده انجام می‌دهیم
+    replies = db.query(models.AutoReply).filter(models.AutoReply.is_active == True).all()
+    text = text.lower().strip()
+    for r in replies:
+        if r.keyword.lower() in text:
+            return r.response
+    return None
+
+# ======================================================================
+# 11. مدیریت پروکسی‌ها (Proxy Management)
+# ======================================================================
+def get_all_proxies(db: Session) -> List[models.Proxy]:
+    return db.query(models.Proxy).all()
+
+def add_proxy(db: Session, data: dict) -> models.Proxy:
+    # اگر اولین پروکسی است، فعالش کن
+    count = db.query(func.count(models.Proxy.id)).scalar()
+    if count == 0:
+        data['is_active'] = True
+
+    # فیلتر کردن فیلدهای معتبر
+    valid_cols = {c.name for c in models.Proxy.__table__.columns}
+    clean_data = {k: v for k, v in data.items() if k in valid_cols}
+
+    proxy = models.Proxy(**clean_data)
+    db.add(proxy)
+    db.commit()
+    db.refresh(proxy)
+    return proxy
+
+def delete_proxy(db: Session, proxy_id: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if proxy:
+        was_active = proxy.is_active
+        db.delete(proxy)
+        db.commit()
+
+        # اگر فعال بود، یکی دیگر را فعال کن
+        if was_active:
+            next_p = db.query(models.Proxy).first()
+            if next_p:
+                next_p.is_active = True
+                db.commit()
+
+def set_active_proxy(db: Session, proxy_id: int):
+    # غیرفعال کردن بقیه
+    db.query(models.Proxy).update({models.Proxy.is_active: False})
+    # فعال کردن مورد نظر
+    db.query(models.Proxy).filter_by(id=proxy_id).update({models.Proxy.is_active: True})
+    db.commit()
+
+def get_active_proxy(db: Session) -> Optional[models.Proxy]:
+    return db.query(models.Proxy).filter_by(is_active=True).first()
+
+def update_proxy_health(db: Session, proxy_id: int, latency: int):
+    proxy = db.query(models.Proxy).get(proxy_id)
+    if not proxy: return
+
+    proxy.last_ping = latency
+    if latency > 0:
+        proxy.fail_count = 0
+        proxy.last_success_at = datetime.now()
+    else:
+        proxy.fail_count += 1
+
+    # مدیریت تاریخچه پینگ (۱۰ مورد آخر)
+    history = json.loads(proxy.latency_history or "[]")
+    history.append(latency)
+    if len(history) > 10: history.pop(0)
+    proxy.latency_history = json.dumps(history)
+
+    db.commit()
+
+def get_best_available_proxy(db: Session) -> Optional[models.Proxy]:
+    """یافتن بهترین پروکسی بر اساس پینگ و عدم خطا"""
+    return db.query(models.Proxy).filter(
+        models.Proxy.last_ping > 0,
+        models.Proxy.fail_count < 3
+    ).order_by(models.Proxy.last_ping.asc()).first()
+
+# ======================================================================
+# 11. تحلیل داده‌های داشبورد (Dashboard Advanced Analytics)
+# ======================================================================
+def get_top_selling_products(db: Session, limit: int = 5, days: int = 30) -> List[Dict[str, Any]]:
+    """دریافت لیست محصولات پرفروش با آمار فروش"""
+    start_date = datetime.now() - timedelta(days=days)
+
+    res = db.query(
+        models.Product,
+        func.sum(models.OrderItem.quantity).label('total_qty')
+    ).join(models.OrderItem, models.Product.id == models.OrderItem.product_id)\
+     .join(models.Order, models.Order.id == models.OrderItem.order_id)\
+     .filter(models.Order.created_at >= start_date)\
+     .filter(models.Order.status.in_(['approved', 'shipped', 'paid']))\
+     .group_by(models.Product.id)\
+     .order_by(desc('total_qty'))\
+     .limit(limit).all()
+
+    return [{"product": r[0], "total_qty": r[1]} for r in res]
+
+def get_dashboard_stats_advanced(db: Session, days: int = 30) -> Dict[str, Any]:
+    """دریافت آمار پیشرفته داشبورد شامل مقایسه با دوره قبل (Trend)"""
+    now = datetime.now()
+    start_current = now - timedelta(days=days)
+    start_previous = now - timedelta(days=days * 2)
+
+    def fetch_period_stats(start, end):
+        stats = db.query(
+            func.coalesce(func.sum(models.Order.total_amount), 0).label('rev'),
+            func.count(models.Order.id).label('orders')
+        ).filter(models.Order.created_at >= start, models.Order.created_at < end)\
+         .filter(models.Order.status.in_(['approved', 'shipped', 'paid'])).first()
+
+        profit = db.query(
+            func.coalesce(func.sum(models.OrderItem.quantity * (models.OrderItem.price_at_purchase - models.OrderItem.purchase_price_at_purchase)), 0)
+        ).join(models.Order).filter(models.Order.created_at >= start, models.Order.created_at < end)\
+         .filter(models.Order.status.in_(['approved', 'shipped', 'paid'])).scalar() or 0
+
+        users = db.query(func.count(models.User.user_id))\
+            .filter(models.User.created_at >= start, models.User.created_at < end).scalar() or 0
+
+        return {"rev": float(stats.rev), "orders": stats.orders, "profit": float(profit), "users": users}
+
+    current = fetch_period_stats(start_current, now)
+    previous = fetch_period_stats(start_previous, start_current)
+
+    def calc_trend(curr, prev):
+        if prev == 0: return 100 if curr > 0 else 0
+        return round(((curr - prev) / prev) * 100, 1)
+
+    return {
+        "current": current,
+        "trends": {
+            "rev": calc_trend(current['rev'], previous['rev']),
+            "orders": calc_trend(current['orders'], previous['orders']),
+            "profit": calc_trend(current['profit'], previous['profit']),
+            "users": calc_trend(current['users'], previous['users'])
+        }
+    }

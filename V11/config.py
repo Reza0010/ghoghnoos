@@ -136,13 +136,44 @@ else:
     logger.info("Using External Database")
 
 # ==============================================================================
-# 5. تنظیمات اضافی
+# 5. تنظیمات Xray (V2Ray Bridge)
+# ==============================================================================
+XRAY_BIN_PATH = BASE_DIR / "bin" / "xray.exe" if os.name == 'nt' else BASE_DIR / "bin" / "xray"
+XRAY_CONFIG_PATH = TEMP_DIR / "xray_config.json"
+DEFAULT_LOCAL_PROXY_PORT = int(os.getenv("LOCAL_PROXY_PORT", "2080"))
+
+# ==============================================================================
+# 6. تنظیمات اضافی و لایه سلسله‌مراتبی
 # ==============================================================================
 TIME_ZONE = os.getenv("TIME_ZONE", "Asia/Tehran")
+
+def get_hierarchical_config(db_session, key, env_var=None, default=None):
+    """
+    سلسله مراتب تنظیمات:
+    1. مقدار موجود در دیتابیس (اگر سشن داده شده باشد)
+    2. مقدار موجود در فایل .env یا متغیر محیطی
+    3. مقدار پیش‌فرض
+    """
+    # ۱. اولویت با دیتابیس
+    if db_session:
+        from db.models import Setting
+        s = db_session.query(Setting).filter_by(key=key).first()
+        if s and s.value:
+            return s.value
+
+    # ۲. متغیر محیطی
+    if env_var:
+        env_val = os.getenv(env_var)
+        if env_val:
+            return env_val
+
+    # ۳. پیش‌فرض
+    return default
 
 __all__ = [
     "BASE_DIR", "MEDIA_DIR", "MEDIA_PRODUCTS_DIR", "TEMP_DIR",
     "DB_FOLDER", "BACKUP_DIR", "LOG_DIR",
     "TELEGRAM_BOT_TOKEN", "RUBIKA_BOT_TOKEN", "ADMIN_USER_IDS",
-    "DATABASE_URL", "TIME_ZONE"
+    "DATABASE_URL", "TIME_ZONE", "XRAY_BIN_PATH", "XRAY_CONFIG_PATH",
+    "DEFAULT_LOCAL_PROXY_PORT", "get_hierarchical_config"
 ]

@@ -1,7 +1,7 @@
-/* --- Deep Night Theme (Optimized Professional Version) --- */
-/* طراحی شده برای راست‌چین و فارسی */
+/* --- Deep Night Glassmorphism Theme (Commercial Grade) --- */
+/* Designed for RTL and Persian Support */
 
-/* 1. تنظیمات عمومی */
+/* 1. General Settings */
 * {
     font-family: "Vazirmatn", "Segoe UI", "Tahoma", sans-serif;
     font-size: 14px;
@@ -10,95 +10,82 @@
     selection-color: #ffffff;
 }
 
-/* 2. پنجره اصلی */
+/* 2. Main Window & Dialogs */
 QMainWindow, QWidget#centralwidget, QDialog {
     background-color: #16161a;
     color: #fffffe;
 }
 
-/* 3. سایدبار (Sidebar) */
+/* 3. Sidebar (Glassmorphism Effect) */
 QFrame#sidebar {
-    background-color: #1e1e24; /* کمی روشن‌تر برای جداسازی */
-    border-radius: 0px; /* فاق حاشیه برای ظاهر Full-Height */
+    background-color: rgba(30, 30, 36, 0.7); /* Semi-transparent */
     border: none;
-    border-right: 1px solid #2e2e38;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 QFrame#sidebar QLabel#app_title {
     color: #fffffe;
-    font-weight: bold;
-    font-size: 20px;
-    padding: 20px 15px;
+    font-weight: 900;
+    font-size: 22px;
+    padding: 25px 15px;
+    letter-spacing: 1px;
 }
 
-/* دکمه‌های منوی سایدبار */
+/* Sidebar Navigation Buttons */
 QFrame#sidebar QPushButton {
     background-color: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     text-align: right;
-    padding: 12px 15px;
+    padding: 14px 18px;
     color: #94a1b2;
-    font-weight: 500;
-    margin: 2px 10px;
+    font-weight: 600;
+    margin: 4px 12px;
 }
 
 QFrame#sidebar QPushButton:hover {
-    background-color: rgba(127, 90, 240, 0.1); /* هاور بنفش ملایم */
+    background-color: rgba(127, 90, 240, 0.1);
     color: #fffffe;
 }
 
 QFrame#sidebar QPushButton:checked {
-    background-color: rgba(127, 90, 240, 0.15);
-    color: #7f5af0; /* متن بنفش */
-    font-weight: bold;
-    border-right: 3px solid #7f5af0; /* خط نشانگر */
+    background-color: rgba(127, 90, 240, 0.2);
+    color: #ffffff;
+    font-weight: 800;
+    border-right: 4px solid #7f5af0;
 }
 
-/* 4. ورودی‌ها (Inputs) */
+/* Status Container in Sidebar */
+QFrame#status_container {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 15px;
+    margin: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* 4. Inputs & Fields */
 QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QTimeEdit, QPlainTextEdit {
-    background-color: #1e1e24;
-    border: 1px solid #4a4a5e;
-    border-radius: 8px;
-    padding: 10px 12px;
+    background-color: rgba(30, 30, 36, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 15px;
     color: #fffffe;
     font-size: 13px;
 }
 
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus {
     border: 1px solid #7f5af0;
-    background-color: #22222a;
+    background-color: rgba(34, 34, 42, 0.8);
 }
 
-QLineEdit:disabled, QComboBox:disabled {
-    background-color: #202025;
-    color: #555;
-    border-color: #333;
-}
-
-/* کمبوباکس */
-QComboBox::drop-down {
-    border: none;
-    width: 30px;
-    subcontrol-position: center right;
-}
-QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid #7f5af0;
-    margin-right: 10px;
-}
-
-/* 5. دکمه‌ها (Buttons) */
+/* 5. Buttons */
 QPushButton {
-    background-color: #7f5af0; /* بنفش: دکمه اصلی پیش‌فرض */
+    background-color: #7f5af0;
     color: white;
     border: none;
-    padding: 10px 24px;
-    border-radius: 8px;
-    font-weight: bold;
-    min-height: 20px;
+    padding: 12px 28px;
+    border-radius: 10px;
+    font-weight: 700;
 }
 
 QPushButton:hover {
@@ -109,203 +96,128 @@ QPushButton:pressed {
     background-color: #5339c4;
 }
 
-/* دکمه‌های ثانویه */
+/* Secondary Button */
 QPushButton#secondary_btn {
-    background-color: #2e2e38;
-    border: 1px solid #4a4a5e;
+    background-color: rgba(46, 46, 56, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fffffe;
 }
 QPushButton#secondary_btn:hover {
-    background-color: #3a3a4e;
+    background-color: rgba(58, 58, 78, 0.7);
     border-color: #7f5af0;
 }
 
-/* دکمه خطر (حذف) */
-QPushButton#delete_btn {
-    background-color: #ef476f;
-}
-QPushButton#delete_btn:hover {
-    background-color: #d64064;
-}
-
-/* دکمه موفقیت (ذخیره/ثبت) - اگر خواستید جداگانه استفاده کنید */
-QPushButton#success_btn {
-    background-color: #2cb67d;
-}
-QPushButton#success_btn:hover {
-    background-color: #25a06c;
-}
-
-/* دکمه غیرفعال */
-QPushButton:disabled {
-    background-color: #242629;
-    color: #555;
-    border: 1px solid #333;
-}
-
-/* 6. جدول‌ها (Tables) */
+/* 6. Tables */
 QTableWidget {
-    background-color: #1e1e24;
-    border: 1px solid #2e2e38;
-    border-radius: 10px;
-    gridline-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(30, 30, 36, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    gridline-color: rgba(255, 255, 255, 0.02);
     selection-background-color: rgba(127, 90, 240, 0.2);
-    selection-color: #fffffe;
     outline: none;
 }
 
 QHeaderView::section {
     background-color: #16161a;
     color: #94a1b2;
-    padding: 12px;
+    padding: 15px;
     border: none;
     border-bottom: 2px solid #7f5af0;
-    font-weight: bold;
+    font-weight: 800;
 }
 
-QTableWidget::item {
-    padding: 8px;
-    border-bottom: 1px solid #2e2e38;
-}
-
-QTableCornerButton::section {
-    background-color: #16161a;
-    border: none;
-}
-
-/* 7. اسکرول بار */
+/* 7. Scrollbars */
 QScrollBar:vertical {
     background: transparent;
-    width: 10px;
-    margin: 0;
+    width: 8px;
 }
 QScrollBar::handle:vertical {
-    background: #4a4a5e;
-    border-radius: 5px;
-    min-height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
 }
 QScrollBar::handle:vertical:hover {
     background: #7f5af0;
 }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
-QScrollBar:horizontal {
-    background: transparent;
-    height: 10px;
-}
-QScrollBar::handle:horizontal {
-    background: #4a4a5e;
-    border-radius: 5px;
-    min-width: 30px;
-}
-QScrollBar::handle:horizontal:hover {
-    background: #7f5af0;
-}
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-
-/* 8. چک‌باکس */
-QCheckBox {
-    spacing: 10px;
-    color: #e4e5f1;
-}
-QCheckBox::indicator {
-    width: 20px;
-    height: 20px;
-    background: #1e1e24;
-    border: 2px solid #4a4a5e;
-    border-radius: 6px;
-}
-QCheckBox::indicator:hover {
-    border-color: #7f5af0;
-}
-QCheckBox::indicator:checked {
-    background-color: #7f5af0;
-    border-color: #7f5af0;
-    image: none; /* برای سادگی تیک را با رنگ پر می‌کنیم */
+/* 8. Cards (Modern Glass Look) */
+QFrame#StatCard, QFrame#kanban_card, QFrame#PaletteContainer {
+    background-color: rgba(36, 38, 41, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 18px;
 }
 
-/* 9. کارت‌ها و فریم‌ها */
-QFrame#card {
-    background-color: #1e1e24;
-    border: 1px solid #2e2e38;
-    border-radius: 12px;
-}
-QFrame#card:hover {
-    border: 1px solid rgba(127, 90, 240, 0.5);
-}
-
-/* 10. لیبل‌ها */
+/* 9. Labels & Typography */
 QLabel { color: #fffffe; }
-QLabel#subtitle { color: #94a1b2; font-size: 12px; }
-QLabel#h1 { font-size: 22px; font-weight: bold; color: #fffffe; }
-QLabel#h2 { font-size: 16px; font-weight: bold; color: #e4e5f1; }
+QLabel#h1 { font-size: 26px; font-weight: 900; color: #ffffff; }
+QLabel#h2 { font-size: 18px; font-weight: 700; color: #e4e5f1; }
+QLabel#subtitle { color: #94a1b2; font-size: 12px; font-weight: 500; }
 
-/* 11. تولتیپ */
-QToolTip {
-    background-color: #1e1e24;
-    color: #fffffe;
-    border: 1px solid #7f5af0;
-    border-radius: 6px;
-    padding: 6px;
-}
-
-/* 12. مسیج باکس */
-QMessageBox {
-    background-color: #16161a;
-}
-QMessageBox QLabel {
-    color: #fffffe;
-}
-
-/* 13. منوی راست کلیک */
-QMenu {
-    background-color: #1e1e24;
-    border: 1px solid #2e2e38;
-    color: #fffffe;
-    padding: 8px;
-}
-QMenu::item {
-    padding: 8px 25px;
-    border-radius: 6px;
-}
-QMenu::item:selected {
-    background-color: #7f5af0;
-    color: white;
-}
-
-/* 14. تب‌ها (Tabs) - برای استفاده‌های احتمالی */
+/* 10. Tabs */
 QTabWidget::pane {
-    border: 1px solid #2e2e38;
-    background: #16161a;
-    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(22, 22, 26, 0.4);
+    border-radius: 12px;
+    top: -1px; /* Overlap border */
 }
 QTabBar::tab {
-    background: #1e1e24;
+    background: transparent;
     color: #94a1b2;
-    padding: 10px 20px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    margin-right: 2px;
+    padding: 12px 25px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    margin-right: 4px;
+    font-weight: 600;
 }
 QTabBar::tab:selected {
-    background: #7f5af0;
-    color: white;
+    background: rgba(127, 90, 240, 0.15);
+    color: #ffffff;
+    border-bottom: 3px solid #7f5af0;
 }
-/* --- استایل‌های اضافه برای وضعیت ربات --- */
+
+/* Status Indicators */
 QLabel#status_indicator {
     min-width: 12px;
     max-width: 12px;
     min-height: 12px;
     max-height: 12px;
     border-radius: 6px;
-    background-color: #72757e; /* خاکستری پیش‌فرض */
+    border: 2px solid rgba(255, 255, 255, 0.1);
 }
-
-/* انیمیشن چشمک‌زن برای حالت آنلاین (نیاز به کد پایتون دارد اما کلاسش اینجاست) */
 QLabel#status_indicator[status="online"] {
-    background-color: #2cb67d; /* سبز */
+    background-color: #2cb67d;
+}
+QLabel#status_indicator[status="offline"] {
+    background-color: #ef476f;
 }
 
-QLabel#status_indicator[status="offline"] {
-    background-color: #ef476f; /* قرمز */
+/* 11. Command Palette Specific */
+QFrame#PaletteContainer {
+    background-color: rgba(22, 22, 26, 0.95);
+    border: 1px solid #7f5af0;
+}
+
+QListWidget#PaletteList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QListWidget#PaletteList::item {
+    height: 60px;
+    padding-right: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #fffffe;
+}
+QListWidget#PaletteList::item:selected {
+    background: rgba(127, 90, 240, 0.2);
+    border-right: 3px solid #7f5af0;
+}
+
+/* 12. Notification Pulse (Indicator only) */
+QLabel#pulse_dot {
+    background-color: #ef476f;
+    border-radius: 4px;
+    min-width: 8px;
+    max-width: 8px;
+    min-height: 8px;
+    max-height: 8px;
 }

@@ -1,9 +1,11 @@
 import logging
+import asyncio
+from bot import responses
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    MessageHandler, 
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
     filters
 )
 from bot.error_handler import global_error_handler
@@ -14,8 +16,53 @@ from bot.handlers import (
     cart_handler,
     main_menu_handler
 )
+from db.database import get_db
+from db import crud
 
 logger = logging.getLogger(__name__)
+
+async def _global_text_handler(update, context):
+    """بررسی کلمات کلیدی برای پاسخ خودکار و منوی اصلی"""
+    if not update.message or not update.message.text: return
+
+    text = update.message.text.strip()
+    user_id = update.effective_user.id
+
+    # ذخیره آخرین پیام در دیتابیس برای CRM (اجرا در ترد جداگانه برای جلوگیری از بلاک شدن)
+    def update_crm():
+        with next(get_db()) as db:
+            crud.update_user_info(db, user_id, last_interaction_text=text)
+
+    asyncio.create_task(asyncio.to_thread(update_crm))
+
+    # نادیده گرفتن دستورات
+    if text.startswith('/'): return
+
+    # ۱. مسیریابی دکمه‌های منوی ثابت (Persistent Menu)
+    if text == responses.PRODUCTS_BUTTON:
+        return await products_handler.list_categories(update, context)
+    elif text == responses.CART_BUTTON:
+        return await cart_handler.view_cart(update, context)
+    elif text == responses.SEARCH_BUTTON:
+        return
+    elif text == responses.USER_PROFILE_BUTTON:
+        return await main_menu_handler.handle_user_profile(update, context)
+    elif text == responses.SUPPORT_BUTTON:
+        return await main_menu_handler.handle_support(update, context)
+    elif text == responses.ABOUT_US_BUTTON:
+        return await main_menu_handler.handle_about_us(update, context)
+
+    # ۲. پاسخگوی خودکار هوشمند
+    def get_reply():
+        with next(get_db()) as db:
+            return crud.get_auto_reply(db, text)
+
+    response = await asyncio.to_thread(get_reply)
+    if response:
+        # نمایش حالت Typing برای واقعی‌تر شدن
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        await asyncio.sleep(0.5)
+        await update.message.reply_text(response, parse_mode='HTML')
 
 async def _unknown_callback(update, context):
     """جلوگیری از نمایش آیکون لودینگ روی دکمه‌هایی که هندلر ندارند"""
@@ -52,13 +99,13 @@ def setup_application_handlers(app: Application, admin_handler=None):
 
     # لیست محصولات و مدیریت صفحه‌بندی
     app.add_handler(CallbackQueryHandler(
-        products_handler.list_products, 
+        products_handler.list_products,
         pattern=r"^(prod:list:|noop)$"
     ))
 
     # نمایش جزئیات کامل یک محصول
     app.add_handler(CallbackQueryHandler(
-        products_handler.show_product_details, 
+        products_handler.show_product_details,
         pattern=r"^prod:show:\d+$"
     ))
 
@@ -97,12 +144,15 @@ def setup_application_handlers(app: Application, admin_handler=None):
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_about_us, pattern=r"^about_us$"))
 
     # ==================================================================
-    # 6. پنل مدیریت و پاکسازی نهایی - اولویت ۶
+    # 6. هندلرهای عمومی و پاسخ خودکار - اولویت ۶
     # ==================================================================
+    # هندلر پاسخ خودکار هوشمند (باید قبل از unknown_callback باشد)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _global_text_handler))
+
     if admin_handler:
         # مدیریت تایید/رد/ارسال سفارش از داخل تلگرام توسط ادمین
         app.add_handler(CallbackQueryHandler(admin_handler, pattern=r"^adm_(approve|reject|ship):"))
-    
+
     # هندلر فال‌بک برای کال‌بک‌های تعریف نشده (بسیار مهم برای UX)
     app.add_handler(CallbackQueryHandler(_unknown_callback, pattern=r".*"))
 

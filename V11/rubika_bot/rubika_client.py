@@ -18,8 +18,9 @@ class RubikaAPI:
     """
     BASE_URL = "https://botapi.rubika.ir/v3/"
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, proxy: str = None):
         self.token = token
+        self.proxy = proxy
         self.url = f"{self.BASE_URL}{token}/"
         self.session: Optional[aiohttp.ClientSession] = None
         # ذخیره آخرین آفست برای جلوگیری از دریافت پیام تکراری
@@ -37,7 +38,7 @@ class RubikaAPI:
         full_url = f"{self.url}{method}"
         
         try:
-            async with session.post(full_url, json=payload or {}) as resp:
+            async with session.post(full_url, json=payload or {}, proxy=self.proxy) as resp:
                 if resp.status != 200:
                     text = await resp.text()
                     logger.error(f"HTTP Error {resp.status}: {text}")

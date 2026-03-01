@@ -106,16 +106,83 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 SessionLocal = scoped_session(session_factory)
 
+def seed_default_settings():
+    """مقداردهی اولیه تنظیمات و قالب‌های متنی در صورت خالی بودن"""
+    from . import models
+    defaults = {
+        "shop_name": "فروشگاه ققنوس",
+        "tmpl_welcome": (
+            "💎 **به فروشگاه {shop_name} خوش آمدید** 👋\n\n"
+            "ما مفتخریم که بهترین محصولات را با تضمین کیفیت و قیمت به شما ارائه می‌دهیم. \n\n"
+            "✨ **مزایای خرید از ما:**\n"
+            "✅ ارسال سریع به سراسر کشور\n"
+            "✅ ضمانت بازگشت وجه\n"
+            "✅ پشتیبانی آنلاین\n\n"
+            "👇 برای شروع خرید، از منوی زیر استفاده کنید:"
+        ),
+        "tmpl_order": (
+            "✅ **سفارش شما با موفقیت ثبت شد!**\n\n"
+            "🆔 شماره سفارش: `#{order_id}`\n"
+            "💰 مبلغ نهایی: `{total_amount}` تومان\n\n"
+            "📦 سفارش شما در وضعیت 'در حال پردازش' قرار گرفت. \n"
+            "🚀 به محض ارسال کالا، کد رهگیری پستی برای شما ارسال خواهد شد.\n\n"
+            "ممنون از اعتماد و خرید شما! ❤️"
+        ),
+        "tmpl_support": (
+            "📞 **مرکز پشتیبانی و هماهنگی**\n\n"
+            "در صورت داشتن هرگونه سوال، پیگیری سفارش یا نیاز به مشاوره قبل از خرید، از طریق روش‌های زیر با ما در ارتباط باشید:\n\n"
+            "🆔 **آیدی پشتیبانی:** @Support_Admin\n"
+            "⏰ **ساعات پاسخگویی:** ۱۰ صبح الی ۲۲\n\n"
+            "🔹 لطفاً شماره سفارش خود را برای پیگیری سریع‌تر همراه داشته باشید."
+        ),
+        "currency": "تومان",
+        "pay_online_active": "true",
+        "pay_card_active": "true",
+        "notif_order": "true",
+        "notif_stock": "true",
+        "notif_ticket": "true"
+    }
+
+    with SessionLocal() as db:
+        for key, value in defaults.items():
+            exists = db.query(models.Setting).filter_by(key=key).first()
+            if not exists:
+                db.add(models.Setting(key=key, value=value))
+        db.commit()
+
 def init_db():
     """ساخت جداول و اجرای مایگریشن‌های خودکار"""
     from .models import Base
     try:
         Base.metadata.create_all(bind=engine)
         run_auto_migrations()
+        seed_default_settings()
         logger.info("Database initialized successfully.")
     except Exception as e:
         logger.critical(f"DB Init Failed: {e}")
         raise
+
+def create_backup():
+    """ایجاد یک نسخه پشتیبان دستی یا دوره‌ای"""
+    if "sqlite" not in DATABASE_URL:
+        return None
+
+    db_path = Path(DATABASE_URL.replace("sqlite:///", ""))
+    backup_dir = db_path.parent / "backups"
+    backup_dir.mkdir(exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"manual_{timestamp}.db"
+
+    try:
+        # در SQLite بهتر است از API مخصوص بک‌آپ استفاده شود تا دیتابیس لاک نشود
+        # اما برای سادگی اینجا از کپی استفاده می‌کنیم (چون WAL فعال است مشکلی نیست)
+        shutil.copy2(db_path, backup_path)
+        logger.info(f"Backup created: {backup_path}")
+        return str(backup_path)
+    except Exception as e:
+        logger.error(f"Backup creation failed: {e}")
+        return None
 
 def get_db() -> Generator[Session, None, None]:
     """Dependency برای استفاده در توابع"""
@@ -148,19 +215,40 @@ def run_auto_migrations():
             "related_product_ids": "VARCHAR(255)",
             "tags": "TEXT",
             "is_top_seller": "BOOLEAN DEFAULT 0",
-            "image_path": "VARCHAR(512)" # بازگرداندن ستون قدیمی برای سازگاری
+            "purchase_price": "NUMERIC(12, 0) DEFAULT 0",
+            "image_path": "VARCHAR(512)"
+        },
+        "categories": {
+            "icon": "VARCHAR(50)",
+            "color": "VARCHAR(20)",
+            "banner_path": "VARCHAR(512)",
+            "sort_order": "INTEGER DEFAULT 0",
+            "description": "TEXT"
         },
         "users": {
             "platform": "VARCHAR(20) DEFAULT 'telegram'",
             "saved_address": "TEXT",
             "saved_phone": "VARCHAR(20)",
             "private_note": "TEXT",
-            "is_banned": "BOOLEAN DEFAULT 0"
+            "is_banned": "BOOLEAN DEFAULT 0",
+            "tags": "VARCHAR(255)",
+            "last_interaction_text": "TEXT"
         },
         "orders": {
             "tracking_code": "VARCHAR(100)",
             "payment_receipt_photo_id": "VARCHAR(255)",
-            "postal_code": "VARCHAR(20)"
+            "postal_code": "VARCHAR(20)",
+            "discount_amount": "NUMERIC(12, 0) DEFAULT 0",
+            "coupon_id": "INTEGER"
+        },
+        "order_items": {
+            "purchase_price_at_purchase": "NUMERIC(12, 0) DEFAULT 0"
+        },
+        "proxies": {
+            "country_code": "VARCHAR(5)",
+            "fail_count": "INTEGER DEFAULT 0",
+            "latency_history": "TEXT",
+            "last_success_at": "DATETIME"
         }
     }
 

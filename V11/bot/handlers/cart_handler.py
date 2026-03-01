@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from telegram import Update, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ContextTypes, ConversationHandler, CallbackQueryHandler, 
@@ -10,12 +11,13 @@ from telegram.error import BadRequest
 from bot.utils import run_db
 from db import crud, models
 from bot import keyboards, responses
+from bot.zarinpal import ZarinPal
 from config import ADMIN_USER_IDS
 
 logger = logging.getLogger("CartHandler")
 
 # وضعیت‌های گفتگوی خرید (Checkout States)
-GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, GET_RECEIPT = range(4)
+GET_ADDRESS, GET_POSTAL_CODE, GET_PHONE, GET_COUPON, CHOOSE_PAYMENT, GET_RECEIPT = range(6)
 
 # ==============================================================================
 # توابع کمکی (Helpers)
@@ -72,14 +74,19 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """افزودن مستقیم به سبد (بدون متغیر)"""
     query = update.callback_query
-    prod_id = int(query.data.split(':')[2])
+    parts = query.data.split(':')
+    prod_id = int(parts[2])
     
     try:
         await run_db(crud.add_to_cart, query.from_user.id, prod_id, 1)
         await query.answer(responses.ADDED_TO_CART)
-        # رفرش صفحه محصول
-        from bot.handlers.products_handler import show_product_details
-        await show_product_details(update, context)
+
+        # رفرش صفحه محصول یا سبد خرید
+        if len(parts) > 3 and parts[3] == "details":
+            from bot.handlers.products_handler import show_product_details
+            await show_product_details(update, context)
+        else:
+            await view_cart(update, context)
     except ValueError as e:
         await query.answer(f"⚠️ {str(e)}", show_alert=True)
 
@@ -107,7 +114,12 @@ async def update_cart_item_handler(update: Update, context: ContextTypes.DEFAULT
     try:
         await run_db(_logic, query.from_user.id, prod_id, change)
         await query.answer()
-        await view_cart(update, context)
+
+        if len(parts) > 4 and parts[4] == "details":
+             from bot.handlers.products_handler import show_product_details
+             await show_product_details(update, context)
+        else:
+            await view_cart(update, context)
     except ValueError as e:
         await query.answer(str(e), show_alert=True)
 
@@ -125,13 +137,35 @@ async def start_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     query = update.callback_query
     await query.answer()
     
-    # چک کردن وضعیت فروشگاه
-    is_open = await run_db(crud.get_setting, "tg_is_open", "true")
+    # چک کردن وضعیت فروشگاه و تعمیرات
+    tasks = [
+        run_db(crud.get_setting, "tg_is_open", "true"),
+        run_db(crud.get_setting, "shop_maintenance_mode", "false"),
+        run_db(crud.get_setting, "min_order_amount", "0")
+    ]
+    is_open, maintenance, min_order = await asyncio.gather(*tasks)
+
+    if maintenance == "true":
+        await query.message.reply_text("🛠 ربات در حال حاضر در حالت تعمیرات است. ثبت سفارش مقدور نیست.")
+        return ConversationHandler.END
+
     if is_open == "false":
         await query.message.reply_text("⛔️ پوزش می‌طلبیم، فروشگاه در حال حاضر سفارش جدید نمی‌پذیرد.")
         return ConversationHandler.END
 
     user_id = query.from_user.id
+    items = await run_db(crud.get_cart_items, user_id)
+    items_total = sum(float(item.product.price) * item.quantity for item in items)
+
+    try:
+        min_order_val = float(min_order) if min_order else 0
+    except:
+        min_order_val = 0
+
+    if items_total < min_order_val:
+        await query.message.reply_text(f"⚠️ حداقل مبلغ سفارش {int(min_order_val):,} تومان است. سبد شما: {int(items_total):,} تومان.")
+        return ConversationHandler.END
+
     addresses = await run_db(crud.get_user_addresses, user_id)
     
     if addresses:
@@ -230,10 +264,42 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         
     context.user_data['phone'] = phone
     await run_db(crud.update_user_phone, update.effective_user.id, phone)
-    return await show_invoice_step(update.message, context)
+
+    # مرحله پرسش کد تخفیف
+    kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⏩ بدون کد تخفیف (ادامه)", callback_data="skip_coupon")]])
+    await update.message.reply_text("🎟 اگر کد تخفیف دارید، آن را وارد کنید؛ در غیر این صورت روی دکمه زیر کلیک کنید:", reply_markup=kbd)
+    return GET_COUPON
+
+async def handle_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """بررسی و اعمال کد تخفیف"""
+    code = update.message.text.strip().upper()
+
+    # محاسبه مجموع فعلی برای بررسی حداقل خرید
+    user_id = update.effective_user.id
+    items = await run_db(crud.get_cart_items, user_id)
+    items_total = sum(float(item.product.price) * item.quantity for item in items)
+
+    success, coupon, msg = await run_db(crud.validate_coupon, code, items_total)
+
+    if success:
+        context.user_data['coupon_id'] = coupon.id
+        context.user_data['discount_percent'] = coupon.percent
+        await update.message.reply_text(f"✅ کد تخفیف {coupon.percent}٪ با موفقیت اعمال شد.")
+        return await show_invoice_step(update.message, context)
+    else:
+        kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⏩ ادامه بدون کد تخفیف", callback_data="skip_coupon")]])
+        await update.message.reply_text(f"❌ {msg}\nدوباره تلاش کنید یا ادامه دهید:", reply_markup=kbd)
+        return GET_COUPON
+
+async def skip_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.user_data['coupon_id'] = None
+    context.user_data['discount_percent'] = 0
+    return await show_invoice_step(query.message, context)
 
 async def show_invoice_step(message, context) -> int:
-    """نمایش فاکتور نهایی و اطلاعات کارت بانکی"""
+    """نمایش فاکتور نهایی و انتخاب روش پرداخت"""
     user_id = context._user_id
     items = await run_db(crud.get_cart_items, user_id)
     
@@ -247,26 +313,143 @@ async def show_invoice_step(message, context) -> int:
     free_limit = float(await run_db(crud.get_setting, "free_shipping_limit", "0"))
     
     final_ship = 0 if (free_limit > 0 and items_total >= free_limit) else ship_cost
-    final_total = items_total + final_ship
 
-    # دریافت اطلاعات کارت از تنظیمات (پشتیبانی از لیست کارت‌ها)
+    # اعمال تخفیف کوپن
+    discount_p = context.user_data.get('discount_percent', 0)
+    discount_amt = (items_total * discount_p) / 100
+
+    final_total = items_total + final_ship - discount_amt
+    context.user_data['final_total'] = final_total
+    context.user_data['discount_amount'] = discount_amt
+
+    text = (
+        f"💳 <b>فاکتور نهایی سفارش</b>\n\n"
+        f"🛍 مجموع کالاها: {int(items_total):,} تومان\n"
+        f"🚚 هزینه ارسال: {'رایگان' if final_ship == 0 else f'{int(final_ship):,} تومان'}\n"
+    )
+    if discount_amt > 0:
+        text += f"🎁 تخفیف اعمال شده ({discount_p}٪): {int(discount_amt):,} تومان\n"
+
+    text += (
+        f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
+        f"💰 <b>مبلغ قابل پرداخت: {int(final_total):,} تومان</b>\n\n"
+        f"لطفا روش پرداخت را انتخاب کنید:"
+    )
+
+    kbd = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 پرداخت آنلاین (زرین‌پال)", callback_data="pay_online")],
+        [InlineKeyboardButton("📷 ارسال فیش واریزی (کارت به کارت)", callback_data="pay_offline")]
+    ])
+
+    await message.reply_text(text, reply_markup=kbd, parse_mode='HTML')
+    return CHOOSE_PAYMENT
+
+async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "pay_online":
+        merchant_id = await run_db(crud.get_setting, "zp_merchant", "")
+        is_active = await run_db(crud.get_setting, "pay_online_active", "true")
+
+        if not merchant_id or is_active == "false":
+            await query.message.reply_text("⚠️ در حال حاضر پرداخت آنلاین غیرفعال است. لطفا از روش فیش واریزی استفاده کنید.")
+            return await start_offline_payment(query.message, context)
+
+        zp = ZarinPal(merchant_id)
+        amount = context.user_data.get('final_total')
+        desc = f"خرید از ربات فروشگاهی - کاربر {query.from_user.id}"
+
+        # دریافت آدرس کال‌بک از تنظیمات
+        callback_url = await run_db(crud.get_setting, "zp_callback", "https://t.me/your_bot?start=verify")
+        res = await zp.create_payment(amount, desc, callback_url)
+
+        if res['status']:
+            context.user_data['authority'] = res['authority']
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 ورود به درگاه پرداخت", url=res['url'])],
+                [InlineKeyboardButton("✅ بررسی وضعیت پرداخت", callback_data="verify_online")]
+            ])
+            await query.message.reply_text("🔗 برای پرداخت آنلاین روی دکمه زیر کلیک کنید. پس از پرداخت، دکمه بررسی وضعیت را بزنید:", reply_markup=kbd)
+            return CHOOSE_PAYMENT
+        else:
+            await query.message.reply_text(f"❌ خطا در اتصال به درگاه: {res.get('error')}")
+            return await start_offline_payment(query.message, context)
+
+    return await start_offline_payment(query.message, context)
+
+async def start_offline_payment(message, context):
     raw_cards = await run_db(crud.get_setting, "bank_cards", "[]")
     try:
         cards = json.loads(raw_cards)
-        card = cards[0] if cards else {"number": "در حال بروزرسانی", "owner": "مدیریت"}
     except:
-        card = {"number": "----", "owner": "مدیریت"}
+        cards = []
 
-    text = responses.get_checkout_payment(
-        total=items_total,
-        shipping_cost="رایگان" if final_ship == 0 else f"{int(final_ship):,} ت",
-        final_total=final_total,
-        card_number=card['number'],
-        card_owner=card['owner']
+    if not cards:
+        cards = [{"number": "در حال بروزرسانی", "owner": "مدیریت", "bank": ""}]
+
+    cards_text = ""
+    for c in cards:
+        bank_name = f" ({c.get('bank')})" if c.get('bank') else ""
+        cards_text += f"💳 <code>{c['number']}</code>\n👤 {c['owner']}{bank_name}\n\n"
+
+    total = context.user_data.get('final_total', 0)
+
+    text = (
+        f"💳 <b>اطلاعات پرداخت کارت به کارت</b>\n\n"
+        f"💰 مبلغ نهایی: <b>{int(total):,} تومان</b>\n\n"
+        f"لطفاً مبلغ فوق را به یکی از شماره کارت‌های زیر واریز نمایید:\n\n"
+        f"{cards_text}"
+        f"📸 پس از واریز، <b>تصویر فیش</b> خود را همین‌جا ارسال کنید."
     )
 
     await message.reply_text(text, reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
     return GET_RECEIPT
+
+async def verify_online_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    authority = context.user_data.get('authority')
+    amount = context.user_data.get('final_total')
+
+    if not authority:
+        await query.answer("اطلاعات تراکنش یافت نشد.", show_alert=True)
+        return CHOOSE_PAYMENT
+
+    merchant_id = await run_db(crud.get_setting, "zp_merchant", "")
+    zp = ZarinPal(merchant_id)
+    res = await zp.verify_payment(amount, authority)
+
+    if res['status']:
+        # ثبت سفارش خودکار
+        user = update.effective_user
+        shipping_data = {
+            "address": context.user_data.get('address'),
+            "phone": context.user_data.get('phone'),
+            "postal_code": context.user_data.get('postal_code'),
+            "coupon_id": context.user_data.get('coupon_id'),
+            "discount_amount": context.user_data.get('discount_amount', 0)
+        }
+        order = await run_db(crud.create_order_from_cart, user.id, shipping_data)
+
+        # ثبت استفاده از کوپن
+        if shipping_data['coupon_id']:
+            await run_db(crud.use_coupon, shipping_data['coupon_id'])
+
+        # آپدیت وضعیت به پرداخت شده
+        def _set_paid(db, oid, ref):
+            o = db.query(models.Order).filter_by(id=oid).first()
+            if o:
+                o.status = "paid"
+                o.tracking_code = f"ZP_REF_{ref}"
+            db.commit()
+        await run_db(_set_paid, order.id, res['ref_id'])
+
+        await query.message.reply_text(f"✅ پرداخت با موفقیت تایید شد!\nکد پیگیری: {res['ref_id']}\nسفارش شما در حال پردازش است.", reply_markup=keyboards.get_main_menu_keyboard())
+        context.user_data.clear()
+        return ConversationHandler.END
+    else:
+        await query.answer("❌ پرداخت تایید نشد یا هنوز واریز نکرده‌اید.", show_alert=True)
+        return CHOOSE_PAYMENT
 
 async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """دریافت فیش و ثبت نهایی سفارش"""
@@ -283,10 +466,16 @@ async def get_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         "postal_code": context.user_data.get('postal_code')
     }
 
+    shipping_data["coupon_id"] = context.user_data.get('coupon_id')
+    shipping_data["discount_amount"] = context.user_data.get('discount_amount', 0)
+
     try:
         # ثبت در دیتابیس (اتمیک)
         order = await run_db(crud.create_order_from_cart, user.id, shipping_data)
         
+        if shipping_data['coupon_id']:
+            await run_db(crud.use_coupon, shipping_data['coupon_id'])
+
         # ذخیره آیدی عکس فیش در سفارش
         def _update_receipt(db, oid, pid):
             order_obj = db.query(models.Order).filter_by(id=oid).first()
@@ -342,6 +531,14 @@ checkout_conversation_handler = ConversationHandler(
         GET_PHONE: [
             CallbackQueryHandler(handle_phone_choice, pattern=r"^(use_saved_phone|new_phone)$"),
             MessageHandler((filters.TEXT | filters.CONTACT) & ~filters.COMMAND, get_phone)
+        ],
+        GET_COUPON: [
+            CallbackQueryHandler(skip_coupon, pattern="^skip_coupon$"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_coupon)
+        ],
+        CHOOSE_PAYMENT: [
+            CallbackQueryHandler(handle_payment_choice, pattern=r"^(pay_online|pay_offline)$"),
+            CallbackQueryHandler(verify_online_payment, pattern="^verify_online$")
         ],
         GET_RECEIPT: [MessageHandler(filters.PHOTO, get_receipt)],
     },
