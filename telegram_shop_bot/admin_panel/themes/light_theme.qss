@@ -1,0 +1,10 @@
+/* Light Theme */
+QMainWindow, QWidget { background-color: #f0f2f5; }
+QFrame#sidebar { background-color: #ffffff; border-right: 1px solid #dcdcdc; }
+QPushButton { background-color: #f0f0f0; color: #333; border: 1px solid #dcdcdc; padding: 10px; text-align: right; border-radius: 5px; }
+QPushButton:hover { background-color: #e8e8e8; }
+QPushButton:checked { background-color: #0078d7; color: white; border: 1px solid #005a9e; }
+QLabel { font-size: 14px; color: #333; }
+QTableWidget { border: 1px solid #dcdcdc; }
+QLineEdit, QTextEdit, QSpinBox, QComboBox { border: 1px solid #dcdcdc; padding: 5px; border-radius: 3px; }
+QHeaderView::section { background-color: #e8e8e8; }

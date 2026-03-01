@@ -1,0 +1,5 @@
+python-telegram-bot[ext]
+SQLAlchemy
+python-dotenv
+PyQt6
+qasync
