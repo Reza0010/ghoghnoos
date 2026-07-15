@@ -1,0 +1,199 @@
+/*
+FixBoard Miner Manager - Glassmorphism Dark Theme Stylesheet
+Designs a highly polished, commercial, dark mode interface for PySide6 widgets.
+*/
+
+/* Global Window Background */
+QMainWindow, QDialog {
+    background-color: #121216;
+    color: #F5F5F7;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+}
+
+/* Tab Widget Styling */
+QTabWidget::pane {
+    border: 1px solid #2E2E38;
+    background-color: #1F1F26;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+QTabWidget::tab-bar {
+    alignment: right;
+}
+
+QTabBar::tab {
+    background-color: #262630;
+    color: #8E9297;
+    padding: 10px 24px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-left: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    border: 1px solid #2E2E38;
+    border-bottom: none;
+}
+
+QTabBar::tab:selected {
+    background-color: #1F1F26;
+    color: #3498DB;
+    border-bottom: 2px solid #3498DB;
+}
+
+QTabBar::tab:hover {
+    color: #FFFFFF;
+    background-color: #2D2D3A;
+}
+
+/* Input Fields (QLineEdit, QTextEdit) */
+QLineEdit, QTextEdit {
+    background-color: #1A1A22;
+    border: 1px solid #3E3E4D;
+    border-radius: 6px;
+    color: #FFFFFF;
+    padding: 8px 12px;
+    font-size: 13px;
+    selection-background-color: #3498DB;
+    selection-color: #FFFFFF;
+}
+
+QLineEdit:focus, QTextEdit:focus {
+    border: 1px solid #3498DB;
+    background-color: #1E1E28;
+}
+
+/* Table Widget styling */
+QTableWidget {
+    background-color: #1F1F26;
+    alternate-background-color: #272733;
+    color: #F5F5F7;
+    gridline-color: #2E2E38;
+    border: 1px solid #2E2E38;
+    border-radius: 8px;
+}
+
+QTableWidget::item {
+    padding: 10px;
+    border-bottom: 1px solid #2E2E38;
+}
+
+QTableWidget::item:selected {
+    background-color: rgba(52, 152, 219, 40);
+    color: #3498DB;
+    font-weight: bold;
+}
+
+QHeaderView::section {
+    background-color: #262630;
+    color: #8E9297;
+    padding: 8px;
+    border: 1px solid #121216;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Beautiful custom buttons */
+QPushButton {
+    background-color: #2E2E38;
+    border: 1px solid #3E3E4D;
+    border-radius: 6px;
+    color: #FFFFFF;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: bold;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background-color: #3E3E4D;
+    border: 1px solid #3498DB;
+}
+
+QPushButton:pressed {
+    background-color: #22222A;
+}
+
+/* Styled progress bars */
+QProgressBar {
+    background-color: #1A1A22;
+    border: 1px solid #3E3E4D;
+    border-radius: 6px;
+    text-align: center;
+    color: #FFFFFF;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QProgressBar::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3498DB, stop:1 #2980B9);
+    border-radius: 5px;
+}
+
+/* ScrollBars */
+QScrollBar:vertical {
+    background-color: #121216;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #2E2E38;
+    min-height: 20px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #3498DB;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Labels */
+QLabel {
+    color: #F5F5F7;
+    font-size: 12px;
+}
+
+/* GroupBox Container */
+QGroupBox {
+    border: 1px solid #2E2E38;
+    border-radius: 8px;
+    margin-top: 20px;
+    font-family: "Segoe UI";
+    font-size: 12px;
+    font-weight: bold;
+    background-color: #1A1A22;
+    padding: 15px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top right;
+    padding: 0 10px;
+    color: #3498DB;
+}
+
+/* ComboBox */
+QComboBox {
+    background-color: #1A1A22;
+    border: 1px solid #3E3E4D;
+    border-radius: 6px;
+    color: #FFFFFF;
+    padding: 6px;
+    min-width: 120px;
+}
+
+QComboBox:on-show {
+    border: 1px solid #3498DB;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1F1F26;
+    border: 1px solid #2E2E38;
+    color: #FFFFFF;
+    selection-background-color: #3498DB;
+}
