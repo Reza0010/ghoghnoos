@@ -1,7 +1,7 @@
 """
-FixBoard Miner Manager - Miner Details Dialog
-A multi-tabbed control panel providing real-time data inspection for hash boards, fans,
-system temperatures, and logs, alongside administrative operations (reboot, restart, edit pools).
+FixBoard Miner Manager - Miner Details Dialog (Non-Blocking)
+Implements a background QThread (RefreshWorker) to fetch live stats, boards, fans,
+and SSH system logs asynchronously. Completely eliminates any GUI freezing or stuttering.
 """
 
 import os
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QDialog, QTabWidget, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QGridLayout, QTableWidget,
                              QTableWidgetItem, QHeaderView, QTextEdit, QLineEdit,
                              QPushButton, QMessageBox, QFileDialog, QGroupBox, QAbstractItemView)
-from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtCore import Qt, QTimer, QSize, QThread, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QBrush
 
 from database.db_manager import DatabaseManager
@@ -18,6 +18,177 @@ from miners.whatsminer_api import WhatsMinerSecureAPI
 from miners.ssh_api import SSHFallbackAPI
 from miners.http_api import HTTPFallbackAPI
 from utils.helpers import format_hashrate, format_uptime
+
+class RefreshWorker(QThread):
+    """
+    Background worker that queries all physical miner endpoints (socket, API, SSH)
+    without blocking the PySide6 UI thread.
+    """
+    data_fetched = Signal(dict)
+
+    def __init__(self, ip: str, brand: str, username: str, password: str):
+        super().__init__()
+        self.ip = ip
+        self.brand = brand
+        self.username = username
+        self.password = password
+
+        # Connection clients
+        self.cg_api = CGMinerAPI(self.ip, timeout=2.5)
+        self.ws_api = WhatsMinerSecureAPI(self.ip, timeout=2.5)
+        self.ssh_api = SSHFallbackAPI(self.ip, self.username, self.password, timeout=2.5)
+
+    def run(self):
+        payload = {
+            "success": False,
+            "mac": "دریافت نشد",
+            "model": "دریافت نشد",
+            "fw": "دریافت نشد",
+            "serial": "دریافت نشد",
+            "uptime": "دریافت نشد",
+            "hashrate": "دریافت نشد",
+            "power": "دریافت نشد",
+            "pool": "دریافت نشد",
+            "worker": "دریافت نشد",
+            "fan1": "دریافت نشد",
+            "fan2": "دریافت نشد",
+            "fan3": "دریافت نشد",
+            "fan4": "دریافت نشد",
+            "temp_chip": "دریافت نشد",
+            "temp_env": "دریافت نشد",
+            "boards": [],
+            "logs": "دریافت نشد"
+        }
+
+        try:
+            # 1. Fetch Logs (Common for both brands via SSH fallback)
+            payload["logs"] = self.ssh_api.fetch_logs()
+
+            # 2. Brand Specific queries
+            if self.brand == "WhatsMiner":
+                self._fetch_whatsminer(payload)
+            else:
+                self._fetch_antminer(payload)
+
+        except Exception as e:
+            payload["success"] = False
+
+        self.data_fetched.emit(payload)
+
+    def _fetch_whatsminer(self, payload: dict):
+        status = self.ws_api.get_miner_status()
+        device_info = self.ws_api.get_device_info()
+
+        if device_info and device_info.get("code") == 0:
+            msg = device_info.get("msg", {})
+            payload["mac"] = msg.get("mac_addr", "دریافت نشد")
+            payload["model"] = msg.get("model_type", "دریافت نشد")
+            payload["fw"] = msg.get("firmware_ver", "دریافت نشد")
+            payload["serial"] = msg.get("sn", "دریافت نشد")
+
+        if status and status.get("code") == 0:
+            payload["success"] = True
+            msg = status.get("msg", {})
+
+            raw_hr = msg.get("hash_rate", 0.0)
+            payload["hashrate"] = f"{raw_hr:.2f} TH/s"
+
+            raw_up = msg.get("uptime", 0)
+            payload["uptime"] = format_uptime(raw_up)
+            payload["power"] = f"{msg.get('power', 'دریافت نشد')} W"
+
+            pools = msg.get("pools", [])
+            if pools:
+                active_pool = pools[0]
+                payload["pool"] = active_pool.get("url", "دریافت نشد")
+                payload["worker"] = active_pool.get("worker", "دریافت نشد")
+
+            # Parse boards
+            boards = msg.get("hash_boards", [])
+            parsed_boards = []
+            for i, b in enumerate(boards):
+                parsed_boards.append({
+                    "id": b.get("id", i),
+                    "status": "فعال" if b.get("is_active", 0) == 1 else "غیرفعال",
+                    "temp": f"{b.get('temp', 'دریافت نشد')} °C",
+                    "freq": f"{b.get('frequency', 'دریافت نشد')} MHz",
+                    "volt": f"{b.get('voltage', 'دریافت نشد')} V",
+                    "asics": b.get("asic_count", "دریافت نشد"),
+                    "chips": b.get("detected_chips", "دریافت نشد"),
+                    "health": b.get("status", "Normal")
+                })
+            payload["boards"] = parsed_boards
+
+            # Parse fans
+            fans = msg.get("fans", [])
+            payload["fan1"] = f"{fans[0]} RPM" if len(fans) > 0 else "دریافت نشد"
+            payload["fan2"] = f"{fans[1]} RPM" if len(fans) > 1 else "دریافت نشد"
+            payload["fan3"] = f"{fans[2]} RPM" if len(fans) > 2 else "دریافت نشد"
+            payload["fan4"] = f"{fans[3]} RPM" if len(fans) > 3 else "دریافت نشد"
+
+            payload["temp_chip"] = f"{msg.get('avg_temp_chip', 'دریافت نشد')} °C"
+            payload["temp_env"] = f"{msg.get('env_temp', 'دریافت نشد')} °C"
+
+    def _fetch_antminer(self, payload: dict):
+        summary = self.cg_api.get_summary()
+        version = self.cg_api.get_version()
+        pools = self.cg_api.get_pools()
+        stats = self.cg_api.get_stats()
+
+        if summary:
+            payload["success"] = True
+            data = summary.get("SUMMARY", [{}])[0]
+            uptime_s = data.get("Elapsed", 0)
+            payload["uptime"] = format_uptime(uptime_s)
+
+            raw_hr = data.get("GHS 5s", data.get("MHS 5s", 0))
+            payload["hashrate"] = format_hashrate(raw_hr, "GH" if "GHS 5s" in data else "MH")
+            payload["power"] = f"{data.get('Power', 'دریافت نشد')} W"
+
+        if version:
+            v_data = version.get("VERSION", [{}])[0]
+            payload["mac"] = v_data.get("MAC", v_data.get("Mac", "دریافت نشد"))
+            payload["model"] = v_data.get("Platform", v_data.get("Type", "Antminer"))
+            payload["fw"] = v_data.get("FileSystem", v_data.get("OS", "دریافت نشد"))
+            payload["serial"] = v_data.get("Serial", "دریافت نشد")
+
+        if pools:
+            pool_list = pools.get("POOLS", [])
+            if pool_list:
+                active_p = pool_list[0]
+                payload["pool"] = active_p.get("URL", "دریافت نشد")
+                payload["worker"] = active_p.get("User", "دریافت نشد")
+
+        if stats:
+            stat_items = stats.get("STATS", [{}])
+            if stat_items:
+                s_item = stat_items[0]
+
+                # Parse boards
+                parsed_boards = []
+                for i in range(3):
+                    chain_acs = s_item.get(f"chain_acs{i}", s_item.get(f"chain_acs_status{i}", ""))
+                    parsed_boards.append({
+                        "id": i + 1,
+                        "status": "فعال" if chain_acs else "غیرفعال",
+                        "temp": f"{s_item.get(f'temp{i+1}', s_item.get(f'temp2_{i+1}', 'دریافت نشد'))} °C",
+                        "freq": f"{s_item.get(f'frequency{i+1}', s_item.get(f'freq{i+1}', 'دریافت نشد'))} MHz",
+                        "volt": f"{s_item.get(f'voltage{i+1}', s_item.get(f'volt{i+1}', 'دریافت نشد'))} V",
+                        "asics": s_item.get(f"chain_asic_num{i}", s_item.get(f"asic{i+1}", "دریافت نشد")),
+                        "chips": s_item.get(f"chain_detected_asic_num{i}", "دریافت نشد"),
+                        "health": "Normal" if chain_acs else "Fault"
+                    })
+                payload["boards"] = parsed_boards
+
+                # Parse fans
+                payload["fan1"] = f"{s_item.get('fan1', s_item.get('fan_speed1', 'دریافت نشد'))} RPM"
+                payload["fan2"] = f"{s_item.get('fan2', s_item.get('fan_speed2', 'دریافت نشد'))} RPM"
+                payload["fan3"] = f"{s_item.get('fan3', s_item.get('fan_speed3', 'دریافت نشد'))} RPM"
+                payload["fan4"] = f"{s_item.get('fan4', s_item.get('fan_speed4', 'دریافت نشد'))} RPM"
+
+                payload["temp_chip"] = f"{s_item.get('temp3_1', 'دریافت نشد')} °C"
+                payload["temp_env"] = f"{s_item.get('temp_env', 'دریافت نشد')} °C"
+
 
 class MinerDetailsDialog(QDialog):
     def __init__(self, miner_ip: str, parent=None):
@@ -28,24 +199,26 @@ class MinerDetailsDialog(QDialog):
         self.brand = self.miner_record.get("brand", "Antminer") if self.miner_record else "Antminer"
         self.username, self.password = self.db.get_miner_credentials(self.ip)
 
-        # Low-level APIs
+        # Operation controllers
         self.cg_api = CGMinerAPI(self.ip)
         self.ws_api = WhatsMinerSecureAPI(self.ip)
         self.ssh_api = SSHFallbackAPI(self.ip, self.username, self.password)
         self.http_api = HTTPFallbackAPI(self.ip, self.username, self.password)
+
+        self.refresh_worker = None
 
         self.setWindowTitle(f"جزئیات و کنترل پنل - {self.ip} ({self.brand})")
         self.setMinimumSize(QSize(800, 600))
 
         self.init_ui()
 
-        # Real-time refresh timer (every 4 seconds)
+        # Non-blocking async QTimer polling (every 4 seconds)
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.refresh_live_data)
+        self.timer.timeout.connect(self.trigger_async_refresh)
         self.timer.start(4000)
 
-        # Load initially
-        self.refresh_live_data()
+        # Trigger first refresh immediately
+        self.trigger_async_refresh()
 
     def init_ui(self):
         self.setStyleSheet("""
@@ -336,199 +509,66 @@ class MinerDetailsDialog(QDialog):
         layout.addLayout(ops_grid)
         layout.addStretch()
 
-    def refresh_live_data(self):
-        """
-        Gathers live parameters from the miner according to the brand.
-        NO MOCKED DATA.
-        """
-        # Read from CGMiner API or Whatsminer API
-        if self.brand == "WhatsMiner":
-            self.refresh_whatsminer_data()
-        else:
-            self.refresh_antminer_data()
-
-    def refresh_whatsminer_data(self):
-        """Fetches real WhatsMiner parameters."""
-        status = self.ws_api.get_miner_status()
-        device_info = self.ws_api.get_device_info()
-
-        # Overview Tab updates
-        if device_info and device_info.get("code") == 0:
-            msg = device_info.get("msg", {})
-            self.lbl_mac.setText(msg.get("mac_addr", "دریافت نشد"))
-            self.lbl_model.setText(msg.get("model_type", "دریافت نشد"))
-            self.lbl_fw.setText(msg.get("firmware_ver", "دریافت نشد"))
-            self.lbl_serial.setText(msg.get("sn", "دریافت نشد"))
-        else:
-            self.lbl_mac.setText("دریافت نشد")
-            self.lbl_model.setText("دریافت نشد")
-            self.lbl_fw.setText("دریافت نشد")
-            self.lbl_serial.setText("دریافت نشد")
-
-        if status and status.get("code") == 0:
-            msg = status.get("msg", {})
-
-            # Hashrate & Uptime
-            raw_hr = msg.get("hash_rate", 0.0)
-            self.lbl_hashrate.setText(f"{raw_hr:.2f} TH/s")
-
-            raw_up = msg.get("uptime", 0)
-            self.lbl_uptime.setText(format_uptime(raw_up))
-
-            self.lbl_power.setText(f"{msg.get('power', 'دریافت نشد')} W")
-
-            # Active Pools
-            pools = msg.get("pools", [])
-            if pools and isinstance(pools, list):
-                active_pool = pools[0]
-                self.lbl_pool.setText(active_pool.get("url", "دریافت نشد"))
-                self.lbl_worker.setText(active_pool.get("worker", "دریافت نشد"))
-            else:
-                self.lbl_pool.setText("دریافت نشد")
-                self.lbl_worker.setText("دریافت نشد")
-
-            # Hashboards parsing
-            boards = msg.get("hash_boards", [])
-            self.boards_table.setRowCount(len(boards))
-            for i, b in enumerate(boards):
-                # Columns: Board Number, Status, Temp, Freq, Volt, ASIC Count, Chips, Final Status
-                self.boards_table.setItem(i, 0, QTableWidgetItem(f"برد {b.get('id', i)}"))
-
-                b_status = "فعال" if b.get("is_active", 0) == 1 else "غیرفعال"
-                self.boards_table.setItem(i, 1, QTableWidgetItem(b_status))
-
-                self.boards_table.setItem(i, 2, QTableWidgetItem(f"{b.get('temp', 'دریافت نشد')}"))
-                self.boards_table.setItem(i, 3, QTableWidgetItem(f"{b.get('frequency', 'دریافت نشد')}"))
-                self.boards_table.setItem(i, 4, QTableWidgetItem(f"{b.get('voltage', 'دریافت نشد')}"))
-                self.boards_table.setItem(i, 5, QTableWidgetItem(f"{b.get('asic_count', 'دریافت نشد')}"))
-                self.boards_table.setItem(i, 6, QTableWidgetItem(f"{b.get('detected_chips', 'دریافت نشد')}"))
-
-                health = b.get("status", "Normal")
-                h_item = QTableWidgetItem(health)
-                if health == "Normal":
-                    h_item.setForeground(QColor("#2ECC71"))
-                else:
-                    h_item.setForeground(QColor("#E74C3C"))
-                self.boards_table.setItem(i, 7, h_item)
-
-            # Fans parsing
-            fans = msg.get("fans", [])
-            self.lbl_fan1.setText(f"{fans[0]} RPM" if len(fans) > 0 else "دریافت نشد")
-            self.lbl_fan2.setText(f"{fans[1]} RPM" if len(fans) > 1 else "دریافت نشد")
-            self.lbl_fan3.setText(f"{fans[2]} RPM" if len(fans) > 2 else "دریافت نشد")
-            self.lbl_fan4.setText(f"{fans[3]} RPM" if len(fans) > 3 else "دریافت نشد")
-            self.lbl_fan_health.setText("سالم" if len(fans) >= 2 else "دریافت نشد")
-
-            self.lbl_temp_chip.setText(f"{msg.get('avg_temp_chip', 'دریافت نشد')} °C")
-            self.lbl_temp_env.setText(f"{msg.get('env_temp', 'دریافت نشد')} °C")
-
-        else:
-            # Fallback to display "دریافت نشد" if cannot connect to Port 4433
-            self._set_offline_labels()
-
-        # Load logs via SSH fallback
-        logs_text = self.ssh_api.fetch_logs()
-        self.logs_display.setText(logs_text)
-        self.highlight_log_lines()
-
-    def refresh_antminer_data(self):
-        """Fetches real Antminer parameters using CGMiner standard API."""
-        summary = self.cg_api.get_summary()
-        version = self.cg_api.get_version()
-        pools = self.cg_api.get_pools()
-        stats = self.cg_api.get_stats()
-
-        # Uptime & Hashrate
-        if summary:
-            data = summary.get("SUMMARY", [{}])[0]
-            uptime_s = data.get("Elapsed", 0)
-            self.lbl_uptime.setText(format_uptime(uptime_s))
-
-            raw_hr = data.get("GHS 5s", data.get("MHS 5s", 0))
-            self.lbl_hashrate.setText(format_hashrate(raw_hr, "GH" if "GHS 5s" in data else "MH"))
-
-            self.lbl_power.setText(f"{data.get('Power', 'دریافت نشد')} W")
-        else:
-            self._set_offline_labels()
+    def trigger_async_refresh(self):
+        """Launches RefreshWorker to query the physical devices on a background thread."""
+        # Prevent starting a new thread if previous is still busy
+        if self.refresh_worker and self.refresh_worker.isRunning():
             return
 
-        if version:
-            v_data = version.get("VERSION", [{}])[0]
-            self.lbl_mac.setText(v_data.get("MAC", v_data.get("Mac", "دریافت نشد")))
-            self.lbl_model.setText(v_data.get("Platform", v_data.get("Type", "Antminer")))
-            self.lbl_fw.setText(v_data.get("FileSystem", v_data.get("OS", "دریافت نشد")))
-            self.lbl_serial.setText(v_data.get("Serial", "دریافت نشد"))
+        self.refresh_worker = RefreshWorker(self.ip, self.brand, self.username, self.password)
+        self.refresh_worker.data_fetched.connect(self.on_data_fetched)
+        self.refresh_worker.finished.connect(self.refresh_worker.deleteLater)
+        self.refresh_worker.start()
 
-        if pools:
-            pool_list = pools.get("POOLS", [])
-            if pool_list:
-                active_p = pool_list[0]
-                self.lbl_pool.setText(active_p.get("URL", "دریافت نشد"))
-                self.lbl_worker.setText(active_p.get("User", "دریافت نشد"))
+    @Slot(dict)
+    def on_data_fetched(self, data: dict):
+        """Asynchronous callback executed safely on the Main Thread."""
+        if not data.get("success", False):
+            self._set_offline_labels()
+            self.logs_display.setText(data.get("logs", "دریافت نشد"))
+            return
 
-        # Parse Hashboards & Fans from stats API
-        if stats:
-            # S9/S17/S19 stats response parsing
-            stat_items = stats.get("STATS", [{}])
-            if stat_items:
-                s_item = stat_items[0]
+        # Update Overview Widgets
+        self.lbl_mac.setText(data["mac"])
+        self.lbl_model.setText(data["model"])
+        self.lbl_fw.setText(data["fw"])
+        self.lbl_serial.setText(data["serial"])
+        self.lbl_hashrate.setText(data["hashrate"])
+        self.lbl_uptime.setText(data["uptime"])
+        self.lbl_power.setText(data["power"])
+        self.lbl_pool.setText(data["pool"])
+        self.lbl_worker.setText(data["worker"])
 
-                # Render common Antminer boards S19 (e.g. Chain[0, 1, 2])
-                chains_count = 0
-                boards_info = []
-                for k, v in s_item.items():
-                    if k.startswith("chain_rate") or k.startswith("chain_acs"):
-                        chains_count += 1
+        # Update Fans & temps
+        self.lbl_fan1.setText(data["fan1"])
+        self.lbl_fan2.setText(data["fan2"])
+        self.lbl_fan3.setText(data["fan3"])
+        self.lbl_fan4.setText(data["fan4"])
+        self.lbl_fan_health.setText("سالم" if data["fan1"] != "دریافت نشد" else "دریافت نشد")
+        self.lbl_temp_chip.setText(data["temp_chip"])
+        self.lbl_temp_env.setText(data["temp_env"])
 
-                # Build boards table dynamically
-                self.boards_table.setRowCount(3) # S9/S19 standard is 3 boards
-                for i in range(3):
-                    self.boards_table.setItem(i, 0, QTableWidgetItem(f"برد {i+1}"))
+        # Update Hash boards table
+        boards = data.get("boards", [])
+        self.boards_table.setRowCount(len(boards))
+        for i, b in enumerate(boards):
+            self.boards_table.setItem(i, 0, QTableWidgetItem(f"برد {b['id']}"))
+            self.boards_table.setItem(i, 1, QTableWidgetItem(b["status"]))
+            self.boards_table.setItem(i, 2, QTableWidgetItem(b["temp"]))
+            self.boards_table.setItem(i, 3, QTableWidgetItem(b["freq"]))
+            self.boards_table.setItem(i, 4, QTableWidgetItem(b["volt"]))
+            self.boards_table.setItem(i, 5, QTableWidgetItem(str(b["asics"])))
+            self.boards_table.setItem(i, 6, QTableWidgetItem(str(b["chips"])))
 
-                    # Status
-                    chain_acs = s_item.get(f"chain_acs{i}", s_item.get(f"chain_acs_status{i}", ""))
-                    b_status = "فعال" if chain_acs else "غیرفعال"
-                    self.boards_table.setItem(i, 1, QTableWidgetItem(b_status))
+            h_item = QTableWidgetItem(b["health"])
+            if b["health"] == "Normal":
+                h_item.setForeground(QColor("#2ECC71"))
+            else:
+                h_item.setForeground(QColor("#E74C3C"))
+            self.boards_table.setItem(i, 7, h_item)
 
-                    # Temp
-                    temp_board = s_item.get(f"temp{i+1}", s_item.get(f"temp2_{i+1}", "دریافت نشد"))
-                    self.boards_table.setItem(i, 2, QTableWidgetItem(f"{temp_board}"))
-
-                    # Frequency
-                    freq = s_item.get(f"frequency{i+1}", s_item.get(f"freq{i+1}", "دریافت نشد"))
-                    self.boards_table.setItem(i, 3, QTableWidgetItem(f"{freq}"))
-
-                    # Voltage
-                    volt = s_item.get(f"voltage{i+1}", s_item.get(f"volt{i+1}", "دریافت نشد"))
-                    self.boards_table.setItem(i, 4, QTableWidgetItem(f"{volt}"))
-
-                    # ASIC Count
-                    asics = s_item.get(f"chain_asic_num{i}", s_item.get(f"asic{i+1}", "دریافت نشد"))
-                    self.boards_table.setItem(i, 5, QTableWidgetItem(f"{asics}"))
-
-                    # Chips
-                    chips = s_item.get(f"chain_detected_asic_num{i}", "دریافت نشد")
-                    self.boards_table.setItem(i, 6, QTableWidgetItem(f"{chips}"))
-
-                    # Final Status
-                    status_str = "Normal" if chain_acs else "Fault"
-                    s_widget = QTableWidgetItem(status_str)
-                    s_widget.setForeground(QColor("#2ECC71" if chain_acs else "#E74C3C"))
-                    self.boards_table.setItem(i, 7, s_widget)
-
-                # Fans parsing from STATS
-                self.lbl_fan1.setText(f"{s_item.get('fan1', s_item.get('fan_speed1', 'دریافت نشد'))} RPM")
-                self.lbl_fan2.setText(f"{s_item.get('fan2', s_item.get('fan_speed2', 'دریافت نشد'))} RPM")
-                self.lbl_fan3.setText(f"{s_item.get('fan3', s_item.get('fan_speed3', 'دریافت نشد'))} RPM")
-                self.lbl_fan4.setText(f"{s_item.get('fan4', s_item.get('fan_speed4', 'دریافت نشد'))} RPM")
-                self.lbl_fan_health.setText("سالم")
-
-                self.lbl_temp_chip.setText(f"{s_item.get('temp3_1', 'دریافت نشد')} °C")
-                self.lbl_temp_env.setText(f"{s_item.get('temp_env', 'دریافت نشد')} °C")
-
-        # Load logs via SSH
-        logs_text = self.ssh_api.fetch_logs()
-        self.logs_display.setText(logs_text)
+        # Update Logs screen
+        self.logs_display.setText(data["logs"])
         self.highlight_log_lines()
 
     def _set_offline_labels(self):
@@ -621,7 +661,7 @@ class MinerDetailsDialog(QDialog):
                     if success:
                         self.db.log_action("CHANGE_POOLS", self.ip, "SUCCESS", f"Changed pool to {url}")
                         QMessageBox.information(self, "موفق", "آدرس استخر فعال با موفقیت بروزرسانی شد.")
-                        self.refresh_live_data()
+                        self.trigger_async_refresh()
                     else:
                         QMessageBox.critical(self, "خطا", "بروزرسانی استخر ناموفق بود.")
 
@@ -728,4 +768,6 @@ class MinerDetailsDialog(QDialog):
     def closeEvent(self, event):
         # Stop background refresh timers
         self.timer.stop()
+        if self.refresh_worker and self.refresh_worker.isRunning():
+            self.refresh_worker.terminate()
         super().closeEvent(event)

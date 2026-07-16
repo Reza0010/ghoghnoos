@@ -1,11 +1,20 @@
 """
 FixBoard Miner Manager - General Utility Helpers
 Contains networking utilities, unit formatters, and range parsers.
+Now supports automatic active local network subnets detection.
 """
 
 import re
+import socket
 import ipaddress
-from typing import List
+from typing import List, Set
+
+# Try importing psutil for comprehensive interface listing
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 def validate_ip(ip_str: str) -> bool:
     """Validates if the provided string is a valid IPv4 address."""
@@ -14,6 +23,70 @@ def validate_ip(ip_str: str) -> bool:
         return True
     except ValueError:
         return False
+
+def detect_local_subnets() -> List[str]:
+    """
+    Automatically detects all active local IPv4 subnets (e.g., ['192.168.1.1-254', '192.168.8.1-254']).
+    Combines psutil (if available) and standard socket lookups to bypass restrictions.
+    """
+    subnets: Set[str] = set()
+
+    # Method 1: Using psutil (Very reliable for subnets/netmasks)
+    if HAS_PSUTIL:
+        try:
+            interfaces = psutil.net_if_addrs()
+            for name, addrs in interfaces.items():
+                for addr in addrs:
+                    if addr.family == socket.AF_INET: # IPv4
+                        ip = addr.address
+                        netmask = addr.netmask
+                        if ip and not ip.startswith("127."):
+                            # Generate subnet string
+                            try:
+                                if netmask:
+                                    network = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
+                                else:
+                                    network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+
+                                # Convert CIDR representation to 1-254 range representation for scanner compatibility
+                                prefix = str(network.network_address).rsplit('.', 1)[0]
+                                subnets.add(f"{prefix}.1-254")
+                            except ValueError:
+                                pass
+        except Exception:
+            pass
+
+    # Method 2: Standard Socket fallback (Fallback if psutil is disabled)
+    try:
+        # Get hostname of local machine
+        hostname = socket.gethostname()
+        # Retrieve all IP addresses associated with this host
+        addr_infos = socket.getaddrinfo(hostname, None, socket.AF_INET)
+        for info in addr_infos:
+            ip = info[4][0]
+            if ip and not ip.startswith("127."):
+                prefix = ip.rsplit('.', 1)[0]
+                subnets.add(f"{prefix}.1-254")
+    except Exception:
+        pass
+
+    # Method 3: Socket connection route probe
+    try:
+        # Connect to a dummy external IP (doesn't send packet) to identify outbound interface
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            if local_ip and not local_ip.startswith("127."):
+                prefix = local_ip.rsplit('.', 1)[0]
+                subnets.add(f"{prefix}.1-254")
+    except Exception:
+        pass
+
+    # Default fallback in case of no active network detected
+    if not subnets:
+        subnets.add("192.168.1.1-254")
+
+    return sorted(list(subnets))
 
 def parse_ip_range(ip_range_str: str) -> List[str]:
     """

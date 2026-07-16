@@ -1,12 +1,12 @@
 """
-FixBoard Miner Manager - Authentication Dialog
-Displays a modern credentials modal to authenticate with the specific miner.
-Supports default credential templates and verifies credentials via real TCP socket / HTTP handshakes.
+FixBoard Miner Manager - Authentication Dialog (Non-Blocking)
+Utilizes a background QThread (LoginWorker) to perform socket / SSH connection checks
+to avoid freezing or hanging the PySide6 main GUI thread during connection attempts.
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame)
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QThread, Signal, Slot
 from PySide6.QtGui import QColor, QFont
 
 from database.db_manager import DatabaseManager
@@ -15,12 +15,72 @@ from miners.whatsminer_api import WhatsMinerSecureAPI
 from miners.ssh_api import SSHFallbackAPI
 from miners.http_api import HTTPFallbackAPI
 
+class LoginWorker(QThread):
+    """
+    Performs network authentication in a background worker thread to prevent any UI freezing.
+    """
+    success = Signal(str, str) # Emits (username, password)
+    failed = Signal(str)       # Emits error message
+
+    def __init__(self, ip: str, brand: str, username: str, password: str):
+        super().__init__()
+        self.ip = ip
+        self.brand = brand
+        self.username = username
+        self.password = password
+
+    def run(self):
+        success = False
+        err_msg = ""
+
+        # Authenticate using appropriate mechanism
+        if self.brand == "WhatsMiner":
+            # For Whatsminer, try secure token api check or SSH fallback
+            ws_api = WhatsMinerSecureAPI(self.ip, timeout=3.0)
+            salt = ws_api.extract_salt()
+            if salt:
+                success = True
+            else:
+                # Try SSH handshake
+                ssh = SSHFallbackAPI(self.ip, self.username, self.password, timeout=3.0)
+                login_ok, _ = ssh.execute_command("echo 1")
+                if login_ok:
+                    success = True
+                else:
+                    err_msg = "خطا در برقراری ارتباط با پورت API 4433 یا SSH واتس‌ماینر."
+        else:
+            # Antminer: standard SSH verification or HTTP CGI Basic Auth verification
+            ssh = SSHFallbackAPI(self.ip, self.username, self.password, timeout=3.0)
+            login_ok, _ = ssh.execute_command("echo 1")
+            if login_ok:
+                success = True
+            else:
+                # Try HTTP CGI validation
+                http_api = HTTPFallbackAPI(self.ip, self.username, self.password, timeout=3.0)
+                http_ok, _ = http_api.send_request("/cgi-bin/get_status.cgi")
+                if http_ok:
+                    success = True
+                else:
+                    # Antminer CGMiner privilege check
+                    cg_api = CGMinerAPI(self.ip, timeout=3.0)
+                    if cg_api.get_summary() is not None:
+                        success = True
+                    else:
+                        err_msg = "نام کاربری/رمز عبور اشتباه است یا پورت‌های ارتباطی دستگاه مسدود می‌باشند."
+
+        if success:
+            self.success.emit(self.username, self.password)
+        else:
+            self.failed.emit(err_msg)
+
+
 class LoginDialog(QDialog):
     def __init__(self, miner_ip: str, parent=None):
         super().__init__(parent)
         self.ip = miner_ip
         self.db = DatabaseManager()
         self.authenticated = False
+        self.worker = None
 
         self.setWindowTitle(f"ورود به پنل ماینر - {self.ip}")
         self.setFixedSize(QSize(360, 280))
@@ -173,69 +233,49 @@ class LoginDialog(QDialog):
 
     def verify_and_save_credentials(self):
         """
-        Attempts a genuine connection test using the specified credentials.
-        Only allows panel entry if the login is successful.
+        Starts a background LoginWorker thread to verify credentials.
+        Keeps GUI completely responsive with animated state change.
         """
         username = self.user_input.text().strip()
         password = self.pass_input.text()
 
-        self.btn_login.setEnabled(False)
-        self.btn_login.setText("در حال بررسی...")
-        # Process events to show UI text change
-        self.parent().repaint() if self.parent() else None
-
-        # Determine brand using database record
+        # Retrieve brand
         miner_record = self.db.get_miner_by_ip(self.ip)
         brand = miner_record.get("brand", "Antminer") if miner_record else "Antminer"
 
-        success = False
-        err_msg = ""
+        # Disable inputs and update button state
+        self.btn_login.setEnabled(False)
+        self.btn_login.setText("در حال بررسی اتصال...")
+        self.user_input.setEnabled(False)
+        self.pass_input.setEnabled(False)
+        self.preset_combo.setEnabled(False)
 
-        # Authenticate using appropriate mechanism
-        # Whatsminer Token verification or SSH handshake verification
-        if brand == "WhatsMiner":
-            # For Whatsminer, try secure token api check or SSH fallback
-            ws_api = WhatsMinerSecureAPI(self.ip)
-            salt = ws_api.extract_salt()
-            if salt:
-                # Retrieve miner status using credentials
-                success = True
-            else:
-                # Try SSH handshake
-                ssh = SSHFallbackAPI(self.ip, username, password)
-                login_ok, _ = ssh.execute_command("echo 1")
-                if login_ok:
-                    success = True
-                else:
-                    err_msg = "خطا در برقراری ارتباط SSH با واتس‌ماینر. لطفاً اطلاعات را بررسی کنید."
-        else:
-            # Antminer: standard SSH verification or HTTP CGI Basic Auth verification
-            ssh = SSHFallbackAPI(self.ip, username, password)
-            login_ok, _ = ssh.execute_command("echo 1")
-            if login_ok:
-                success = True
-            else:
-                # Try HTTP CGI validation
-                http_api = HTTPFallbackAPI(self.ip, username, password)
-                http_ok, status_body = http_api.send_request("/cgi-bin/get_status.cgi")
-                if http_ok:
-                    success = True
-                else:
-                    # Antminer CGMiner privilege check
-                    cg_api = CGMinerAPI(self.ip)
-                    if cg_api.get_summary() is not None:
-                        success = True
-                    else:
-                        err_msg = "نام کاربری یا رمز عبور نامعتبر است. دسترسی رد شد."
+        # Launch QThread background worker
+        self.worker = LoginWorker(self.ip, brand, username, password)
+        self.worker.success.connect(self.on_auth_success)
+        self.worker.failed.connect(self.on_auth_failed)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.start()
 
+    @Slot(str, str)
+    def on_auth_success(self, username, password):
+        """Callback from background thread indicating successful login verification."""
+        self.db.update_miner_credentials(self.ip, username, password)
+        self.db.log_action("AUTHENTICATE_MINER", self.ip, "SUCCESS", "Credentials verified successfully via non-blocking login")
+        self.authenticated = True
+        self.accept()
+
+    @Slot(str)
+    def on_auth_failed(self, err_msg):
+        """Callback from background thread indicating failed login verification."""
+        # Restore inputs
         self.btn_login.setEnabled(True)
         self.btn_login.setText("بررسی و ورود")
+        self.user_input.setEnabled(True)
+        self.pass_input.setEnabled(True)
+        self.preset_combo.setEnabled(True)
 
-        if success:
-            # Save to SQLite
-            self.db.update_miner_credentials(self.ip, username, password)
-            self.db.log_action("AUTHENTICATE_MINER", self.ip, "SUCCESS", "Credentials verified successfully")
-            self.authenticated = True
-            self.accept()
-        else:
-            QMessageBox.critical(self, "خطای احراز هویت", err_msg or "اطلاعات وارد شده اشتباه است یا پورت‌های ارتباطی دستگاه مسدود می‌باشند.")
+        QMessageBox.critical(
+            self, "خطای احراز هویت",
+            err_msg or "اطلاعات وارد شده اشتباه است یا پورت‌های ارتباطی دستگاه مسدود می‌باشند."
+        )
