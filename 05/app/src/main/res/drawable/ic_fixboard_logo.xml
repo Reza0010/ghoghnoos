@@ -1,0 +1,63 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- Dark Background Circle -->
+    <path
+        android:pathData="M64,64m-60,0a60,60 0 1,0 120,0a60,60 0 1,0 -120,0"
+        android:fillColor="#1A1C23" />
+
+    <!-- Outer Golden Ring -->
+    <path
+        android:pathData="M64,64m-54,0a54,54 0 1,0 108,0a54,54 0 1,0 -108,0"
+        android:strokeWidth="3"
+        android:strokeColor="#FFD700" />
+
+    <!-- Circuit Board Accent Lines -->
+    <path
+        android:pathData="M24,64 L40,64 L48,56 L64,56"
+        android:strokeWidth="2"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M104,64 L88,64 L80,72 L64,72"
+        android:strokeWidth="2"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M64,24 L64,40 L56,48 L56,64"
+        android:strokeWidth="2"
+        android:strokeColor="#FFD700"
+        android:strokeLineCap="round" />
+
+    <!-- Circuit Nodes -->
+    <path
+        android:pathData="M24,64m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"
+        android:fillColor="#00E5FF" />
+    <path
+        android:pathData="M104,64m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"
+        android:fillColor="#00E5FF" />
+    <path
+        android:pathData="M64,24m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"
+        android:fillColor="#FFD700" />
+
+    <!-- Wrench / Tool Center Emblem -->
+    <path
+        android:pathData="M52,76 L76,52 M70,46 C74,42 80,42 84,46 C88,50 88,56 84,60 L78,54 M50,74 C46,78 40,78 36,74 C32,70 32,64 36,60 L42,66"
+        android:strokeWidth="4"
+        android:strokeColor="#FFD700"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:pathData="M48,80 L80,48"
+        android:strokeWidth="5"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round" />
+
+</vector>
