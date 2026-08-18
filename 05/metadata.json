@@ -1,6 +1,0 @@
-{
-  "name": "FixBoard Scanner",
-  "description": "ASIC miner local network scanner and real-time dashboard for Whatsminer devices.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
