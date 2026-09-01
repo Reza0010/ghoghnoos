@@ -1,0 +1,12 @@
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite Database
+*.db
+
+# Log files
+*.log
+logs/
