@@ -1,0 +1,53 @@
+name: fixboard_app
+description: "A professional Android application for Fixboard - Miner repair tutorials."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.5.1
+  firebase_core: ^3.10.1
+  firebase_auth: ^5.4.1
+  cloud_firestore: ^5.6.1
+  firebase_storage: ^12.3.6
+  firebase_messaging: ^15.2.1
+  sqflite: ^2.4.1
+  path_provider: ^2.1.5
+  flutter_markdown: ^0.7.4+1
+  cached_network_image: ^3.4.1
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.3.5
+  video_player: ^2.9.2
+  chewie: ^1.8.5
+  intl: ^0.20.2
+  url_launcher: ^6.3.1
+  flutter_svg: ^2.0.10+1
+  animate_do: ^3.3.4
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/videos/
+
+  # Note: You would add custom Persian fonts here like Vazirmatn or IRANSans
+  # fonts:
+  #   - family: Vazirmatn
+  #     fonts:
+  #       - asset: assets/fonts/Vazirmatn-Regular.ttf
+  #       - asset: assets/fonts/Vazirmatn-Bold.ttf
+  #         weight: 700
