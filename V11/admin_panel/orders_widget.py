@@ -91,6 +91,19 @@ class OrderDetailDialog(QDialog):
         
         header_layout.addWidget(title)
         header_layout.addStretch()
+
+        btn_copy_ship = QPushButton(" کپی پستی")
+        btn_copy_ship.setIcon(qta.icon("fa5s.copy", color="white"))
+        btn_copy_ship.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; border-radius: 5px; padding: 5px 10px;")
+        btn_copy_ship.clicked.connect(self.copy_shipping_info)
+
+        btn_pdf = QPushButton(" PDF")
+        btn_pdf.setIcon(qta.icon("fa5s.file-pdf", color="white"))
+        btn_pdf.setStyleSheet(f"background: {DANGER_COLOR}; color: white; border-radius: 5px; padding: 5px 10px;")
+        btn_pdf.clicked.connect(lambda: self.parent_widget.save_invoice_pdf(self.order_data['id']))
+
+        header_layout.addWidget(btn_copy_ship)
+        header_layout.addWidget(btn_pdf)
         header_layout.addWidget(btn_print)
         header_layout.addWidget(btn_close)
         layout.addWidget(header)
@@ -216,6 +229,17 @@ class OrderDetailDialog(QDialog):
         lay.addWidget(btn)
         lay.addStretch()
         return w
+
+    def copy_shipping_info(self):
+        text = (
+            f"📦 گیرنده: {self.order_data.get('user_name')}\n"
+            f"📞 تلفن: {self.order_data.get('phone')}\n"
+            f"📮 کد پستی: {self.order_data.get('postal_code') or '-'}\n"
+            f"📍 آدرس: {self.order_data.get('address')}"
+        )
+        QApplication.clipboard().setText(text)
+        if hasattr(self.parent_widget.window(), 'show_toast'):
+            self.parent_widget.window().show_toast("اطلاعات پستی کپی شد")
 
     def do_action(self, status):
         self.close()
@@ -493,8 +517,14 @@ class OrdersWidget(QWidget):
             QMessageBox.warning(self, "هشدار", "کد رهگیری الزامی است.")
 
     @asyncSlot()
-    async def refresh_data(self):
-        self.btn_refresh.setEnabled(False)
+    async def refresh_data(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+            self.btn_refresh.setEnabled(False)
+        except (RuntimeError, AttributeError):
+            return
+
         self.search_inp.clear()
         for col in self.columns_map.values(): col.clear_all()
 
@@ -525,7 +555,10 @@ class OrdersWidget(QWidget):
         except Exception as e:
             logger.error(f"Refresh Error: {e}")
         finally:
-            self.btn_refresh.setEnabled(True)
+            try:
+                self.btn_refresh.setEnabled(True)
+            except RuntimeError:
+                pass
 
     def _add_card_to_column(self, data):
         status = data['status']
@@ -548,7 +581,13 @@ class OrdersWidget(QWidget):
         try:
             def db_op():
                 with next(get_db()) as db:
-                    order = db.query(crud.models.Order).get(order_id)
+                    # استفاده از eager loading برای دسترسی در ترد دیگر
+                    from sqlalchemy.orm import selectinload
+                    order = db.query(crud.models.Order).options(
+                        selectinload(crud.models.Order.items).joinedload(crud.models.OrderItem.product),
+                        selectinload(crud.models.Order.user)
+                    ).filter_by(id=order_id).first()
+
                     if order:
                         order.status = new_status
                         if tracking_code: order.tracking_code = tracking_code
@@ -559,6 +598,11 @@ class OrdersWidget(QWidget):
             updated_order = await loop.run_in_executor(None, db_op)
 
             if updated_order and updated_order.user:
+                # اگر تایید شد و کالای دیجیتال داشت، ارسال کن
+                if new_status in ['approved', 'paid']:
+                    from bot.utils import send_digital_items
+                    await send_digital_items(self.bot_app, self.rubika_client, updated_order)
+
                 user_platform = updated_order.user.platform
                 user_id = updated_order.user_id
 
@@ -591,17 +635,61 @@ class OrdersWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"{e}")
             
     @asyncSlot()
-    async def show_order_details(self, order_id):
+    async def show_order_details(self, order_id, *args, **kwargs):
         order_data = next((o for o in self.all_orders_cache if o['id'] == order_id), None)
         if order_data:
             dialog = OrderDetailDialog(order_data, self)
             dialog.exec()        
 
     def print_invoice(self, order_id):
+        html_content = self._get_invoice_html(order_id)
+        if not html_content: return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        preview = QPrintPreviewDialog(printer, self)
+        preview.setWindowTitle(f"چاپ فاکتور سفارش #{order_id}")
+        preview.setMinimumSize(1000, 800)
+
+        def handle_paint(printer_obj):
+            doc = QTextDocument()
+            self._apply_font_to_doc(doc)
+            doc.setHtml(html_content)
+            doc.print(printer_obj)
+
+        preview.paintRequested.connect(handle_paint)
+        preview.exec()
+
+    def save_invoice_pdf(self, order_id):
+        html_content = self._get_invoice_html(order_id)
+        if not html_content: return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره PDF", f"Invoice_{order_id}.pdf", "PDF Files (*.pdf)")
+        if not file_path: return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(file_path)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+
+        doc = QTextDocument()
+        self._apply_font_to_doc(doc)
+        doc.setHtml(html_content)
+        doc.print(printer)
+        if hasattr(self.window(), 'show_toast'): self.window().show_toast("فایل PDF ذخیره شد.")
+
+    def _apply_font_to_doc(self, doc):
+        font_path = BASE_DIR / "fonts" / "Vazirmatn.ttf"
+        if font_path.exists():
+             doc.setDefaultFont(QFont("Vazirmatn", 10))
+        else:
+             doc.setDefaultFont(QFont("Tahoma", 10))
+
+    def _get_invoice_html(self, order_id):
         try:
             with next(get_db()) as db:
                 order = crud.get_order_by_id(db, order_id)
-                if not order: return
+                if not order: return None
 
                 items = []
                 for item in order.items:
@@ -620,35 +708,26 @@ class OrdersWidget(QWidget):
 
                 date_str = order.created_at.strftime("%Y/%m/%d - %H:%M")
                 total = order.total_amount
+                return self._generate_invoice_html(order_id, date_str, user_info, items, total)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Database error: {e}")
-            return
-
-        html_content = self._generate_invoice_html(order_id, date_str, user_info, items, total)
-
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-        preview = QPrintPreviewDialog(printer, self)
-        preview.setWindowTitle(f"چاپ فاکتور سفارش #{order_id}")
-        preview.setMinimumSize(1000, 800)
-
-        def handle_paint(printer_obj):
-            doc = QTextDocument()
-            font_path = BASE_DIR / "fonts" / "Vazirmatn.ttf"
-            if font_path.exists():
-                 doc.setDefaultFont(QFont("Vazirmatn", 10))
-            else:
-                 doc.setDefaultFont(QFont("Tahoma", 10))
-            doc.setHtml(html_content)
-            doc.print(printer_obj)
-
-        preview.paintRequested.connect(handle_paint)
-        preview.exec()
+            return None
 
     def _generate_invoice_html(self, order_id, date, user, items, total):
         rows = ""
         for idx, item in enumerate(items, 1):
             rows += f"""<tr><td style="text-align: center;">{idx}</td><td>{item['name']}</td><td style="text-align: center;">{item['qty']}</td><td style="text-align: right;">{int(item['price']):,}</td><td style="text-align: right;">{int(item['total']):,}</td></tr>"""
+
+        # دریافت لوگو
+        with next(get_db()) as db:
+            logo_path = crud.get_setting(db, "branding_logo", "")
+            shop_name = crud.get_setting(db, "tg_shop_name", "فروشگاه ققنوس")
+
+        logo_html = ""
+        if logo_path:
+            full_logo_path = Path(BASE_DIR) / logo_path
+            if full_logo_path.exists():
+                logo_html = f"<img src='file:///{full_logo_path}' width='80' height='80' style='margin-bottom: 10px;'>"
 
         return f"""
         <!DOCTYPE html>
@@ -663,7 +742,11 @@ class OrdersWidget(QWidget):
         </style>
         </head>
         <body>
-        <div class="header"><h1>فاکتور فروش</h1><p>تاریخ: {date}</p></div>
+        <div class="header">
+            {logo_html}
+            <h1>فاکتور فروش {shop_name}</h1>
+            <p>تاریخ: {date}</p>
+        </div>
         <div style="margin-bottom: 20px;">
         <p><strong>خریدار:</strong> {user['name']}</p>
         <p><strong>تلفن:</strong> {user['phone']}</p>
@@ -680,7 +763,12 @@ class OrdersWidget(QWidget):
         """
 
     @asyncSlot()
-    async def export_to_excel(self):
+    async def export_to_excel(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
+
         if pd is None:
             QMessageBox.warning(self, "خطا", "کتابخانه pandas نصب نیست.")
             return
@@ -705,34 +793,3 @@ class OrdersWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "خطا", str(e))
 
-    @asyncSlot()
-    async def show_order_details(self, order_id):
-        try:
-            with next(get_db()) as db:
-                order = crud.get_order_by_id(db, order_id)
-                if not order: return
-
-                details = f"""
-                📦 <b>جزئیات سفارش #{order.id}</b>
-                
-                👤 <b>مشتری:</b> {order.user.full_name if order.user else 'ناشناس'}
-                📱 <b>تلفن:</b> {order.phone_number or '-'}
-                📍 <b>آدرس:</b> {order.shipping_address or '-'}
-                📮 <b>کد پستی:</b> {order.postal_code or '-'}
-                
-                💰 <b>مبلغ کل:</b> {int(order.total_amount):,} تومان
-                🚚 <b>هزینه ارسال:</b> {int(order.shipping_cost):,} تومان
-                🏷 <b>وضعیت:</b> {order.status}
-                🕒 <b>تاریخ:</b> {order.created_at.strftime('%Y/%m/%d %H:%M')}
-                """
-
-                if order.tracking_code:
-                    details += f"\n📦 <b>کد رهگیری:</b> <code>{order.tracking_code}</code>"
-
-                details += "\n\n<b>--- محصولات ---</b>\n"
-                for item in order.items:
-                    details += f"\n🔸 {item.product.name if item.product else 'حذف شده'}\n   {item.quantity} × {int(item.price_at_purchase):,} = {int(item.quantity * item.price_at_purchase):,} ت"
-
-                QMessageBox.information(self, f"جزئیات سفارش #{order_id}", details)
-        except Exception as e:
-            QMessageBox.critical(self, "خطا", f"دریافت جزئیات با خطا مواجه شد: {str(e)}")

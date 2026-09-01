@@ -12,20 +12,32 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import (
     Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
 )
+from qasync import asyncSlot
 from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon
 import qtawesome as qta
 
 from config import BASE_DIR
 
 # ایمپورت ویجت‌ها
+from .command_palette import CommandPalette
 from .dashboard_widget import DashboardWidget
 from .categories_widget import CategoriesWidget
 from .products_widget import ProductsWidget
 from .orders_widget import OrdersWidget
 from .settings_widget import SettingsWidget
 from .users_widget import UsersWidget
+from .tickets_widget import TicketsWidget
 
 logger = logging.getLogger("MainWindow")
+
+# پالت رنگی هماهنگ
+BG_COLOR = "#16161a"
+PANEL_BG = "#242629"
+ACCENT_COLOR = "#7f5af0"
+DANGER_COLOR = "#ef4565"
+TEXT_MAIN = "#fffffe"
+TEXT_SUB = "#94a1b2"
+BORDER_COLOR = "#2e2e38"
 
 class MainWindow(QMainWindow):
     PAGE_MAP = {
@@ -33,12 +45,14 @@ class MainWindow(QMainWindow):
         1: ("محصولات", "fa5s.box-open"),
         2: ("دسته‌بندی‌ها", "fa5s.layer-group"),
         3: ("سفارشات", "fa5s.clipboard-list"),
-        4: ("کاربران", "fa5s.users"),
-        5: ("تنظیمات", "fa5s.cog"),
+        4: ("تیکت‌ها", "fa5s.ticket-alt"),
+        5: ("کاربران", "fa5s.users"),
+        6: ("تنظیمات", "fa5s.cog"),
     }
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
         super().__init__()
+        self._is_shutting_down = False
         self.bot_application = bot_application
         self.rubika_client = rubika_client
         self.base_path = Path(BASE_DIR) / "admin_panel"
@@ -60,17 +74,24 @@ class MainWindow(QMainWindow):
             lambda: ProductsWidget(bot_app=self.bot_application),
             lambda: CategoriesWidget(),
             lambda: OrdersWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
+            lambda: TicketsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
             lambda: UsersWidget(),
             lambda: SettingsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client)
         ]
         
         self.setup_ui()
         self.load_stylesheet()
+        self.setup_palette()
         
         # تایمر بررسی وضعیت اتصال
         self.check_connection_timer = QTimer(self)
         self.check_connection_timer.timeout.connect(self._safe_check_connection)
         self.check_connection_timer.start(15000) # هر ۱۵ ثانیه
+
+        # تایمر اعلان‌های جدید
+        self.notification_timer = QTimer(self)
+        self.notification_timer.timeout.connect(self._check_new_notifications)
+        self.notification_timer.start(30000) # هر ۳۰ ثانیه
 
         self._toast = None
 
@@ -93,6 +114,40 @@ class MainWindow(QMainWindow):
         
         if not font_loaded:
             logger.warning("Vazirmatn font not found. Using system default.")
+
+    def setup_palette(self):
+        self.palette = CommandPalette(self)
+        self.palette.action_triggered.connect(self._on_palette_action)
+
+    def _on_palette_action(self, category, data):
+        if category == 'nav':
+            self.switch_page(data)
+            self.nav_group.button(data).setChecked(True)
+        elif category == 'product':
+            self.switch_page(1) # تب محصولات
+            self.nav_group.button(1).setChecked(True)
+            # در اینجا می‌توان مستقیماً دیالوگ ویرایش محصول را هم باز کرد
+            if hasattr(self.pages.get(1), 'open_editor_dialog'):
+                self.pages[1].open_editor_dialog(data)
+        elif category == 'user':
+            self.switch_page(5)
+            self.nav_group.button(5).setChecked(True)
+            # اسکرول یا فیلتر به کاربر خاص در تب کاربران (اختیاری)
+        elif category == 'order':
+            self.switch_page(3)
+            self.nav_group.button(3).setChecked(True)
+        elif category == 'action':
+            if data == 'add_product':
+                self.switch_page(1)
+                self.nav_group.button(1).setChecked(True)
+                if hasattr(self.pages.get(1), 'open_editor_dialog'):
+                    self.pages[1].open_editor_dialog(None)
+
+    def keyPressEvent(self, event):
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_K:
+            self.palette.exec()
+            return
+        super().keyPressEvent(event)
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -131,8 +186,12 @@ class MainWindow(QMainWindow):
         self.app_title = QLabel("پنل ادمین")
         self.app_title.setObjectName("app_title")
         
+        self.k_hint = QLabel("Ctrl+K")
+        self.k_hint.setStyleSheet(f"color: {TEXT_SUB}; background: {BG_COLOR}; padding: 2px 5px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
+
         header_box.addWidget(self.menu_btn)
         header_box.addWidget(self.app_title)
+        header_box.addWidget(self.k_hint)
         header_box.addStretch()
         sidebar_layout.addLayout(header_box)
 
@@ -238,6 +297,16 @@ class MainWindow(QMainWindow):
         self.switch_page(0)
         self.nav_buttons[0].setChecked(True)
 
+        # بررسی رمز عبور پیش‌فرض
+        QTimer.singleShot(2000, self._check_default_password)
+
+    def _check_default_password(self):
+        from db.database import SessionLocal
+        from db import crud
+        with SessionLocal() as db:
+            if crud.get_setting(db, "panel_password", "admin") == "admin":
+                QMessageBox.warning(self, "هشدار امنیتی", "شما هنوز از رمز عبور پیش‌فرض (admin) استفاده می‌کنید.\nلطفاً برای امنیت بیشتر در بخش تنظیمات آن را تغییر دهید.")
+
     def switch_page(self, page_id):
         """مدیریت جابجایی بین صفحات با Lazy Loading"""
         if page_id not in self.pages:
@@ -269,20 +338,35 @@ class MainWindow(QMainWindow):
             if asyncio.iscoroutine(res):
                 asyncio.create_task(res)
         
-        QTimer.singleShot(100, lambda: self.show_loading_state(False))
+        QTimer.singleShot(250, lambda: self.show_loading_state(False))
 
     def show_loading_state(self, show: bool):
         if show:
             if not hasattr(self, '_loading_widget'):
-                self._loading_widget = QLabel("⏳ در حال بارگذاری...")
-                self._loading_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                self._loading_widget.setObjectName("loading_label")
+                self._loading_widget = QFrame()
+                self._loading_widget.setStyleSheet(f"background: {BG_COLOR};")
+                lay = QVBoxLayout(self._loading_widget)
+
+                # یک افکت شبیه‌ساز اسکلت
+                skeleton = QFrame()
+                skeleton.setFixedSize(600, 400)
+                skeleton.setStyleSheet(f"background: {PANEL_BG}; border-radius: 15px; border: 1px solid {BORDER_COLOR};")
+
+                self.loading_lbl = QLabel("🚀 در حال آماده‌سازی هوشمند داده‌ها...")
+                self.loading_lbl.setStyleSheet(f"color: {ACCENT_COLOR}; font-weight: bold; font-size: 16px;")
+                self.loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                lay.addStretch()
+                lay.addWidget(skeleton, 0, Qt.AlignmentFlag.AlignCenter)
+                lay.addWidget(self.loading_lbl, 0, Qt.AlignmentFlag.AlignCenter)
+                lay.addStretch()
+
                 self.content_area.addWidget(self._loading_widget)
             self.content_area.setCurrentWidget(self._loading_widget)
 
     def toggle_sidebar(self):
         width = self.sidebar.width()
-        collapsed = 70
+        collapsed = 80
         expanded = 260
         
         if width > 100:
@@ -309,6 +393,60 @@ class MainWindow(QMainWindow):
         self.anim.setEasingCurve(QEasingCurve.Type.OutQuint)
         self.anim.start()
         self.sidebar.setMaximumWidth(target)
+        self.sidebar.setMinimumWidth(target)
+
+    @asyncSlot()
+    async def _check_new_notifications(self):
+        """بررسی برای سفارشات یا تیکت‌های جدید و نمایش نقطه اعلان"""
+        if getattr(self, '_fetching_notifications', False):
+            return
+        try:
+            self._fetching_notifications = True
+            await self._fetch_notification_stats()
+        finally:
+            self._fetching_notifications = False
+
+    async def _fetch_notification_stats(self):
+        if self._is_shutting_down: return
+
+        from db.database import SessionLocal
+        from db import crud, models
+
+        # استفاده از loop ذخیره شده در کلاس یا گرفتن loop فعلی با احتیاط
+        loop = asyncio.get_running_loop()
+        def fetch():
+            try:
+                with SessionLocal() as db:
+                    new_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
+                    new_tickets = db.query(models.Ticket).filter(models.Ticket.status == 'open').count()
+                    return new_orders, new_tickets
+            except: return 0, 0
+
+        try:
+            orders_count, tickets_count = await loop.run_in_executor(None, fetch)
+            if not self._is_shutting_down:
+                self._update_sidebar_badges(orders_count, tickets_count)
+        except Exception as e:
+            logger.debug(f"Notification fetch failed: {e}")
+
+    def _update_sidebar_badges(self, orders, tickets):
+        # ایندکس ۳ سفارشات، ۴ تیکت‌ها است طبق PAGE_MAP
+        for btn in self.nav_buttons:
+            idx = self.nav_group.id(btn)
+            if idx == 3: # سفارشات
+                self._apply_badge_style(btn, orders > 0)
+            elif idx == 4: # تیکت‌ها
+                self._apply_badge_style(btn, tickets > 0)
+
+    def _apply_badge_style(self, btn, has_new):
+        current_style = btn.styleSheet()
+        if has_new:
+            # اضافه کردن یک نقطه قرمز یا تغییر حاشیه
+            btn.setStyleSheet(f"""
+                QPushButton {{ border-left: 4px solid {DANGER_COLOR}; }}
+            """)
+        else:
+            btn.setStyleSheet("") # بازگشت به استایل پیش‌فرض QSS
 
     def _safe_check_connection(self):
         """بررسی وضعیت و تغییر استایل نشانگرها"""
@@ -324,9 +462,13 @@ class MainWindow(QMainWindow):
         self.rb_indicator.setStyleSheet("")
         self.rb_indicator.setToolTip("آنلاین" if self.rubika_client else "آفلاین")
 
-    def _handle_restart_click(self):
-        self.show_toast("درخواست ریستارت ارسال شد...")
-        QTimer.singleShot(1000, lambda: self.show_toast("سرویس‌ها در حال راه‌اندازی مجدد..."))
+    @asyncSlot()
+    async def _handle_restart_click(self):
+        if hasattr(self, 'app_manager'):
+            self.show_toast("در حال بازآوری سرویس‌ها...")
+            await self.app_manager.restart_services()
+        else:
+            self.show_toast("خطا: مدیر برنامه در دسترس نیست", is_error=True)
 
     def load_stylesheet(self):
         path = self.base_path / "themes" / "dark_theme.qss"
@@ -359,12 +501,17 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(3500, self._toast.close)
 
     def closeEvent(self, event):
+        if self._is_shutting_down:
+            event.accept()
+            return
+
         reply = QMessageBox.question(
             self, 'خروج', "آیا از خروج و توقف مدیریت مطمئن هستید؟",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            self._is_shutting_down = True
             event.accept()
         else:
             event.ignore()

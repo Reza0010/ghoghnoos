@@ -161,6 +161,10 @@ def run_auto_migrations():
             "tracking_code": "VARCHAR(100)",
             "payment_receipt_photo_id": "VARCHAR(255)",
             "postal_code": "VARCHAR(20)"
+        },
+        "proxies": {
+            "raw_link": "TEXT",
+            "config_type": "VARCHAR(50)"
         }
     }
 

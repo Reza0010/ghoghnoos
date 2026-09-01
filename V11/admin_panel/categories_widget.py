@@ -290,7 +290,12 @@ class CategoriesWidget(QWidget):
             self._data_loaded = True
 
     @asyncSlot()
-    async def refresh_data(self):
+    async def refresh_data(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
+
         self.tree.clear()
         loop = asyncio.get_running_loop()
         try:
@@ -394,8 +399,11 @@ class CategoriesWidget(QWidget):
             search(self.tree.topLevelItem(i))
 
     @asyncSlot()
-    async def save_category(self):
-        name = self.inp_name.text().strip()
+    async def save_category(self, *args, **kwargs):
+        try:
+            name = self.inp_name.text().strip()
+        except RuntimeError: return
+
         if not name:
             return QMessageBox.warning(self, "خطا", "نام دسته‌بندی الزامی است.")
 
@@ -419,8 +427,10 @@ class CategoriesWidget(QWidget):
             QMessageBox.critical(self, "خطا", f"خطا در ذخیره‌سازی: {e}")
 
     @asyncSlot()
-    async def delete_category(self):
-        if not self.selected_cat_id: return
+    async def delete_category(self, *args, **kwargs):
+        try:
+            if not self.selected_cat_id or getattr(self.window(), '_is_shutting_down', False): return
+        except (RuntimeError, AttributeError): return
         
         msg = "آیا از حذف این دسته مطمئن هستید؟\n(کالاهای زیرمجموعه حذف نخواهند شد)"
         if QMessageBox.question(self, "تایید", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:

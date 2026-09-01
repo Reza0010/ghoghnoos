@@ -88,6 +88,12 @@ def format_dynamic_text(template: str, user_data: Dict[str, Any]) -> str:
     for key, value in replacements.items():
         text = text.replace(key, value)
     
+    # افزودن فوتر برندینگ در صورت وجود (اختیاری)
+    if user_data.get("append_footer"):
+        footer = user_data.get("bot_footer_text")
+        if footer:
+            text += f"\n\n---\n{footer}"
+
     return text
 
 # ====================================================================
@@ -99,7 +105,7 @@ ERROR_MESSAGE = (
 )
 UNKNOWN_COMMAND = "🤔 متوجه این دستور نشدم. لطفا از منوی زیر استفاده کنید."
 LOADING = "⏳ <i>در حال دریافت اطلاعات...</i>"
-WELCOME_MESSAGE = "سلام {user_name} عزیز 👋\nبه فروشگاه {shop_name} خوش آمدید."
+WELCOME_MESSAGE = "سلام {user_name} عزیز 👋\nبه مجموعه {shop_name} خوش آمدید. \n\n✨ بهترین محصولات را با ما تجربه کنید."
 
 # ====================================================================
 # برچسب دکمه‌ها (Button Labels)
@@ -110,7 +116,7 @@ SPECIAL_OFFERS_BUTTON = "🔥 پیشنهاد ویژه"
 CART_BUTTON = "🛒 سبد خرید"
 TRACK_ORDER_BUTTON = "📦 پیگیری سفارش"
 SUPPORT_BUTTON = "📞 پشتیبانی"
-ABOUT_US_BUTTON = "ℹ️ درباره ما"
+ABOUT_US_BUTTON = "🏢 درباره ما"
 BACK_BUTTON = "🔙 بازگشت"
 MAIN_MENU_BUTTON = "🏠 صفحه اصلی"
 USER_PROFILE_BUTTON = "👤 حساب کاربری"
@@ -121,16 +127,18 @@ USER_PROFILE_BUTTON = "👤 حساب کاربری"
 CATEGORY_SELECT = "📂 <b>لطفاً دسته‌بندی مورد نظر را انتخاب کنید:</b>"
 PRODUCT_LIST = "📋 <b>لیست محصولات گروه:</b>\n{breadcrumbs}"
 PRODUCT_DETAILS = """
-✨ <b>{name}</b>
+💎 <b>{name}</b>
 {divider}
-📝 <b>توضیحات:</b>
-{description}
+📜 <b>توضیحات محصول:</b>
+<i>{description}</i>
 
 🏷 <b>برند:</b> <code>{brand}</code>
-📦 <b>وضعیت:</b> {stock_status}
+📦 <b>وضعیت موجودی:</b> {stock_status}
 {divider}
-💰 <b>قیمت:</b> {price_formatted}
+💰 <b>قیمت نهایی:</b> {price_formatted}
 {cart_preview}
+
+🚀 <b>تضمین کیفیت و اصالت کالا</b>
 """
 SEARCH_PROMPT = "🔍 <b>چه محصولی نیاز دارید؟</b>\nنام محصول، برند یا تگ مورد نظر را بنویسید:"
 SEARCH_NO_RESULT = "❌ <b>نتیجه‌ای یافت نشد!</b>\nلطفاً کلمات کلیدی دیگری را امتحان کنید."
@@ -140,7 +148,7 @@ SEARCH_RESULT_TITLE = "🔎 نتایج جستجو برای: <code>{query}</code>
 # سبد خرید و علاقه‌مندی
 # ====================================================================
 CART_EMPTY = "🛒 <b>سبد خرید شما خالی است!</b>\nمی‌توانید از بخش محصولات کالا اضافه کنید."
-CART_TITLE = "🛒 <b>لیست خرید شما:</b>\n"
+CART_TITLE = "🛒 <b>سبد خرید شما:</b>\n"
 CART_ITEM_ROW = "🔸 <b>{name}</b>\n└ 🔢 {quantity} عدد × {total_formatted}\n"
 CART_TOTAL = "────────────────\n💵 <b>مبلغ قابل پرداخت: {total_amount_formatted}</b>"
 ADDED_TO_CART = "✅ محصول به سبد خرید اضافه شد."
@@ -160,6 +168,7 @@ USER_PROFILE_DASHBOARD = """
 🆔 کد کاربری: <code>{user_id}</code>
 👤 نام: <b>{full_name}</b>
 📱 موبایل: <code>{phone}</code>
+💎 امتیاز وفاداری: <b>{points}</b>
 
 📊 <b>آمار خرید:</b>
 📅 عضویت: <code>{join_date}</code>
@@ -167,6 +176,20 @@ USER_PROFILE_DASHBOARD = """
 💰 مجموع خرید: <b>{total_spent}</b>
 {divider}
 👇 تنظیمات حساب:
+"""
+USER_REFERRAL_PAGE = """
+💎 <b>سیستم کسب درآمد و دعوت از دوستان</b>
+{divider}
+با دعوت از دوستان خود به فروشگاه ما، از هر خرید آن‌ها امتیاز هدیه بگیرید!
+
+🎁 <b>مزایای شما:</b>
+• دریافت امتیاز به محض اولین خرید زیرمجموعه
+• امکان استفاده از امتیازها برای تخفیف در خریدهای بعدی
+
+🔗 <b>لینک دعوت اختصاصی شما:</b>
+<code>{ref_link}</code>
+
+👥 <b>تعداد دعوت‌های شما:</b> {ref_count} نفر
 """
 ORDER_HISTORY_LIST = """
 📦 <b>تاریخچه سفارشات اخیر</b>
@@ -210,11 +233,11 @@ def get_checkout_payment(total: Any, shipping_cost: str, final_total: Any, card_
 
 ORDER_CONFIRMATION = """
 🎉 <b>سفارش شما با موفقیت ثبت شد!</b> 😍
-🆔 کد پیگیری: <code>{order_id}</code>
+🆔 شماره سفارش: <code>{order_id}</code>
 {divider}
 {timeline}
 {divider}
-<i>به محض تغییر وضعیت، اطلاع‌رسانی انجام خواهد شد.</i>
+🙏 از اعتماد شما متشکریم. وضعیت سفارش از طریق همین ربات اطلاع‌رسانی خواهد شد.
 """
 
 # ====================================================================

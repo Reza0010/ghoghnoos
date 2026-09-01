@@ -1,9 +1,10 @@
 import logging
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    MessageHandler, 
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    InlineQueryHandler,
     filters
 )
 from bot.error_handler import global_error_handler
@@ -12,7 +13,8 @@ from bot.handlers import (
     products_handler,
     search_handler,
     cart_handler,
-    main_menu_handler
+    main_menu_handler,
+    support_handler
 )
 
 logger = logging.getLogger(__name__)
@@ -32,8 +34,10 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # 1. هندلرهای مکالمه (Conversation Handlers) - اولویت ۱
     # ==================================================================
     # این موارد باید حتماً قبل از هندلرهای Callback معمولی باشند
+    app.add_handler(InlineQueryHandler(search_handler.handle_inline_query))
     app.add_handler(search_handler.search_conversation_handler)
     app.add_handler(cart_handler.checkout_conversation_handler)
+    app.add_handler(support_handler.support_conversation_handler)
 
     # ==================================================================
     # 2. نقطه شروع و منوی اصلی - اولویت ۲
@@ -52,13 +56,13 @@ def setup_application_handlers(app: Application, admin_handler=None):
 
     # لیست محصولات و مدیریت صفحه‌بندی
     app.add_handler(CallbackQueryHandler(
-        products_handler.list_products, 
+        products_handler.list_products,
         pattern=r"^(prod:list:|noop)$"
     ))
 
     # نمایش جزئیات کامل یک محصول
     app.add_handler(CallbackQueryHandler(
-        products_handler.show_product_details, 
+        products_handler.show_product_details,
         pattern=r"^prod:show:\d+$"
     ))
 
@@ -85,6 +89,7 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # ==================================================================
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_user_profile, pattern=r"^user_profile$"))
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_order_history, pattern=r"^order_history$"))
+    app.add_handler(CallbackQueryHandler(main_menu_handler.handle_user_referral, pattern=r"^user_referral$"))
 
     # مدیریت آدرس‌ها
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_user_addresses, pattern=r"^user_addresses$"))
@@ -93,8 +98,13 @@ def setup_application_handlers(app: Application, admin_handler=None):
     # بخش‌های اطلاع‌رسانی
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_special_offers, pattern=r"^special_offers$"))
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_track_order, pattern=r"^track_order$"))
-    app.add_handler(CallbackQueryHandler(main_menu_handler.handle_support, pattern=r"^support$"))
+    app.add_handler(CallbackQueryHandler(support_handler.support_menu, pattern=r"^support$"))
+    app.add_handler(CallbackQueryHandler(support_handler.list_tickets, pattern=r"^ticket:list$"))
+    app.add_handler(CallbackQueryHandler(support_handler.show_ticket, pattern=r"^ticket:show:\d+$"))
     app.add_handler(CallbackQueryHandler(main_menu_handler.handle_about_us, pattern=r"^about_us$"))
+
+    # هندلر پاسخگوی خودکار کلمات کلیدی (اولویت پایین‌تر از بقیه)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler.handle_auto_reply))
 
     # ==================================================================
     # 6. پنل مدیریت و پاکسازی نهایی - اولویت ۶
@@ -102,7 +112,7 @@ def setup_application_handlers(app: Application, admin_handler=None):
     if admin_handler:
         # مدیریت تایید/رد/ارسال سفارش از داخل تلگرام توسط ادمین
         app.add_handler(CallbackQueryHandler(admin_handler, pattern=r"^adm_(approve|reject|ship):"))
-    
+
     # هندلر فال‌بک برای کال‌بک‌های تعریف نشده (بسیار مهم برای UX)
     app.add_handler(CallbackQueryHandler(_unknown_callback, pattern=r".*"))
 

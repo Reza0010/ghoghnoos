@@ -12,7 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QProgressBar, QListWidget, QListWidgetItem,
     QStackedWidget, QFrame, QScrollArea, QTimeEdit, QFileDialog, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox
+    QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox, QDialog, QGridLayout, QInputDialog, QAbstractSpinBox,
+    QSpinBox
 )
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QFont, QPen, QBrush
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QTime, QEasingCurve, pyqtProperty, QRect, QSize
@@ -20,8 +21,8 @@ from qasync import asyncSlot
 import qtawesome as qta
 
 from db.database import get_db
-from db import crud
-from config import BASE_DIR, ADMIN_USER_IDS
+from db import crud, models
+from config import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,10 @@ class SettingsWidget(QWidget):
         """)
 
         nav_items = [
+            (" تنظیمات پایه", "fa5s.network-wired"),
+            (" کدهای تخفیف", "fa5s.ticket-alt"),
+            (" مدیریت پروکسی", "fa5s.shield-alt"),
+            (" پاسخگوی خودکار", "fa5s.robot"),
             (" ربات تلگرام", "fa5b.telegram"),
             (" ربات روبیکا", "fa5s.infinity"),
             (" مالی و ارسال", "fa5s.credit-card"),
@@ -208,6 +213,10 @@ class SettingsWidget(QWidget):
 
         # --- صفحات محتوا ---
         self.pages_stack = QStackedWidget()
+        self.pages_stack.addWidget(self._ui_core_page())
+        self.pages_stack.addWidget(self._ui_coupons_page())
+        self.pages_stack.addWidget(self._ui_proxy_page())
+        self.pages_stack.addWidget(self._ui_auto_reply_page())
         self.pages_stack.addWidget(self._ui_telegram_page())
         self.pages_stack.addWidget(self._ui_rubika_page())
         self.pages_stack.addWidget(self._ui_payment_page())
@@ -228,26 +237,156 @@ class SettingsWidget(QWidget):
         
     # ==================== UI Pages ====================
 
+    def _ui_core_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("background: transparent; border: none;")
+        container = QWidget(); v_box = QVBoxLayout(container); v_box.setSpacing(25)
+
+        # کارت توکن‌ها
+        card_tokens = SettingCard("توکن‌های اتصال (Bot Tokens)")
+        self.tg_token_inp = QLineEdit(); self.tg_token_inp.setPlaceholderText("Telegram Bot Token")
+        self.rb_token_inp = QLineEdit(); self.rb_token_inp.setPlaceholderText("Rubika Bot Token")
+        card_tokens.add_layout(self._form_row("توکن تلگرام:", self.tg_token_inp))
+        card_tokens.add_layout(self._form_row("توکن روبیکا:", self.rb_token_inp))
+        v_box.addWidget(card_tokens)
+
+        # کارت شبکه و پراکسی
+        card_network = SettingCard("تنظیمات شبکه و پراکسی")
+        self.proxy_url_inp = QLineEdit(); self.proxy_url_inp.setPlaceholderText("http://username:password@ip:port")
+        self.proxy_enabled = ToggleSwitch()
+        card_network.add_layout(self._form_row("استفاده از پراکسی:", self.proxy_enabled))
+        card_network.add_layout(self._form_row("آدرس پراکسی:", self.proxy_url_inp))
+        v_box.addWidget(card_network)
+
+        # کارت دسترسی ادمین‌ها
+        card_admins = SettingCard("مدیریت دسترسی ادمین‌ها")
+        self.admin_ids_main = QTextEdit(); self.admin_ids_main.setPlaceholderText("آیدی‌های عددی را با کاما جدا کنید...")
+        self.admin_ids_main.setMaximumHeight(80)
+        card_admins.add_widget(QLabel("شناسه ادمین‌های مجاز (تلگرام):"))
+        card_admins.add_widget(self.admin_ids_main)
+        v_box.addWidget(card_admins)
+
+        btn_save = QPushButton("💾 ذخیره تنظیمات پایه")
+        btn_save.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 12px; border-radius: 10px; font-weight: bold;")
+        btn_save.clicked.connect(self.save_settings)
+        v_box.addWidget(btn_save)
+
+        btn_restart = QPushButton("🔄 راه‌اندازی مجدد سرویس‌ها")
+        btn_restart.setStyleSheet(f"background: {PANEL_BG}; border: 1px solid {WARNING_COLOR}; color: {WARNING_COLOR}; padding: 10px; border-radius: 10px;")
+        btn_restart.clicked.connect(self.restart_all_services)
+        v_box.addWidget(btn_restart)
+
+        v_box.addStretch()
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        return page
+
+    def _ui_coupons_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("مدیریت کدهای تخفیف (Coupons)")
+        self.coupon_table = QTableWidget(0, 6)
+        self.coupon_table.setHorizontalHeaderLabels(["کد", "تخفیف", "ظرفیت", "استفاده شده", "تاریخ انقضا", "عملیات"])
+        self.coupon_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.coupon_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        btn_add = QPushButton(" ➕ تعریف کد تخفیف جدید")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.clicked.connect(self.show_add_coupon_dialog)
+
+        card.add_widget(self.coupon_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
+
+        QTimer.singleShot(1000, self.load_coupons)
+        return page
+
+    def _ui_proxy_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30); layout.setSpacing(20)
+
+        card = SettingCard("مدیریت پروکسی‌های پیشرفته (Hiddify / V2Ray / Standard)")
+
+        self.proxy_table = QTableWidget(0, 6)
+        self.proxy_table.setHorizontalHeaderLabels(["نام", "پروتکل", "آدرس:پورت", "وضعیت", "تأخیر", "عملیات"])
+        self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.proxy_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        h_btns = QHBoxLayout()
+        btn_add = QPushButton(" ➕ افزودن دستی")
+        btn_add.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {ACCENT_COLOR}; color: {ACCENT_COLOR}; padding: 10px; border-radius: 8px; font-weight: bold;")
+        btn_add.clicked.connect(self.show_add_proxy_dialog)
+
+        btn_import = QPushButton(" 🔗 وارد کردن لینک (V2Ray/Hiddify)")
+        btn_import.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px; font-weight: bold;")
+        btn_import.clicked.connect(self.show_import_proxy_dialog)
+
+        btn_tools = QPushButton(" 📁 پوشه ابزارها")
+        btn_tools.setStyleSheet(f"background: {BG_COLOR}; border: 1px solid {INFO_COLOR}; color: {INFO_COLOR}; padding: 10px; border-radius: 8px;")
+        btn_tools.clicked.connect(self.open_tools_folder)
+
+        h_btns.addWidget(btn_add); h_btns.addWidget(btn_import); h_btns.addWidget(btn_tools)
+
+        card.add_widget(self.proxy_table)
+        card.add_layout(h_btns)
+        layout.addWidget(card)
+
+        hint = QLabel("💡 نکته: پروکسی فعال برای اتصال ربات تلگرام استفاده می‌شود. لینک‌های V2Ray برای اتصال مستقیم نیاز به هسته Xray دارند.")
+        hint.setStyleSheet(f"color: {TEXT_SUB}; font-size: 11px;")
+        layout.addWidget(hint)
+        layout.addStretch()
+
+        QTimer.singleShot(600, self.load_proxies)
+        return page
+
     def _ui_telegram_page(self):
         page = QWidget()
         layout = QVBoxLayout(page); layout.setContentsMargins(20, 20, 20, 20)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("background: transparent; border: none;")
         container = QWidget(); v_box = QVBoxLayout(container); v_box.setSpacing(20)
 
-        # --- کارت هویت ---
-        card1 = SettingCard("هویت فروشگاه")
-        row1 = QHBoxLayout()
+        # --- کارت هویت و برندینگ ---
+        card1 = SettingCard("هویت و برندینگ فروشگاه")
+        row_name = QHBoxLayout()
         self.tg_shop_name = QLineEdit(); self.tg_shop_name.setPlaceholderText("نام فروشگاه")
         self.tg_toggle_status = ToggleSwitch()
-        row1.addWidget(QLabel("نام:")); row1.addWidget(self.tg_shop_name)
-        row1.addStretch()
-        row1.addWidget(QLabel("وضعیت:")); row1.addWidget(self.tg_toggle_status)
-        self.tg_shop_address = QTextEdit(); self.tg_shop_address.setPlaceholderText("آدرس...")
+        row_name.addWidget(QLabel("نام فروشگاه:")); row_name.addWidget(self.tg_shop_name)
+        row_name.addStretch()
+        row_name.addWidget(QLabel("باز/بسته:")); row_name.addWidget(self.tg_toggle_status)
+        card1.add_layout(row_name)
+
+        h_branding = QHBoxLayout()
+        self.lbl_logo_path = QLineEdit(); self.lbl_logo_path.setPlaceholderText("مسیر لوگو (برای فاکتورها)"); self.lbl_logo_path.setReadOnly(True)
+        btn_logo = QPushButton("انتخاب لوگو"); btn_logo.setStyleSheet(f"background: {INFO_COLOR}; color: white; padding: 5px;")
+        btn_logo.clicked.connect(self.select_branding_logo)
+        h_branding.addWidget(self.lbl_logo_path); h_branding.addWidget(btn_logo)
+        card1.add_layout(h_branding)
+
+        self.bot_footer_text = QLineEdit(); self.bot_footer_text.setPlaceholderText("متن فوتر پیام‌های ربات (مثلاً لینک کانال یا کپی‌رایت)")
+        card1.add_layout(self._form_row("متن فوتر:", self.bot_footer_text))
+
+        self.tg_shop_address = QTextEdit(); self.tg_shop_address.setPlaceholderText("آدرس فیزیکی فروشگاه...")
         self.tg_shop_address.setMaximumHeight(60)
-        card1.add_layout(row1)
-        card1.add_widget(QLabel("آدرس:"))
+        card1.add_widget(QLabel("آدرس فروشگاه:"))
         card1.add_widget(self.tg_shop_address)
         v_box.addWidget(card1)
+
+        # --- کارت ساعات کاری ---
+        card_hours = SettingCard("تنظیمات ساعات کاری خودکار")
+        self.op_hours_enabled = ToggleSwitch()
+        self.op_hours_start = QTimeEdit(); self.op_hours_end = QTimeEdit()
+
+        card_hours.add_layout(self._form_row("فعالسازی زمانبندی:", self.op_hours_enabled))
+        h_times = QHBoxLayout()
+        h_times.addWidget(QLabel("از ساعت:")); h_times.addWidget(self.op_hours_start)
+        h_times.addSpacing(20)
+        h_times.addWidget(QLabel("تا ساعت:")); h_times.addWidget(self.op_hours_end)
+        h_times.addStretch()
+        card_hours.add_layout(h_times)
+        v_box.addWidget(card_hours)
 
         # --- کارت ارتباطات ---
         card2 = SettingCard("اطلاعات تماس و پشتیبانی")
@@ -441,9 +580,39 @@ class SettingsWidget(QWidget):
         layout.addWidget(scroll)
         return page
 
+    def _ui_auto_reply_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        card = SettingCard("پاسخگوی خودکار کلمات کلیدی")
+        self.auto_reply_table = QTableWidget(0, 4)
+        self.auto_reply_table.setHorizontalHeaderLabels(["کلمه کلیدی", "پاسخ", "نوع تطبیق", "عملیات"])
+        self.auto_reply_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.auto_reply_table.setStyleSheet(f"background: {BG_COLOR}; border-radius: 8px;")
+
+        btn_add = QPushButton(" ➕ افزودن قانون جدید")
+        btn_add.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px; border-radius: 8px;")
+        btn_add.clicked.connect(self.show_add_auto_reply_dialog)
+
+        card.add_widget(self.auto_reply_table)
+        card.add_widget(btn_add)
+        layout.addWidget(card)
+        layout.addStretch()
+
+        QTimer.singleShot(800, self.load_auto_replies)
+        return page
+
     def _ui_payment_page(self):
         page = QWidget()
         layout = QVBoxLayout(page); layout.setContentsMargins(30, 30, 30, 30)
+
+        # بخش وفادارسازی
+        card_loyalty = SettingCard("سیستم وفادارسازی مشتریان (Loyalty)")
+        self.loyalty_percent = QSpinBox()
+        self.loyalty_percent.setRange(0, 100); self.loyalty_percent.setSuffix(" %")
+        self.loyalty_percent.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px;")
+        card_loyalty.add_layout(self._form_row("درصد هدیه از هر خرید:", self.loyalty_percent))
+        layout.addWidget(card_loyalty)
 
         card1 = SettingCard("حساب‌های بانکی")
         self.card_table = QTableWidget(0, 3)
@@ -463,6 +632,14 @@ class SettingsWidget(QWidget):
         card2.add_layout(self._form_row("هزینه ارسال:", self.shipping_cost))
         card2.add_layout(self._form_row("سقف ارسال رایگان:", self.free_limit))
         layout.addWidget(card2)
+
+        card3 = SettingCard("درگاه پرداخت آنلاین (زرین‌پال)")
+        self.zarinpal_enabled = ToggleSwitch()
+        self.zarinpal_merchant = QLineEdit()
+        self.zarinpal_merchant.setPlaceholderText("Merchant ID")
+        card3.add_layout(self._form_row("فعال‌سازی درگاه:", self.zarinpal_enabled))
+        card3.add_layout(self._form_row("کد مرچنت:", self.zarinpal_merchant))
+        layout.addWidget(card3)
         
         btn = QPushButton("ذخیره تنظیمات مالی")
         btn.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 12px; border-radius: 8px;")
@@ -501,12 +678,20 @@ class SettingsWidget(QWidget):
         h_auto.addStretch()
         
         card_bk.add_widget(self.bk_table)
-        card_bk.add_layout(h_bk)
-        card_bk.add_layout(h_auto)
-        layout.addWidget(card_bk)
+        card_pass = SettingCard("امنیت پنل")
+        self.panel_pass = QLineEdit()
+        self.panel_pass.setPlaceholderText("رمز عبور جدید...")
+        self.panel_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        card_pass.add_layout(self._form_row("رمز عبور پنل:", self.panel_pass))
+        layout.addWidget(card_pass)
 
         # --- پیام همگانی ---
         card_bc = SettingCard("ارسال پیام همگانی (Broadcast)")
+
+        self.bc_tag_filter = QLineEdit()
+        self.bc_tag_filter.setPlaceholderText("فیلتر تگ (مثلاً: وفادار) - خالی برای همه")
+        card_bc.add_layout(self._form_row("ارسال به تگ خاص:", self.bc_tag_filter))
+
         self.bc_text = QTextEdit(); self.bc_text.setMaximumHeight(80)
         h_bc_img = QHBoxLayout()
         self.lbl_bc_img = QLabel("عکس: بدون عکس")
@@ -525,6 +710,22 @@ class SettingsWidget(QWidget):
         card_bc.add_widget(self.bc_progress)
         card_bc.add_widget(btn_bc)
         layout.addWidget(card_bc)
+
+        card_admin = SettingCard("مدیریت و نقش‌های ادمین")
+        self.admin_ids_input = QLineEdit()
+        self.admin_ids_input.setPlaceholderText("آیدی‌های ادمین (با کاما جدا کنید)")
+        card_admin.add_layout(self._form_row("کل ادمین‌ها:", self.admin_ids_input))
+
+        grid_roles = QGridLayout()
+        self.role_sales = QLineEdit(); self.role_sales.setPlaceholderText("آیدی‌های بخش فروش...")
+        self.role_support = QLineEdit(); self.role_support.setPlaceholderText("آیدی‌های بخش پشتیبانی...")
+        self.role_system = QLineEdit(); self.role_system.setPlaceholderText("آیدی‌های فنی/سیستمی...")
+
+        grid_roles.addWidget(QLabel("اعلان فروش:"), 0, 0); grid_roles.addWidget(self.role_sales, 0, 1)
+        grid_roles.addWidget(QLabel("اعلان تیکت:"), 1, 0); grid_roles.addWidget(self.role_support, 1, 1)
+        grid_roles.addWidget(QLabel("اعلان انبار:"), 2, 0); grid_roles.addWidget(self.role_system, 2, 1)
+        card_admin.add_layout(grid_roles)
+        layout.addWidget(card_admin)
         
         QTimer.singleShot(500, self.load_backups_list)
         return page
@@ -536,17 +737,40 @@ class SettingsWidget(QWidget):
         self.log_viewer = QTextEdit()
         self.log_viewer.setReadOnly(True)
         self.log_viewer.setStyleSheet(f"background: #0f1015; color: #ccc; font-family: Consolas; border-radius: 8px; padding: 10px;")
+
         h_btn = QHBoxLayout()
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["همه", "ERROR", "WARNING", "INFO"])
         self.filter_combo.currentTextChanged.connect(self.read_app_logs)
+
         btn_ref = QPushButton("بروزرسانی"); btn_ref.clicked.connect(self.read_app_logs)
+        btn_copy = QPushButton(" کپی کامل لاگ"); btn_copy.setIcon(qta.icon('fa5s.copy'))
+        btn_copy.clicked.connect(self.copy_logs_to_clipboard)
+
         h_btn.addWidget(QLabel("فیلتر:")); h_btn.addWidget(self.filter_combo)
-        h_btn.addStretch(); h_btn.addWidget(btn_ref)
+        h_btn.addStretch(); h_btn.addWidget(btn_copy); h_btn.addWidget(btn_ref)
+
         card.add_widget(self.log_viewer)
         card.add_layout(h_btn)
         layout.addWidget(card)
         return page
+
+    def copy_logs_to_clipboard(self):
+        path = BASE_DIR / "logs" / "app.log"
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                QApplication.clipboard().setText(text)
+                self.window().show_toast("تمام لاگ‌ها در کلیپ‌بورد کپی شد.")
+            except: pass
+
+    def open_tools_folder(self):
+        import os
+        import webbrowser
+        path = BASE_DIR / "tools" / "xray"
+        path.mkdir(parents=True, exist_ok=True)
+        webbrowser.open(f"file:///{path.absolute()}")
 
     # --- Helper Layout ---
     def _form_row(self, label_text, widget):
@@ -625,6 +849,10 @@ class SettingsWidget(QWidget):
     def on_select_image(self):
         f, _ = QFileDialog.getOpenFileName(self, "تصویر", "", "Images (*.jpg *.png *.jpeg)")
         if f: self.tg_welcome_img_path.setText(f)
+
+    def select_branding_logo(self):
+        f, _ = QFileDialog.getOpenFileName(self, "انتخاب لوگوی برند", "", "Images (*.jpg *.png *.jpeg)")
+        if f: self.lbl_logo_path.setText(f)
         
     def select_broadcast_image(self):
         f, _ = QFileDialog.getOpenFileName(self, "عکس پیام همگانی", "", "Images (*.jpg *.png)")
@@ -646,17 +874,300 @@ class SettingsWidget(QWidget):
             self.log_viewer.setHtml(html)
         except: pass
 
+    def load_coupons(self):
+        try:
+            with next(get_db()) as db:
+                items = crud.get_all_coupons(db)
+            self.coupon_table.setRowCount(0)
+            for i, item in enumerate(items):
+                self.coupon_table.insertRow(i)
+                self.coupon_table.setItem(i, 0, QTableWidgetItem(item.code))
+                val = f"{item.percent}%" if item.percent > 0 else f"{int(item.amount):,} ت"
+                self.coupon_table.setItem(i, 1, QTableWidgetItem(val))
+                self.coupon_table.setItem(i, 2, QTableWidgetItem(str(item.usage_limit)))
+                self.coupon_table.setItem(i, 3, QTableWidgetItem(str(item.used_count)))
+                exp = item.expiry_date.strftime("%Y/%m/%d") if item.expiry_date else "بدون انقضا"
+                self.coupon_table.setItem(i, 4, QTableWidgetItem(exp))
+
+                btn_del = QPushButton(); btn_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                btn_del.clicked.connect(lambda _, cid=item.id: self.delete_coupon_ui(cid))
+                self.coupon_table.setCellWidget(i, 5, btn_del)
+        except: pass
+
+    def show_add_coupon_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("تعریف کد تخفیف"); dlg.setFixedWidth(400)
+        l = QVBoxLayout(dlg); l.setSpacing(10)
+
+        code = QLineEdit(); code.setPlaceholderText("کد (مثلا: OFF20)")
+        percent = QSpinBox(); percent.setRange(0, 100); percent.setSuffix(" %")
+        amount = FormattedPriceInput(placeholder="مبلغ ثابت (اگر درصد صفر باشد)")
+        limit = QSpinBox(); limit.setRange(1, 10000); limit.setValue(100)
+        min_p = FormattedPriceInput(placeholder="حداقل مبلغ خرید")
+        expiry = QLineEdit(); expiry.setPlaceholderText("تاریخ انقضا (YYYY-MM-DD)")
+
+        for w in [code, expiry]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px;")
+
+        l.addWidget(QLabel("کد تخفیف (انگلیسی):")); l.addWidget(code)
+        l.addWidget(QLabel("درصد تخفیف:")); l.addWidget(percent)
+        l.addWidget(QLabel("یا مبلغ ثابت تخفیف (تومان):")); l.addWidget(amount)
+        l.addWidget(QLabel("ظرفیت استفاده (تعداد):")); l.addWidget(limit)
+        l.addWidget(QLabel("حداقل خرید (تومان):")); l.addWidget(min_p)
+        l.addWidget(QLabel("تاریخ انقضا (اختیاری):")); l.addWidget(expiry)
+
+        b = QPushButton("ذخیره کد تخفیف"); b.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not code.text(): return
+            try:
+                exp_date = datetime.strptime(expiry.text(), "%Y-%m-%d") if expiry.text() else None
+                data = {
+                    "code": code.text().strip().upper(),
+                    "percent": percent.value(),
+                    "amount": amount.value(),
+                    "usage_limit": limit.value(),
+                    "min_purchase": min_p.value(),
+                    "expiry_date": exp_date
+                }
+                with next(get_db()) as db: crud.create_coupon(db, data)
+                dlg.accept(); self.load_coupons()
+            except Exception as e: QMessageBox.warning(dlg, "خطا", "فرمت تاریخ صحیح نیست (YYYY-MM-DD)")
+
+        b.clicked.connect(save); dlg.exec()
+
+    def delete_coupon_ui(self, cid):
+        if QMessageBox.question(self, "حذف", "این کد تخفیف حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_coupon(db, cid)
+            self.load_coupons()
+
+    def load_proxies(self):
+        try:
+            with next(get_db()) as db:
+                proxies = crud.get_all_proxies(db)
+
+            self.proxy_table.setRowCount(0)
+            for i, p in enumerate(proxies):
+                self.proxy_table.insertRow(i)
+                self.proxy_table.setItem(i, 0, QTableWidgetItem(p.name))
+                self.proxy_table.setItem(i, 1, QTableWidgetItem(p.protocol.upper()))
+                self.proxy_table.setItem(i, 2, QTableWidgetItem(f"{p.host}:{p.port}"))
+
+                # وضعیت (فعال/غیرفعال)
+                status_btn = QPushButton("فعال شود" if not p.is_active else "✅ فعال")
+                status_btn.setEnabled(not p.is_active)
+                status_btn.setStyleSheet(f"background: {SUCCESS_COLOR if p.is_active else PANEL_BG}; color: white; border-radius: 4px;")
+                status_btn.clicked.connect(lambda _, pid=p.id: self.activate_proxy(pid))
+                self.proxy_table.setCellWidget(i, 3, status_btn)
+
+                # تأخیر
+                lat_text = f"{p.latency}ms" if p.latency else "--"
+                self.proxy_table.setItem(i, 4, QTableWidgetItem(lat_text))
+
+                # عملیات
+                actions = QWidget(); h = QHBoxLayout(actions); h.setContentsMargins(0,0,0,0)
+                b_test = QPushButton(); b_test.setIcon(qta.icon('fa5s.vial', color=INFO_COLOR))
+                b_test.setToolTip("تست اتصال"); b_test.clicked.connect(lambda _, pid=p.id: self.test_proxy_connection(pid))
+                b_del = QPushButton(); b_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                b_del.setToolTip("حذف"); b_del.clicked.connect(lambda _, pid=p.id: self.delete_proxy_ui(pid))
+                h.addWidget(b_test); h.addWidget(b_del)
+                self.proxy_table.setCellWidget(i, 5, actions)
+        except: pass
+
+    def show_add_proxy_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("افزودن پروکسی"); dlg.setFixedWidth(400)
+        l = QVBoxLayout(dlg)
+
+        name = QLineEdit(); name.setPlaceholderText("نام (مثلا: هیدیفای اصلی)")
+        proto = QComboBox(); proto.addItems(["http", "socks5"])
+        host = QLineEdit(); host.setPlaceholderText("آدرس (IP یا Domain)")
+        port = QSpinBox(); port.setRange(1, 65535); port.setValue(2080)
+        user = QLineEdit(); user.setPlaceholderText("نام کاربری (اختیاری)")
+        passw = QLineEdit(); passw.setPlaceholderText("رمز عبور (اختیاری)"); passw.setEchoMode(QLineEdit.EchoMode.Password)
+
+        for w in [name, host, user, passw]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px; border-radius: 5px;")
+
+        l.addWidget(QLabel("نام:")); l.addWidget(name)
+        l.addWidget(QLabel("پروتکل:")); l.addWidget(proto)
+        l.addWidget(QLabel("آدرس:")); l.addWidget(host)
+        l.addWidget(QLabel("پورت:")); l.addWidget(port)
+        l.addWidget(QLabel("نام کاربری:")); l.addWidget(user)
+        l.addWidget(QLabel("رمز عبور:")); l.addWidget(passw)
+
+        b = QPushButton("ذخیره"); b.setStyleSheet(f"background: {ACCENT_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not host.text() or not name.text(): return
+            data = {
+                "name": name.text(), "protocol": proto.currentText(),
+                "host": host.text(), "port": port.value(),
+                "username": user.text() or None, "password": passw.text() or None
+            }
+            with next(get_db()) as db: crud.add_proxy(db, data)
+            dlg.accept(); self.load_proxies()
+
+        b.clicked.connect(save); dlg.exec()
+
+    def show_import_proxy_dialog(self):
+        text, ok = QInputDialog.getMultiLineText(self, "وارد کردن لینک‌ها",
+            "لینک‌های V2Ray (VLESS, VMESS, SS) را وارد کنید (هر لینک در یک خط):")
+        if ok and text.strip():
+            from bot.proxy_utils import parse_v2ray_link
+            links = text.strip().splitlines()
+            imported = 0
+            for link in links:
+                if not link.strip(): continue
+                data = parse_v2ray_link(link.strip())
+                if data:
+                    with next(get_db()) as db: crud.add_proxy(db, data)
+                    imported += 1
+
+            self.load_proxies()
+            if imported > 0:
+                self.window().show_toast(f"✅ تعداد {imported} لینک با موفقیت وارد شد.")
+            else:
+                QMessageBox.warning(self, "خطا", "هیچ لینک معتبری یافت نشد.")
+
+    def activate_proxy(self, pid):
+        with next(get_db()) as db:
+            p = db.query(models.Proxy).get(pid)
+            if not p: return
+
+            # چک کردن وجود هسته Xray برای لینک‌های v2ray
+            if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
+                if not hasattr(self.window(), 'app_manager') or not self.window().app_manager.xray_manager.is_available():
+                    QMessageBox.warning(self, "هسته Xray یافت نشد",
+                        "برای استفاده از لینک‌های مستقیم V2ray/Hiddify، باید فایل xray.exe را در پوشه tools/xray قرار دهید.\n"
+                        "در غیر این صورت ربات قادر به اتصال نخواهد بود.")
+
+            crud.set_active_proxy(db, pid)
+
+        self.load_proxies()
+        self.window().show_toast("پروکسی فعال شد. برای اعمال نهایی، سرویس‌ها را ریستارت کنید.")
+
+    def delete_proxy_ui(self, pid):
+        if QMessageBox.question(self, "حذف", "آیا این پروکسی حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_proxy(db, pid)
+            self.load_proxies()
+
     @asyncSlot()
-    async def refresh_data(self):
+    async def test_proxy_connection(self, pid):
+        self.window().show_toast("در حال بررسی وضعیت اتصال...")
+
+        with next(get_db()) as db:
+            p = db.query(models.Proxy).get(pid)
+            if not p: return
+
+        # برای لینک‌های V2Ray (تست مستقیم TCP)
+        if p.config_type == "link" or p.protocol in ["vless", "vmess", "ss", "trojan"]:
+            from bot.proxy_utils import tcp_ping
+            # استفاده از تایم اوت بیشتر در UI
+            latency, status = await tcp_ping(p.host, p.port, timeout=10.0)
+            if latency is not None:
+                with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
+                self.load_proxies()
+                self.window().show_toast(f"✅ سرور در دسترس است! تأخیر: {latency}ms")
+            else:
+                self.window().show_toast(f"❌ {status}", is_error=True)
+            return
+
+        # برای پروکسی‌های استاندارد (SOCKS5/HTTP)
+        import time
+        import httpx
+        proxy_url = f"{p.protocol}://"
+        if p.username and p.password: proxy_url += f"{p.username}:{p.password}@"
+        proxy_url += f"{p.host}:{p.port}"
+
+        start = time.time()
+        try:
+            # تست واقعی اتصال به تلگرام از طریق پروکسی
+            async with httpx.AsyncClient(proxies=proxy_url, timeout=15) as client:
+                resp = await client.get("https://api.telegram.org", follow_redirects=True)
+                if resp.status_code in [200, 404]: # 404 هم یعنی به سرور تلگرام رسیده
+                    latency = int((time.time() - start) * 1000)
+                    with next(get_db()) as db: crud.update_proxy_latency(db, pid, latency)
+                    self.load_proxies()
+                    self.window().show_toast(f"✅ اتصال موفق! تأخیر: {latency}ms")
+                else:
+                    self.window().show_toast(f"⚠️ پاسخ غیرمنتظره از سرور: {resp.status_code}", is_error=True)
+        except httpx.ConnectError:
+            self.window().show_toast("❌ خطا: امکان اتصال به پروکسی وجود ندارد.", is_error=True)
+        except httpx.TimeoutException:
+            self.window().show_toast("❌ خطا: زمان پاسخگویی پروکسی بیش از حد طولانی شد.", is_error=True)
+        except Exception as e:
+            self.window().show_toast(f"❌ خطا در اتصال: {str(e)}", is_error=True)
+
+    def load_auto_replies(self):
+        try:
+            with next(get_db()) as db:
+                items = crud.get_all_auto_responses(db)
+            self.auto_reply_table.setRowCount(0)
+            for i, item in enumerate(items):
+                self.auto_reply_table.insertRow(i)
+                self.auto_reply_table.setItem(i, 0, QTableWidgetItem(item.keyword))
+                self.auto_reply_table.setItem(i, 1, QTableWidgetItem(item.response_text[:50] + "..."))
+                self.auto_reply_table.setItem(i, 2, QTableWidgetItem("دقیق" if item.match_type == "exact" else "محتوایی"))
+
+                btn_del = QPushButton(); btn_del.setIcon(qta.icon('fa5s.trash-alt', color=DANGER_COLOR))
+                btn_del.clicked.connect(lambda _, rid=item.id: self.delete_auto_reply(rid))
+                self.auto_reply_table.setCellWidget(i, 3, btn_del)
+        except: pass
+
+    def show_add_auto_reply_dialog(self):
+        dlg = QDialog(self); dlg.setWindowTitle("قانون پاسخ خودکار"); dlg.setFixedWidth(450)
+        l = QVBoxLayout(dlg)
+
+        kw = QLineEdit(); kw.setPlaceholderText("کلمه کلیدی (مثلا: آدرس)")
+        resp = QTextEdit(); resp.setPlaceholderText("متن پاسخ...")
+        m_type = QComboBox(); m_type.addItems(["دقیق (Exact)", "محتوایی (Contains)"])
+
+        for w in [kw, resp]: w.setStyleSheet(f"background: {BG_COLOR}; color: white; padding: 8px; border-radius: 5px;")
+
+        l.addWidget(QLabel("کلمه کلیدی:")); l.addWidget(kw)
+        l.addWidget(QLabel("نوع تطبیق:")); l.addWidget(m_type)
+        l.addWidget(QLabel("متن پاسخ:")); l.addWidget(resp)
+
+        b = QPushButton("ذخیره"); b.setStyleSheet(f"background: {SUCCESS_COLOR}; color: white; padding: 10px;")
+        l.addWidget(b)
+
+        def save():
+            if not kw.text() or not resp.toPlainText(): return
+            match = "exact" if "Exact" in m_type.currentText() else "contains"
+            with next(get_db()) as db: crud.set_auto_response(db, kw.text(), resp.toPlainText(), match)
+            dlg.accept(); self.load_auto_replies()
+
+        b.clicked.connect(save); dlg.exec()
+
+    def delete_auto_reply(self, rid):
+        if QMessageBox.question(self, "حذف", "این قانون حذف شود؟") == QMessageBox.StandardButton.Yes:
+            with next(get_db()) as db: crud.delete_auto_response(db, rid)
+            self.load_auto_replies()
+
+    @asyncSlot()
+    async def refresh_data(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
+
         loop = asyncio.get_running_loop()
         try:
             data = await loop.run_in_executor(None, self._fetch_all_settings)
-            # تلگرام
-            self.tg_shop_name.setText(data["tg_shop_name"])
+            # تلگرام و برندینگ
+            try:
+                self.tg_shop_name.setText(data["tg_shop_name"])
+            except RuntimeError: return
             self.tg_toggle_status.setChecked(data["tg_is_open"] == "true")
             self.tg_shop_address.setPlainText(data["tg_shop_address"])
             self.tg_welcome_msg.setPlainText(data["tg_welcome_message"])
             self.tg_welcome_img_path.setText(data["tg_welcome_image"])
+            self.lbl_logo_path.setText(data.get("branding_logo", ""))
+            self.bot_footer_text.setText(data.get("bot_footer_text", ""))
+
+            # ساعات کاری
+            self.op_hours_enabled.setChecked(data.get("op_hours_enabled") == "true")
+            self.op_hours_start.setTime(QTime.fromString(data.get("op_hours_start", "08:00"), "HH:mm"))
+            self.op_hours_end.setTime(QTime.fromString(data.get("op_hours_end", "22:00"), "HH:mm"))
             
             tg_support_ids = json.loads(data.get("tg_support_ids", "[]"))
             self.tg_support_ids_list.clear()
@@ -695,6 +1206,25 @@ class SettingsWidget(QWidget):
             self.shipping_cost.setText(data["shipping_cost"])
             self.free_limit.setText(data["free_shipping_limit"])
 
+            self.zarinpal_enabled.setChecked(data.get("zarinpal_enabled", "false") == "true")
+            self.zarinpal_merchant.setText(data.get("zarinpal_merchant", ""))
+            self.loyalty_percent.setValue(int(data.get("loyalty_percent", "1")))
+
+            self.panel_pass.setText(data.get("panel_password", "admin"))
+            self.admin_ids_input.setText(data.get("admin_user_ids", ""))
+
+            # فیلدهای جدید
+            self.tg_token_inp.setText(data.get("telegram_bot_token", ""))
+            self.rb_token_inp.setText(data.get("rubika_bot_token", ""))
+            self.proxy_url_inp.setText(data.get("proxy_url", ""))
+            self.proxy_enabled.setChecked(data.get("proxy_enabled", "false") == "true")
+            self.admin_ids_main.setText(data.get("admin_user_ids", ""))
+
+            roles = json.loads(data.get("admin_notification_roles", "{}"))
+            self.role_sales.setText(",".join(map(str, roles.get("sales", []))))
+            self.role_support.setText(",".join(map(str, roles.get("support", []))))
+            self.role_system.setText(",".join(map(str, roles.get("system", []))))
+
             # بک‌آپ
             self.auto_bk_toggle.setChecked(data["auto_backup_enabled"] == "true")
             try: self.auto_bk_time.setTime(QTime.fromString(data["auto_backup_time"], "HH:mm"))
@@ -713,19 +1243,44 @@ class SettingsWidget(QWidget):
                 "rb_phones": "[]", "rb_main_menu": "[]", "bank_cards": "[]",
                 "shipping_cost": "0", "free_shipping_limit": "0",
                 "auto_backup_enabled": "false", "auto_backup_time": "00:00",
-                "tg_shop_address": ""
+                "tg_shop_address": "",
+                "zarinpal_enabled": "false", "zarinpal_merchant": "",
+                "panel_password": "admin",
+                "admin_user_ids": "",
+                "branding_logo": "", "bot_footer_text": "",
+                "op_hours_enabled": "false", "op_hours_start": "08:00", "op_hours_end": "22:00",
+                "admin_notification_roles": "{}",
+                "telegram_bot_token": "", "rubika_bot_token": "",
+                "proxy_url": "", "proxy_enabled": "false"
             }
             return {k: crud.get_setting(db, k, v) for k, v in DEFAULT_SETTINGS.items()}
 
     @asyncSlot()
-    async def save_settings(self):
-        # Logic to save Telegram & Payment settings
+    async def save_settings(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
+
+        # نقش‌های ادمین
+        roles = {
+            "sales": [x.strip() for x in self.role_sales.text().split(',') if x.strip().isdigit()],
+            "support": [x.strip() for x in self.role_support.text().split(',') if x.strip().isdigit()],
+            "system": [x.strip() for x in self.role_system.text().split(',') if x.strip().isdigit()]
+        }
+
         data = {
             "tg_shop_name": self.tg_shop_name.text(),
             "tg_is_open": "true" if self.tg_toggle_status.isChecked() else "false",
             "tg_shop_address": self.tg_shop_address.toPlainText(),
             "tg_welcome_message": self.tg_welcome_msg.toPlainText(),
             "tg_welcome_image": self.tg_welcome_img_path.text(),
+            "branding_logo": self.lbl_logo_path.text(),
+            "bot_footer_text": self.bot_footer_text.text(),
+            "op_hours_enabled": "true" if self.op_hours_enabled.isChecked() else "false",
+            "op_hours_start": self.op_hours_start.time().toString("HH:mm"),
+            "op_hours_end": self.op_hours_end.time().toString("HH:mm"),
+            "admin_notification_roles": json.dumps(roles),
             "tg_support_ids": json.dumps([self.tg_support_ids_list.item(i).text() for i in range(self.tg_support_ids_list.count())]),
             "tg_phones": json.dumps([self.tg_phones_list.item(i).text() for i in range(self.tg_phones_list.count())]),
             "bank_cards": json.dumps([{"number": self.card_table.cellWidget(r, 0).text(), "owner": self.card_table.cellWidget(r, 1).text()} for r in range(self.card_table.rowCount())]),
@@ -733,19 +1288,32 @@ class SettingsWidget(QWidget):
             "free_shipping_limit": self.free_limit.text().replace(",", ""),
             "auto_backup_enabled": "true" if self.auto_bk_toggle.isChecked() else "false",
             "auto_backup_time": self.auto_bk_time.time().toString("HH:mm"),
+            "zarinpal_enabled": "true" if self.zarinpal_enabled.isChecked() else "false",
+            "zarinpal_merchant": self.zarinpal_merchant.text().strip(),
+            "loyalty_percent": str(self.loyalty_percent.value()),
+            "panel_password": self.panel_pass.text().strip() or "admin",
+            "admin_user_ids": self.admin_ids_main.toPlainText().strip() or self.admin_ids_input.text().strip(),
+            "telegram_bot_token": self.tg_token_inp.text().strip(),
+            "rubika_bot_token": self.rb_token_inp.text().strip(),
+            "proxy_url": self.proxy_url_inp.text().strip(),
+            "proxy_enabled": "true" if self.proxy_enabled.isChecked() else "false"
         }
-        # Copy image
-        img = data["tg_welcome_image"]
-        if img and not img.startswith("media/"):
-            dest = BASE_DIR / "media" / f"banner_start{Path(img).suffix}"
-            shutil.copy(img, dest)
-            data["tg_welcome_image"] = f"media/{dest.name}"
+        # کپی تصاویر برندینگ و بنر
+        for key in ["tg_welcome_image", "branding_logo"]:
+            img = data[key]
+            if img and not img.startswith("media/"):
+                suffix = Path(img).suffix
+                dest = BASE_DIR / "media" / f"{key}{suffix}"
+                try:
+                    shutil.copy(img, dest)
+                    data[key] = f"media/{dest.name}"
+                except: pass
             
         await asyncio.get_running_loop().run_in_executor(None, lambda: self._save_db(data))
-        self.window().show_toast("تنظیمات تلگرام و مالی ذخیره شد.")
+        self.window().show_toast("تنظیمات با موفقیت ذخیره شد.")
 
     @asyncSlot()
-    async def save_rubika_settings(self):
+    async def save_rubika_settings(self, *args, **kwargs):
         data = {
             "rb_shop_name": self.rb_shop_name.text(),
             "rb_welcome_message": self.rb_welcome_msg.toPlainText(),
@@ -761,7 +1329,26 @@ class SettingsWidget(QWidget):
             for k, v in data.items(): crud.set_setting(db, k, v)
 
     @asyncSlot()
-    async def update_bot_commands(self):
+    async def restart_all_services(self, *args, **kwargs):
+        if getattr(self, '_restarting', False): return
+
+        if not hasattr(self.window(), 'app_manager'):
+            return QMessageBox.warning(self, "خطا", "مدیریت برنامه در دسترس نیست.")
+
+        if QMessageBox.question(self, "تایید", "سرویس‌های ربات با تنظیمات جدید ریستارت شوند؟\n(ممکن است برای اعمال کامل توکن جدید نیاز به بستن و باز کردن برنامه باشد)") == QMessageBox.StandardButton.Yes:
+            try:
+                self._restarting = True
+                await self.window().app_manager.restart_services()
+            finally:
+                self._restarting = False
+
+    @asyncSlot()
+    async def update_bot_commands(self, *args, **kwargs):
+        try:
+            if not self.window() or not self.isVisible() or getattr(self.window(), '_is_shutting_down', False):
+                return
+        except (RuntimeError, AttributeError): return
+
         if not self.bot_app: return QMessageBox.warning(self, "خطا", "ربات تلگرام متصل نیست.")
         try:
             from telegram import BotCommand
@@ -783,7 +1370,12 @@ class SettingsWidget(QWidget):
         except Exception as e: QMessageBox.critical(self, "خطا", str(e))
 
     def load_backups_list(self):
-        self.bk_table.setRowCount(0)
+        try:
+            if not self.isVisible(): return
+            self.bk_table.setRowCount(0)
+        except RuntimeError:
+            return
+
         d = BASE_DIR / "db" / "backups"
         if not d.exists(): return
         for i, f in enumerate(sorted(d.glob("*.db"), key=os.path.getmtime, reverse=True)):
@@ -803,8 +1395,10 @@ class SettingsWidget(QWidget):
             except Exception as e: QMessageBox.critical(self, "خطا", str(e))
 
     @asyncSlot()
-    async def send_backup_to_telegram(self):
-        if not self.bot_app or not ADMIN_USER_IDS: return self.window().show_toast("ربات تلگرام فعال نیست.", is_error=True)
+    async def send_backup_to_telegram(self, *args, **kwargs):
+        with next(get_db()) as db:
+            admin_ids = crud.get_admin_ids(db)
+        if not self.bot_app or not admin_ids: return self.window().show_toast("ربات تلگرام یا ادمین تنظیم نشده است.", is_error=True)
         d = BASE_DIR / "db" / "backups"
         if not d.exists(): return
         files = sorted(d.glob("*.db"), key=os.path.getmtime, reverse=True)
@@ -813,21 +1407,34 @@ class SettingsWidget(QWidget):
         self.window().show_toast("در حال ارسال به تلگرام...")
         try:
             with open(latest, 'rb') as doc:
-                await self.bot_app.bot.send_document(chat_id=ADMIN_USER_IDS[0], document=doc, caption=f"📦 Backup {datetime.now().strftime('%Y-%m-%d')}")
+                await self.bot_app.bot.send_document(chat_id=admin_ids[0], document=doc, caption=f"📦 Backup {datetime.now().strftime('%Y-%m-%d')}")
             self.window().show_toast("بک‌آپ در تلگرام ذخیره شد.")
         except Exception as e: self.window().show_toast(f"خطا: {e}", is_error=True)
 
     @asyncSlot()
-    async def on_start_broadcast(self):
+    async def on_start_broadcast(self, *args, **kwargs):
         msg = self.bc_text.toPlainText().strip()
+        tag_filter = self.bc_tag_filter.text().strip()
+
         if not msg and not self._broadcast_image_path:
             return QMessageBox.warning(self, "خطا", "متن یا عکس الزامی است.")
             
         self.bc_progress.show(); self.bc_progress.setValue(0)
         loop = asyncio.get_running_loop()
-        users = await loop.run_in_executor(None, lambda: crud.get_all_users(next(get_db())))
+
+        def fetch_filtered():
+            with next(get_db()) as db:
+                if tag_filter:
+                    return db.query(models.User).filter(models.User.tags.ilike(f"%{tag_filter}%")).all()
+                return crud.get_all_users(db, limit=5000)
+
+        users = await loop.run_in_executor(None, fetch_filtered)
         total = len(users); sent = 0
         
+        if total == 0:
+            self.bc_progress.hide()
+            return QMessageBox.information(self, "پیام", "هیچ کاربری با این مشخصات یافت نشد.")
+
         for i, u in enumerate(users):
             try:
                 if u.platform == 'telegram' and self.bot_app:
