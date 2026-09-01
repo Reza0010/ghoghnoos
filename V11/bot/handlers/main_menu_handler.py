@@ -1,5 +1,6 @@
 import logging
 import html
+import json
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
@@ -106,27 +107,30 @@ async def handle_order_history(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_track_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پیگیری وضعیت آخرین سفارش به صورت سریع"""
     query = update.callback_query
-    await query.answer()
+    if query: await query.answer()
     
     orders = await run_db(crud.get_user_orders, update.effective_user.id)
     last_order = orders[0] if orders else None
 
     if last_order:
         timeline = responses.get_tracking_timeline(last_order.status)
-        trk = f"\n📬 <b>کد رهگیری پستی:</b> <code>{last_order.tracking_code}</code>" if last_order.tracking_code else ""
+        trk = f"\n📬 <b>کد رهگیری پستی:</b>\n<code>{last_order.tracking_code}</code>" if last_order.tracking_code else ""
         
         text = (
-            f"📋 <b>وضعیت آخرین سفارش شما:</b>\n"
-            f"🆔 شناسه: <code>{last_order.id}</code>\n"
-            f"💰 مبلغ: {responses.format_price(last_order.total_amount)}\n"
-            f"📅 تاریخ ثبت: {last_order.created_at.strftime('%Y-%m-%d')}\n\n"
+            f"📋 <b>جزئیات سفارش #{last_order.id}:</b>\n\n"
+            f"💰 مبلغ کل: {responses.format_price(last_order.total_amount)}\n"
+            f"📅 تاریخ: {last_order.created_at.strftime('%Y/%m/%d')}\n\n"
             f"{timeline}{trk}\n\n"
-            f"<i>برای مشاهده لیست تمام سفارشات به بخش پروفایل بروید.</i>"
+            f"⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
+            f"<i>برای مشاهده سوابق کامل به بخش «حساب من» بروید.</i>"
         )
     else:
-        text = "❌ شما سفارشی برای پیگیری ندارید."
+        text = "❌ شما هنوز سفارشی ثبت نکرده‌اید."
 
-    await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    if query:
+        await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
+    else:
+        await update.effective_chat.send_message(text, reply_markup=keyboards.get_main_menu_keyboard(), parse_mode='HTML')
 
 # ==============================================================================
 # مدیریت آدرس‌ها
@@ -178,16 +182,26 @@ async def handle_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # دریافت لیست آیدی‌های پشتیبانی از تنظیمات (به صورت لیست JSON)
-    raw_support = await run_db(crud.get_setting, "tg_support_ids", "[]")
-    import json
+    raw_support = await run_db(crud.get_setting, "support_contacts", "[]")
     try:
-        ids = json.loads(raw_support)
-        supp_link = ids[0] if ids else "@Admin"
+        contacts = json.loads(raw_support)
     except:
-        supp_link = "@Admin"
+        contacts = []
 
-    text = responses.SUPPORT_TEXT.format(support_id=supp_link, divider=responses.get_divider())
+    if not contacts:
+        contacts = [{"title": "پشتیبانی", "phone": "ثبت نشده", "hours": ""}]
+
+    contact_lines = ""
+    for c in contacts:
+        hours = f" ({c.get('hours')})" if c.get('hours') else ""
+        contact_lines += f"👤 {c['title']}\n📞 <code>{c['phone']}</code>{hours}\n\n"
+
+    text = (
+        f"🎧 <b>مرکز پشتیبانی مشتریان</b>\n\n"
+        f"در صورت بروز هرگونه مشکل یا سوال، از راه‌های زیر با ما در ارتباط باشید:\n\n"
+        f"{contact_lines}"
+        f"⏰ کارشناسان ما در سریع‌ترین زمان پاسخگوی شما خواهند بود."
+    )
     await _safe_edit(update, text, keyboards.get_main_menu_keyboard())
 
 async def handle_about_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,14 +209,14 @@ async def handle_about_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    shop_name = await run_db(crud.get_setting, "tg_shop_name", "فروشگاه ما")
-    phone = await run_db(crud.get_setting, "tg_phones", "ثبت نشده")
-    addr = await run_db(crud.get_setting, "tg_shop_address", "فروشگاه اینترنتی")
+    shop_name = await run_db(crud.get_setting, "shop_name", "فروشگاه ما")
+    addr = await run_db(crud.get_setting, "shop_address", "ایران - فروشگاه اینترنتی")
 
-    text = responses.ABOUT_US_TEXT.format(
-        shop_name=shop_name,
-        phone=phone,
-        address=addr,
-        divider=responses.get_divider()
+    text = (
+        f"🏛 <b>درباره فروشگاه {shop_name}</b>\n"
+        f"{responses.get_divider()}\n"
+        f"ما همواره در تلاشیم تا بهترین خدمات و محصولات را با بالاترین کیفیت و مناسب‌ترین قیمت به شما عزیزان ارائه دهیم.\n\n"
+        f"📍 <b>آدرس دفتر مرکزی:</b>\n{addr}\n\n"
+        f"✅ نماد اعتماد و اصالت کالا"
     )
     await _safe_edit(update, text, keyboards.get_main_menu_keyboard())

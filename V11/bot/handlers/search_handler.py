@@ -156,7 +156,8 @@ async def cancel_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 search_conversation_handler = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_search, pattern=r'^search:start$'),
-        CommandHandler("search", start_search)
+        CommandHandler("search", start_search),
+        MessageHandler(filters.Text(responses.SEARCH_BUTTON), start_search)
     ],
     states={
         SEARCH_QUERY_STATE: [

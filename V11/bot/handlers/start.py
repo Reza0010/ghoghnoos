@@ -51,16 +51,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         tasks = [
             run_db(crud.get_or_create_user, user.id, user.full_name or "کاربر", user.username, "telegram"),
-            run_db(crud.get_setting, "tg_shop_name", "فروشگاه"),
+            run_db(crud.get_setting, "shop_name", "فروشگاه ما"),
             run_db(crud.get_setting, "tg_is_open", "true"),
-            run_db(crud.get_setting, "tg_welcome_message", ""),
+            run_db(crud.get_setting, "shop_maintenance_mode", "false"),
+            run_db(crud.get_setting, "tmpl_welcome", ""),
             run_db(crud.get_setting, "tg_welcome_image", ""),
             run_db(crud.get_setting, "channel_link", ""),
             run_db(crud.get_user_stats, user.id)
         ]
         results = await asyncio.gather(*tasks)
         
-        db_user, shop_name, is_open, welcome_tpl, banner_rel, channel_url, stats = results
+        db_user, shop_name, is_open, maintenance, welcome_tpl, banner_rel, channel_url, stats = results
     except Exception as e:
         logger.error(f"Error in Start-Gather: {e}")
         await context.bot.send_message(chat_id=chat_id, text="⚠️ خطا در ارتباط با سرور. لطفاً مجدداً /start کنید.")
@@ -79,11 +80,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = responses.format_dynamic_text(welcome_text, dynamic_data)
 
     # افزودن هشدار وضعیت فروشگاه
-    if str(is_open).lower() == "false":
+    if str(maintenance).lower() == "true":
+        welcome_text = f"🛠 <b>در حال حاضر ربات در حالت تعمیرات است.</b>\n\nما در حال ارتقای سیستم هستیم و به زودی باز خواهیم گشت. پوزش ما را بپذیرید. 🙏"
+        kbd = None # غیرفعال کردن منوی اصلی
+    elif str(is_open).lower() == "false":
         welcome_text += f"\n\n{responses.get_divider()}\n⛔️ <b>در حال حاضر فروشگاه بسته است و سفارش جدید ثبت نمی‌شود.</b>"
 
     # آماده‌سازی کیبورد و تصویر بنر
     kbd = keyboards.get_main_menu_keyboard(channel_url=channel_url)
+    persistent_kbd = keyboards.get_persistent_menu()
+
     banner_full_path = (Path(BASE_DIR) / banner_rel) if banner_rel else None
     has_valid_banner = banner_full_path and banner_full_path.exists()
 
@@ -106,6 +112,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     reply_markup=kbd,
                     parse_mode=constants.ParseMode.HTML
                 )
+                # ارسال منوی ثابت در صورت نیاز
+                if not query:
+                    await context.bot.send_message(chat_id=chat_id, text="👇 از منوی زیر برای دسترسی سریع استفاده کنید:", reply_markup=persistent_kbd)
         else:
             # اگر بنر نداریم (فقط متن):
             if query and query.message:
@@ -119,6 +128,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 # پیام جدید
                 await context.bot.send_message(chat_id=chat_id, text=welcome_text, reply_markup=kbd, parse_mode=constants.ParseMode.HTML)
+                if not query:
+                     await context.bot.send_message(chat_id=chat_id, text="👇 از منوی زیر برای دسترسی سریع استفاده کنید:", reply_markup=persistent_kbd)
 
     except BadRequest as e:
         if "Message is not modified" not in str(e):

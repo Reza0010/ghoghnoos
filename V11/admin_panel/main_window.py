@@ -7,15 +7,19 @@ from typing import Optional, Dict, Any, Callable
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QStackedWidget, QFrame, QButtonGroup, QLabel, QGraphicsDropShadowEffect,
-    QSizePolicy, QMessageBox
+    QSizePolicy, QMessageBox, QGraphicsOpacityEffect, QSystemTrayIcon, QMenu,
+    QPlainTextEdit
 )
 from PyQt6.QtCore import (
-    Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot
+    Qt, QSize, QTimer, QPropertyAnimation, QEasingCurve, QPoint, pyqtSlot,
+    QObject, pyqtSignal
 )
-from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon
+from PyQt6.QtGui import QColor, QFontDatabase, QFont, QIcon, QPixmap
 import qtawesome as qta
 
 from config import BASE_DIR
+from db.database import create_backup, get_db
+from db import crud, models
 
 # ایمپورت ویجت‌ها
 from .dashboard_widget import DashboardWidget
@@ -24,17 +28,76 @@ from .products_widget import ProductsWidget
 from .orders_widget import OrdersWidget
 from .settings_widget import SettingsWidget
 from .users_widget import UsersWidget
+from .command_palette import CommandPalette
 
 logger = logging.getLogger("MainWindow")
 
+# ==============================================================================
+# Helper: Live Log Viewer Widget
+# ==============================================================================
+class LogStreamHandler(logging.Handler, QObject):
+    new_log = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        QObject.__init__(self)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.new_log.emit(msg)
+
+class LogsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        header = QLabel("📜 مانیتورینگ لحظه‌ای لاگ‌ها")
+        header.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
+        layout.addWidget(header)
+
+        self.log_display = QPlainTextEdit()
+        self.log_display.setReadOnly(True)
+        self.log_display.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #0d1117; color: #c9d1d9;
+                font-family: 'Consolas', 'Courier New'; font-size: 12px;
+                border-radius: 10px; padding: 10px; border: 1px solid #30363d;
+            }
+        """)
+        layout.addWidget(self.log_display)
+
+        # دکمه‌های کنترل
+        btn_lay = QHBoxLayout()
+        self.btn_clear = QPushButton("پاکسازی کنسول")
+        self.btn_clear.clicked.connect(self.log_display.clear)
+        self.btn_clear.setStyleSheet("background: #21262d; color: white; padding: 8px; border-radius: 5px;")
+        btn_lay.addStretch(); btn_lay.addWidget(self.btn_clear)
+        layout.addLayout(btn_lay)
+
+        # اتصال به هندلر لاگ
+        self.handler = LogStreamHandler()
+        self.handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', '%H:%M:%S'))
+        self.handler.new_log.connect(self.append_log)
+        logging.getLogger().addHandler(self.handler)
+
+    def append_log(self, text):
+        self.log_display.appendPlainText(text)
+        self.log_display.moveCursor(self.log_display.textCursor().MoveOperation.End)
+
+# ==============================================================================
+# Main Window
+# ==============================================================================
 class MainWindow(QMainWindow):
     PAGE_MAP = {
-        0: ("داشبورد", "fa5s.chart-pie"),
-        1: ("محصولات", "fa5s.box-open"),
-        2: ("دسته‌بندی‌ها", "fa5s.layer-group"),
-        3: ("سفارشات", "fa5s.clipboard-list"),
-        4: ("کاربران", "fa5s.users"),
-        5: ("تنظیمات", "fa5s.cog"),
+        0: ("داشبورد", "fa5s.th-large"),
+        1: ("محصولات", "fa5s.shopping-bag"),
+        2: ("دسته‌بندی‌ها", "fa5s.stream"),
+        3: ("سفارشات", "fa5s.receipt"),
+        4: ("کاربران", "fa5s.user-friends"),
+        5: ("لاگ‌های زنده", "fa5s.terminal"),
+        6: ("تنظیمات", "fa5s.sliders-h"),
     }
 
     def __init__(self, bot_application: Optional[object] = None, rubika_client: Optional[object] = None):
@@ -61,18 +124,56 @@ class MainWindow(QMainWindow):
             lambda: CategoriesWidget(),
             lambda: OrdersWidget(bot_app=self.bot_application, rubika_client=self.rubika_client),
             lambda: UsersWidget(),
+            lambda: LogsWidget(),
             lambda: SettingsWidget(bot_app=self.bot_application, rubika_client=self.rubika_client)
         ]
         
         self.setup_ui()
         self.load_stylesheet()
         
-        # تایمر بررسی وضعیت اتصال
+        # تایمر بررسی وضعیت اتصال و نوتیفیکیشن‌ها
         self.check_connection_timer = QTimer(self)
         self.check_connection_timer.timeout.connect(self._safe_check_connection)
+        self.check_connection_timer.timeout.connect(self._check_new_notifications)
         self.check_connection_timer.start(15000) # هر ۱۵ ثانیه
 
+        # تایمر بک‌آپ خودکار (هر ۶ ساعت)
+        self.backup_timer = QTimer(self)
+        self.backup_timer.timeout.connect(self._auto_backup)
+        self.backup_timer.start(6 * 3600 * 1000)
+
+        # تنظیمات Tray
+        self._init_tray()
+
         self._toast = None
+
+    def _init_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.windowIcon())
+
+        tray_menu = QMenu()
+        show_action = tray_menu.addAction("نمایش پنل")
+        show_action.triggered.connect(self.showNormal)
+
+        tray_menu.addSeparator()
+        exit_action = tray_menu.addAction("خروج کامل")
+        exit_action.triggered.connect(QApplication.quit)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            if self.isVisible():
+                self.hide()
+            else:
+                self.showNormal()
+                self.activateWindow()
+
+    def send_notification(self, title, message):
+        """نمایش نوتیفیکیشن بومی سیستم‌عامل"""
+        self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 5000)
 
     def _load_font(self):
         # بررسی چند مسیر احتمالی برای فونت
@@ -95,6 +196,11 @@ class MainWindow(QMainWindow):
             logger.warning("Vazirmatn font not found. Using system default.")
 
     def setup_ui(self):
+        # دریافت اطلاعات برندینگ از دیتابیس
+        with next(get_db()) as db:
+            shop_name = crud.get_setting(db, "shop_name", "پنل ادمین")
+            shop_logo = crud.get_setting(db, "shop_logo", "")
+
         central_widget = QWidget()
         central_widget.setObjectName("centralwidget") 
         self.setCentralWidget(central_widget)
@@ -102,6 +208,17 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0) 
         main_layout.setSpacing(0)
+
+        # افکت درخشش پس‌زمینه (Background Glow)
+        self.bg_glow = QFrame(central_widget)
+        self.bg_glow.setObjectName("bg_glow")
+        self.bg_glow.setStyleSheet("""
+            QFrame#bg_glow {
+                background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5,
+                            stop:0 rgba(127, 90, 240, 0.05), stop:1 rgba(22, 22, 26, 0));
+            }
+        """)
+        self.bg_glow.lower() # فرستادن به پشت
 
         # ==================== ۱. سایدبار (Sidebar) ====================
         self.sidebar = QFrame()
@@ -128,10 +245,16 @@ class MainWindow(QMainWindow):
         self.menu_btn.setObjectName("menu_btn")
         self.menu_btn.clicked.connect(self.toggle_sidebar)
         
-        self.app_title = QLabel("پنل ادمین")
+        self.app_title = QLabel(shop_name)
         self.app_title.setObjectName("app_title")
         
+        self.logo_lbl = QLabel()
+        if shop_logo and Path(shop_logo).exists():
+            pix = QPixmap(shop_logo).scaled(30, 30, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.logo_lbl.setPixmap(pix)
+
         header_box.addWidget(self.menu_btn)
+        header_box.addWidget(self.logo_lbl)
         header_box.addWidget(self.app_title)
         header_box.addStretch()
         sidebar_layout.addLayout(header_box)
@@ -141,7 +264,13 @@ class MainWindow(QMainWindow):
         self.nav_group.setExclusive(True)
         self.nav_buttons = []
 
+        self.nav_indicators = {}
         for index, (text, icon) in self.PAGE_MAP.items():
+            btn_container = QWidget()
+            btn_lay = QHBoxLayout(btn_container)
+            btn_lay.setContentsMargins(0, 0, 0, 0)
+            btn_lay.setSpacing(0)
+
             btn = QPushButton(f"  {text}")
             btn.setIcon(qta.icon(icon, color="#94a1b2"))
             btn.setIconSize(QSize(20, 20))
@@ -150,10 +279,21 @@ class MainWindow(QMainWindow):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setProperty("original_text", f"  {text}")
             btn.setProperty("icon_name", icon)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+            # نقطه اعلان (Pulse Indicator)
+            indicator = QLabel()
+            indicator.setObjectName("pulse_dot")
+            indicator.setFixedSize(8, 8)
+            indicator.setVisible(False)
+            self.nav_indicators[index] = indicator
+
+            btn_lay.addWidget(btn)
+            btn_lay.addWidget(indicator)
             
             self.nav_group.addButton(btn, index)
             self.nav_buttons.append(btn)
-            sidebar_layout.addWidget(btn)
+            sidebar_layout.addWidget(btn_container)
 
         sidebar_layout.addStretch()
 
@@ -230,6 +370,9 @@ class MainWindow(QMainWindow):
 
         self.nav_group.idClicked.connect(self.switch_page)
 
+        # پالت دستورات (Ctrl+K)
+        self.command_palette = None
+
         # افزودن ویجت‌ها به لایه اصلی
         main_layout.addWidget(self.sidebar)
         main_layout.addWidget(content_margin)
@@ -243,6 +386,7 @@ class MainWindow(QMainWindow):
         if page_id not in self.pages:
             self.show_loading_state(True)
             try:
+                # فراخوانی لایمبدا برای ساخت ویجت
                 widget = self.page_factories[page_id]()
                 self.pages[page_id] = widget
                 self.content_area.addWidget(widget)
@@ -262,7 +406,26 @@ class MainWindow(QMainWindow):
             else:
                 btn.setIcon(qta.icon(icon_name, color="#94a1b2"))
 
+        # انیمیشن تعویض صفحه (Fade In) - بهینه‌سازی شده برای جلوگیری از تداخل Painter
+        eff = current_page.graphicsEffect()
+        if not isinstance(eff, QGraphicsOpacityEffect):
+            eff = QGraphicsOpacityEffect(current_page)
+            current_page.setGraphicsEffect(eff)
+
+        if hasattr(self, 'page_anim'):
+            self.page_anim.stop()
+
+        self.page_anim = QPropertyAnimation(eff, b"opacity")
+        self.page_anim.setDuration(350)
+        self.page_anim.setStartValue(0.0)
+        self.page_anim.setEndValue(1.0)
+        self.page_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+
+        # پاکسازی افکت بعد از اتمام انیمیشن برای پایداری ترسیم
+        self.page_anim.finished.connect(lambda: current_page.setGraphicsEffect(None))
+
         self.content_area.setCurrentWidget(current_page)
+        self.page_anim.start()
         
         if hasattr(current_page, "refresh_data"):
             res = current_page.refresh_data()
@@ -315,18 +478,34 @@ class MainWindow(QMainWindow):
         # وضعیت تلگرام
         tg_status = "online" if self.bot_application else "offline"
         self.tg_indicator.setProperty("status", tg_status)
-        self.tg_indicator.setStyleSheet("") # ریست استایل برای اعمال تغییرات
+        self.tg_indicator.setStyleSheet("/* force refresh */")
         self.tg_indicator.setToolTip("آنلاین" if self.bot_application else "آفلاین")
         
         # وضعیت روبیکا
         rb_status = "online" if self.rubika_client else "offline"
         self.rb_indicator.setProperty("status", rb_status)
-        self.rb_indicator.setStyleSheet("")
+        self.rb_indicator.setStyleSheet("/* force refresh */")
         self.rb_indicator.setToolTip("آنلاین" if self.rubika_client else "آفلاین")
+
+    def _check_new_notifications(self):
+        """بررسی وجود سفارشات یا تیکت‌های جدید برای نمایش نقطه قرمز"""
+        asyncio.create_task(self._async_check_notifications())
+
+    async def _async_check_notifications(self):
+        loop = asyncio.get_running_loop()
+        def check():
+            with next(get_db()) as db:
+                new_orders = db.query(models.Order).filter(models.Order.status == 'pending_payment').count()
+                # فرض بر وجود مدل تیکت در آینده، فعلاً فقط سفارش
+                return {"orders": new_orders > 0}
+
+        res = await loop.run_in_executor(None, check)
+        # آپدیت ایندیکیتور سفارشات (ایندکس ۳ در PAGE_MAP)
+        self.nav_indicators[3].setVisible(res.get("orders", False))
 
     def _handle_restart_click(self):
         self.show_toast("درخواست ریستارت ارسال شد...")
-        QTimer.singleShot(1000, lambda: self.show_toast("سرویس‌ها در حال راه‌اندازی مجدد..."))
+        # منطق ریستارت توسط ApplicationManager در run_panel مدیریت می‌شود
 
     def load_stylesheet(self):
         path = self.base_path / "themes" / "dark_theme.qss"
@@ -358,13 +537,58 @@ class MainWindow(QMainWindow):
         
         QTimer.singleShot(3500, self._toast.close)
 
-    def closeEvent(self, event):
-        reply = QMessageBox.question(
-            self, 'خروج', "آیا از خروج و توقف مدیریت مطمئن هستید؟",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            event.accept()
+    def _auto_backup(self):
+        """اجرای بک‌آپ خودکار در پس‌زمینه"""
+        res = create_backup()
+        if res:
+            logger.info(f"Auto-backup created: {res}")
+
+    def keyPressEvent(self, event):
+        # تشخیص Ctrl+K برای باز کردن پالت جستجو
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_K:
+            self.show_command_palette()
         else:
+            super().keyPressEvent(event)
+
+    def show_command_palette(self):
+        if not self.command_palette:
+            self.command_palette = CommandPalette(self)
+            self.command_palette.item_selected.connect(self.handle_palette_navigation)
+
+        # نمایش در مرکز پنجره
+        self.command_palette.move(
+            self.x() + (self.width() - self.command_palette.width()) // 2,
+            self.y() + 100
+        )
+        self.command_palette.show()
+        self.command_palette.search_input.setFocus()
+
+    def handle_palette_navigation(self, type_name, item_id):
+        """هدایت ادمین به بخش مربوطه بر اساس انتخاب در پالت"""
+        if type_name == "product":
+            self.switch_page(1)
+            page = self.pages.get(1)
+            if page and hasattr(page, "search_and_highlight"):
+                page.search_and_highlight(item_id)
+        elif type_name == "user":
+            self.switch_page(4)
+            page = self.pages.get(4)
+            if page and hasattr(page, "show_user_details_by_id"):
+                page.show_user_details_by_id(item_id)
+        elif type_name == "order":
+            self.switch_page(3)
+            page = self.pages.get(3)
+            if page and hasattr(page, "filter_by_order_id"):
+                page.filter_by_order_id(item_id)
+
+    def closeEvent(self, event):
+        if self.tray_icon.isVisible():
+            self.hide()
+            self.send_notification("پنل مدیریت", "برنامه در پس‌زمینه در حال اجرا است.")
             event.ignore()
+        else:
+            event.accept()
+
+    def full_quit(self):
+        """خروج کامل از برنامه"""
+        QApplication.quit()

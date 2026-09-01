@@ -23,6 +23,8 @@ class User(Base):
     saved_address = Column(Text, nullable=True)
     saved_phone = Column(String(20), nullable=True)
     private_note = Column(Text, nullable=True)  # یادداشت ادمین برای کاربر
+    tags = Column(String(255), nullable=True)  # برچسب‌های کاربر (کاما جدا شده)
+    last_interaction_text = Column(Text, nullable=True) # آخرین پیام کاربر
     
     last_seen = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -50,6 +52,12 @@ class Category(Base):
     name = Column(String(255), nullable=False, unique=True)
     parent_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=True)
     
+    icon = Column(String(50), nullable=True)
+    color = Column(String(20), nullable=True)
+    banner_path = Column(String(512), nullable=True)
+    sort_order = Column(Integer, default=0)
+    description = Column(Text, nullable=True)
+
     parent = relationship("Category", remote_side=[id], back_populates="children")
     children = relationship("Category", back_populates="parent", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="category", cascade="all, delete-orphan")
@@ -67,6 +75,7 @@ class Product(Base):
     brand = Column(String(100), nullable=True)
     
     price = Column(Numeric(12, 0), nullable=False)
+    purchase_price = Column(Numeric(12, 0), default=0) # قیمت خرید (برای محاسبه سود)
     discount_price = Column(Numeric(12, 0), nullable=True)
     stock = Column(Integer, default=0, nullable=False)
     
@@ -104,6 +113,7 @@ class ProductVariant(Base):
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(100), nullable=False) # مثلا: قرمز، XL
+    color_code = Column(String(20), nullable=True) # کد هگز رنگ (اختیاری)
     price_adjustment = Column(Numeric(12, 0), default=0) # مبلغ اضافه یا کسر شده
     stock = Column(Integer, default=0)
 
@@ -145,6 +155,10 @@ class Order(Base):
     total_amount = Column(Numeric(12, 0), nullable=False)
     shipping_cost = Column(Numeric(12, 0), default=0)
     
+    # فیلدهای تخفیف
+    discount_amount = Column(Numeric(12, 0), default=0)
+    coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
+
     shipping_address = Column(Text, nullable=False)
     postal_code = Column(String(20), nullable=True)
     phone_number = Column(String(20), nullable=True)
@@ -156,6 +170,7 @@ class Order(Base):
 
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin")
+    coupon = relationship("Coupon", back_populates="orders")
 
     def __repr__(self):
         return f"<Order(id={self.id}, status={self.status})>"
@@ -170,6 +185,7 @@ class OrderItem(Base):
     
     quantity = Column(Integer, nullable=False)
     price_at_purchase = Column(Numeric(12, 0), nullable=False)
+    purchase_price_at_purchase = Column(Numeric(12, 0), default=0) # قیمت خرید در زمان ثبت سفارش
     selected_attributes = Column(Text, nullable=True)
 
     order = relationship("Order", back_populates="items")
@@ -212,3 +228,63 @@ class Setting(Base):
     value = Column(Text, nullable=True)
     description = Column(String(255), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(String(50), nullable=True) # شناسه ادمینی که تغییر را ایجاد کرده
+    action = Column(String(100), nullable=False) # مثلا: delete_product, change_price
+    target_type = Column(String(50), nullable=True) # مثلا: product, user, order
+    target_id = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class StockLog(Base):
+    __tablename__ = "stock_logs"
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    change_amount = Column(Integer, nullable=False) # مقدار تغییر (+ یا -)
+    reason = Column(String(255), nullable=True) # مثلا: خرید کاربر، اصلاح ادمین
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    percent = Column(Integer, nullable=False) # درصد تخفیف (مثلا ۲۰)
+    max_uses = Column(Integer, default=0) # صفر یعنی نامحدود
+    current_uses = Column(Integer, default=0)
+    expire_date = Column(DateTime(timezone=True), nullable=True)
+    min_purchase = Column(Numeric(12, 0), default=0) # حداقل خرید برای اعمال کد
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    orders = relationship("Order", back_populates="coupon")
+
+
+class AutoReply(Base):
+    __tablename__ = "auto_replies"
+    id = Column(Integer, primary_key=True)
+    keyword = Column(String(255), unique=True, nullable=False, index=True)
+    response = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Proxy(Base):
+    __tablename__ = "proxies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=True)
+    url = Column(Text, nullable=False)
+    type = Column(String(20), nullable=False) # 'v2ray', 'http', 'socks5'
+    is_active = Column(Boolean, default=False)
+    last_ping = Column(Integer, nullable=True)
+
+    country_code = Column(String(5), nullable=True) # برای نمایش پرچم
+    fail_count = Column(Integer, default=0) # تعداد خطاهای متوالی
+    latency_history = Column(Text, nullable=True) # تاریخچه پینگ به صورت JSON
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
