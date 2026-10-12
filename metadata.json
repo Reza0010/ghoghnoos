@@ -1,0 +1,9 @@
+{
+  "name": "MinerMedia AI — Smart Mining & Crypto Channel Manager",
+  "description": "سامانه مدیریت هوشمند و خودکار کانال‌های تلگرام در حوزه ماینینگ، تعمیرات هش‌برد، قیمت لحظه‌ای نوبیتکس و استودیو تولید محتوا",
+  "requestFrame": "true",
+  "prompt": "MinerMedia AI - Smart Mining & Crypto Channel Manager web application",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
